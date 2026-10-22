@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
-import { ArrowDownCircle, ArrowUpCircle, Eye, EyeOff, Plus } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, ChevronRight, Eye, EyeOff, Plus } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '@/lib/api'
 import { useAccounts, useAllCategories, useCreditCards, useTotalBalance } from '@/lib/hooks'
@@ -18,6 +18,7 @@ const PALETTE = ['#6366f1', '#f87171', '#34d399', '#fbbf24', '#38bdf8', '#e879f9
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const nav = useNavigate()
   const [period, setPeriod] = useState(currentPeriod())
   const [ignored, setIgnored] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
@@ -71,21 +72,23 @@ export default function Dashboard() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="p-4">
+        <Card onClick={() => nav('/contas')} className="cursor-pointer p-4 transition hover:border-primary/40">
           <div className="mb-1 flex items-center justify-between">
-            <h2 className="font-semibold">Contas</h2>
-            <button onClick={() => setAddingAccount(true)} aria-label="Nova conta" title="Nova conta"
+            <Link to="/contas" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 font-semibold hover:text-primary-hover">
+              Contas <ChevronRight className="size-4 text-muted" />
+            </Link>
+            <button onClick={(e) => { e.stopPropagation(); setAddingAccount(true) }} aria-label="Nova conta" title="Nova conta"
               className="grid size-8 place-items-center rounded-full bg-primary/15 text-primary-hover transition hover:bg-primary/25"><Plus className="size-4" /></button>
           </div>
           <p className="mb-3 text-xs text-muted">Toque no olho para ignorar uma conta do saldo total.</p>
-          {accounts.isLoading ? <Spinner /> : !accounts.data?.length ? <Empty title="Sem contas."><Button size="sm" onClick={() => setAddingAccount(true)}>Criar conta</Button></Empty> : (
+          {accounts.isLoading ? <Spinner /> : !accounts.data?.length ? <Empty title="Sem contas."><Button size="sm" onClick={(e) => { e.stopPropagation(); setAddingAccount(true) }}>Criar conta</Button></Empty> : (
             <ul className="divide-y divide-border">
               {accounts.data.map((a) => (
                 <li key={a.id} className="flex items-center gap-2 py-2.5">
-                  <button onClick={() => toggleIgnore(a.id)} className="p-1 text-muted hover:text-text" aria-label="Ignorar no saldo">
+                  <button onClick={(e) => { e.stopPropagation(); toggleIgnore(a.id) }} className="p-1 text-muted hover:text-text" aria-label="Ignorar no saldo">
                     {ignored.includes(a.id) ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
-                  <Link to={`/contas/${a.id}`} className={`flex flex-1 items-center justify-between ${ignored.includes(a.id) ? 'opacity-40' : ''}`}>
+                  <Link to={`/contas/${a.id}`} onClick={(e) => e.stopPropagation()} className={`flex flex-1 items-center justify-between hover:text-primary-hover ${ignored.includes(a.id) ? 'opacity-40' : ''}`}>
                     <span className="text-sm">{a.name}</span>
                     <span className={`text-sm font-semibold ${a.balance < 0 ? 'text-expense' : ''}`}>{formatMoney(a.balance)}</span>
                   </Link>
@@ -122,19 +125,21 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <Card className="mt-4 p-4">
+      <Card onClick={() => nav('/cartoes')} className="mt-4 cursor-pointer p-4 transition hover:border-primary/40">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-semibold">Cartões de crédito</h2>
-          <button onClick={() => setAddingCard(true)} aria-label="Novo cartão" title="Novo cartão"
+          <Link to="/cartoes" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 font-semibold hover:text-primary-hover">
+            Cartões de crédito <ChevronRight className="size-4 text-muted" />
+          </Link>
+          <button onClick={(e) => { e.stopPropagation(); setAddingCard(true) }} aria-label="Novo cartão" title="Novo cartão"
             className="grid size-8 place-items-center rounded-full bg-primary/15 text-primary-hover transition hover:bg-primary/25"><Plus className="size-4" /></button>
         </div>
         {creditCards.isLoading ? <Spinner /> : !creditCards.data?.length ? (
-          <Empty title="Sem cartões de crédito."><Button size="sm" onClick={() => setAddingCard(true)}>Criar cartão</Button></Empty>
+          <Empty title="Sem cartões de crédito."><Button size="sm" onClick={(e) => { e.stopPropagation(); setAddingCard(true) }}>Criar cartão</Button></Empty>
         ) : (
           <ul className="divide-y divide-border">
             {creditCards.data.map((c) => (
               <li key={c.id} className="py-2.5">
-                <Link to={`/cartoes/${c.id}`} className="flex items-center justify-between text-sm">
+                <Link to={`/cartoes/${c.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center justify-between text-sm hover:text-primary-hover">
                   <div>
                     <p className="font-medium">{c.name}</p>
                     <p className="text-xs text-muted">Disponível: <span className="text-income">{formatMoney(c.availableLimit)}</span> · Vence dia {c.dueDay}</p>
