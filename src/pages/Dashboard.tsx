@@ -6,7 +6,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '@/lib/api'
 import { useAccounts, useAllCategories, useCreditCards, useTotalBalance } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
-import type { Transaction } from '@/lib/types'
+import type { CreditCardInvoice, Transaction } from '@/lib/types'
 import { formatDate, formatMoney } from '@/lib/format'
 import { Button, Card, Empty, PageHeader, Spinner } from '@/components/ui'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
@@ -35,12 +35,72 @@ export default function Dashboard() {
       queryFn: () => api.get<Transaction[]>(`/transactions/account/${a.id}`, { params: period }).then((r) => r.data),
     })),
   })
+  const invoiceQueries = useQueries({
+    queries: (creditCards.data ?? []).map((c) => ({
+      queryKey: ['credit-cards', c.id, 'invoice', period.month, period.year],
+      queryFn: () =>
+        api
+          .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, { params: period })
+          .then((r) => ({ card: c, invoice: r.data })),
+    })),
+  })
   const txLoading = txQueries.some((q) => q.isLoading)
+  const txStamp = txQueries.map((q) => q.dataUpdatedAt).join(',')
+  const invStamp = invoiceQueries.map((q) => q.dataUpdatedAt).join(',')
   const allTx = useMemo(() => {
     const seen = new Map<string, Transaction>()
     txQueries.forEach((q) => q.data?.forEach((t) => seen.set(t.id, t)))
     return [...seen.values()]
-  }, [txQueries])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txStamp])
+
+  const summary = useMemo(() => {
+    const activeAccounts = (accounts.data ?? []).filter((a) => !ignored.includes(a.id))
+    const activeIds = new Set(activeAccounts.map((a) => a.id))
+    const currentBalance = balance.data?.total ?? activeAccounts.reduce((s, a) => s + a.balance, 0)
+
+    let realizedIncome = 0
+    let pendingIncome = 0
+    let realizedExpense = 0
+    let pendingExpense = 0
+    let pendingTransferDelta = 0
+
+    allTx.forEach((t) => {
+      if (t.creditCardId) return
+      if (t.type === 'INCOME' && activeIds.has(t.accountId)) {
+        if (t.status === 'COMPLETED') realizedIncome += t.amount
+        else pendingIncome += t.amount
+      } else if (t.type === 'EXPENSE' && activeIds.has(t.accountId)) {
+        if (t.status === 'COMPLETED') realizedExpense += t.amount
+        else pendingExpense += t.amount
+      } else if (t.type === 'TRANSFER' && t.status === 'PENDING') {
+        if (activeIds.has(t.accountId)) pendingTransferDelta -= t.amount
+        if (t.destinationAccountId && activeIds.has(t.destinationAccountId)) pendingTransferDelta += t.amount
+      }
+    })
+
+    let unpaidCardInvoices = 0
+    invoiceQueries.forEach((iq) => {
+      const d = iq.data
+      if (!d) return
+      if (!activeIds.has(d.card.accountId)) return
+      unpaidCardInvoices += Math.max(0, d.invoice.remainingAmount)
+    })
+
+    const projectedIncome = realizedIncome + pendingIncome
+    const projectedExpense = realizedExpense + pendingExpense + unpaidCardInvoices
+    const projectedBalance = currentBalance + pendingIncome - pendingExpense - unpaidCardInvoices + pendingTransferDelta
+
+    return {
+      currentBalance,
+      projectedBalance,
+      realizedIncome,
+      projectedIncome,
+      realizedExpense,
+      projectedExpense,
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts.data, ignored, balance.data, allTx, invStamp])
 
   const byCategory = useMemo(() => {
     const map = new Map<string, number>()
@@ -63,11 +123,49 @@ export default function Dashboard() {
       <div className="mb-4"><MonthPicker value={period} onChange={setPeriod} /></div>
 
       <Card className="mb-4 bg-gradient-to-br from-primary/25 to-surface p-5">
-        <p className="text-sm text-muted">Saldo total</p>
-        <p className="text-4xl font-bold">{balance.data ? formatMoney(balance.data.total) : '—'}</p>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-2"><ArrowUpCircle className="size-8 text-income" /><div><p className="text-xs text-muted">Receitas</p><p className="font-semibold text-income">{formatMoney(balance.data?.monthlyIncome ?? 0)}</p></div></div>
-          <div className="flex items-center gap-2"><ArrowDownCircle className="size-8 text-expense" /><div><p className="text-xs text-muted">Despesas</p><p className="font-semibold text-expense">{formatMoney(balance.data?.monthlyExpense ?? 0)}</p></div></div>
+        <div className="grid grid-cols-2 gap-4 border-b border-border/60 pb-4">
+          <div>
+            <p className="text-xs text-muted">Saldo total</p>
+            <p className="mt-0.5 text-2xl font-bold sm:text-3xl">
+              {balance.data ? formatMoney(summary.currentBalance) : '—'}
+            </p>
+          </div>
+          <div className="border-l border-border/60 pl-4">
+            <p className="text-xs text-muted">Saldo projetado</p>
+            <p className={`mt-0.5 text-2xl font-bold sm:text-3xl ${summary.projectedBalance < 0 ? 'text-expense' : 'text-primary-hover'}`}>
+              {balance.data ? formatMoney(summary.projectedBalance) : '—'}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <ArrowUpCircle className="size-7 shrink-0 text-income" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted">Receitas</p>
+                <p className="truncate font-semibold text-income">{formatMoney(summary.realizedIncome)}</p>
+              </div>
+            </div>
+            <div className="rounded-lg bg-surface/60 px-2.5 py-1.5">
+              <p className="text-[11px] text-muted">Receitas projetadas</p>
+              <p className="text-sm font-semibold text-income/90">{formatMoney(summary.projectedIncome)}</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <ArrowDownCircle className="size-7 shrink-0 text-expense" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted">Despesas</p>
+                <p className="truncate font-semibold text-expense">{formatMoney(summary.realizedExpense)}</p>
+              </div>
+            </div>
+            <div className="rounded-lg bg-surface/60 px-2.5 py-1.5">
+              <p className="text-[11px] text-muted">Despesas projetadas</p>
+              <p className="text-sm font-semibold text-expense/90">{formatMoney(summary.projectedExpense)}</p>
+            </div>
+          </div>
         </div>
       </Card>
 
