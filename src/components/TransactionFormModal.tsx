@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { ALL_MONEY, useAccessibleAccounts, useAction, useCreditCards, useGroupCategories, useMyCategories } from '@/lib/hooks'
 import type {
-  AccountSplitInput,
   CreateTransactionInput,
   RecurrenceFrequency,
   Transaction,
@@ -59,11 +58,16 @@ export default function TransactionFormModal({
   const [installmentAmountMode, setInstallmentAmountMode] = useState<'INSTALLMENT' | 'TOTAL'>('TOTAL')
   const [allFuture, setAllFuture] = useState(false)
   const [splitMode, setSplitMode] = useState(false)
-  const [splits, setSplits] = useState<AccountSplitInput[]>([])
+  const [splitUnit, setSplitUnit] = useState<'AMOUNT' | 'PERCENT'>('AMOUNT')
+  const [splits, setSplits] = useState<{ accountId: string; amount: number; percentage: number }[]>([])
 
   const canSplit = !editing && sourceMode === 'ACCOUNT' && type !== 'TRANSFER' && accounts.length >= 2
   const activeSplit = canSplit && splitMode
   const splitsSum = useMemo(() => splits.reduce((s, item) => s + item.amount, 0), [splits])
+  const splitsPctSum = useMemo(
+    () => Number(splits.reduce((s, item) => s + (Number.isFinite(item.percentage) ? item.percentage : 0), 0).toFixed(2)),
+    [splits],
+  )
 
   const selectedCard = useMemo(() => creditCards.find((c) => c.id === creditCardId), [creditCards, creditCardId])
   const effectiveAccountId = useMemo(() => {
@@ -112,6 +116,7 @@ export default function TransactionFormModal({
     setInstallmentAmountMode('TOTAL')
     setAllFuture(false)
     setSplitMode(false)
+    setSplitUnit('AMOUNT')
     setSplits([])
 
     const cardObj = creditCards.find((c) => c.id === cid)
@@ -174,6 +179,62 @@ export default function TransactionFormModal({
     { invalidate: ALL_MONEY, success: editing ? 'Transação atualizada' : 'Transação criada', onSuccess: onClose },
   )
 
+  const applyPercentagesToAmounts = (
+    rows: { accountId: string; amount: number; percentage: number }[],
+    totalCents: number,
+  ) => {
+    const pctSum = rows.reduce((s, r) => s + (Number.isFinite(r.percentage) ? r.percentage : 0), 0)
+    const computed = rows.map((r) => ({
+      ...r,
+      amount: totalCents > 0 ? Math.round((totalCents * (r.percentage || 0)) / 100) : 0,
+    }))
+    if (totalCents > 0 && Math.abs(pctSum - 100) < 0.05 && computed.length > 0) {
+      const currentSum = computed.reduce((s, r) => s + r.amount, 0)
+      const diff = totalCents - currentSum
+      if (diff !== 0) {
+        const targetIdx = computed.findIndex((r) => r.percentage > 0)
+        const idx = targetIdx >= 0 ? targetIdx : 0
+        computed[idx] = { ...computed[idx], amount: Math.max(0, computed[idx].amount + diff) }
+      }
+    }
+    return computed
+  }
+
+  const handleTotalAmountChange = (newCents: number) => {
+    setAmount(newCents)
+    if (activeSplit && splitUnit === 'PERCENT') {
+      setSplits((prev) => applyPercentagesToAmounts(prev, newCents))
+    }
+  }
+
+  const switchSplitUnit = (unit: 'AMOUNT' | 'PERCENT') => {
+    if (unit === splitUnit) return
+    setSplitUnit(unit)
+    if (unit === 'PERCENT' && splits.length > 0) {
+      const refTotal = splitsSum > 0 ? splitsSum : amount
+      if (refTotal > 0 && splitsSum > 0) {
+        const withPct = splits.map((s) => ({
+          ...s,
+          percentage: Number(((s.amount / splitsSum) * 100).toFixed(2)),
+        }))
+        const sumPct = Number(withPct.reduce((acc, r) => acc + r.percentage, 0).toFixed(2))
+        const diffPct = Number((100 - sumPct).toFixed(2))
+        if (Math.abs(diffPct) <= 0.1 && withPct.length > 0) {
+          withPct[0].percentage = Number((withPct[0].percentage + diffPct).toFixed(2))
+        }
+        setSplits(withPct)
+      } else {
+        const eqPct = Number((100 / splits.length).toFixed(2))
+        const remPct = Number((100 - eqPct * splits.length).toFixed(2))
+        const withPct = splits.map((s, i) => ({
+          ...s,
+          percentage: i === 0 ? Number((eqPct + remPct).toFixed(2)) : eqPct,
+        }))
+        setSplits(applyPercentagesToAmounts(withPct, amount))
+      }
+    }
+  }
+
   const toggleSplitMode = () => {
     if (splitMode) {
       setSplitMode(false)
@@ -184,8 +245,8 @@ export default function TransactionFormModal({
     const base = amount > 0 ? Math.floor(amount / 2) : 0
     const rem = amount > 0 ? amount - base * 2 : 0
     setSplits([
-      { accountId: firstId, amount: base + rem },
-      ...(secondId ? [{ accountId: secondId, amount: base }] : []),
+      { accountId: firstId, amount: base + rem, percentage: secondId ? 50 : 100 },
+      ...(secondId ? [{ accountId: secondId, amount: base, percentage: 50 }] : []),
     ])
     setSplitMode(true)
   }
@@ -195,14 +256,25 @@ export default function TransactionFormModal({
     const used = new Set(splits.map((s) => s.accountId))
     const nextAcc = accounts.find((a) => !used.has(a.id))
     if (!nextAcc) return
-    const remaining = Math.max(0, amount - splitsSum)
-    setSplits((prev) => [...prev, { accountId: nextAcc.id, amount: remaining }])
+    if (splitUnit === 'PERCENT') {
+      const remPct = Math.max(0, Number((100 - splitsPctSum).toFixed(2)))
+      setSplits((prev) =>
+        applyPercentagesToAmounts([...prev, { accountId: nextAcc.id, amount: 0, percentage: remPct }], amount),
+      )
+    } else {
+      const remaining = Math.max(0, amount - splitsSum)
+      const pct = amount > 0 ? Number(((remaining / amount) * 100).toFixed(2)) : 0
+      setSplits((prev) => [...prev, { accountId: nextAcc.id, amount: remaining, percentage: pct }])
+    }
   }
 
   const removeSplitRow = (idx: number) => {
     if (splits.length <= 2) return
     setSplits((prev) => {
       const next = prev.filter((_, i) => i !== idx)
+      if (splitUnit === 'PERCENT') {
+        return applyPercentagesToAmounts(next, amount)
+      }
       const nextSum = next.reduce((s, item) => s + item.amount, 0)
       if (amount === splitsSum) setAmount(nextSum)
       return next
@@ -213,10 +285,22 @@ export default function TransactionFormModal({
     setSplits((prev) => {
       const next = prev.map((item, i) => (i === idx ? { ...item, amount: cents } : item))
       const nextSum = next.reduce((s, item) => s + item.amount, 0)
+      const effectiveTotal = amount === 0 || amount === splitsSum ? nextSum : amount
       if (amount === 0 || amount === splitsSum) {
         setAmount(nextSum)
       }
-      return next
+      return next.map((item) => ({
+        ...item,
+        percentage: effectiveTotal > 0 ? Number(((item.amount / effectiveTotal) * 100).toFixed(2)) : 0,
+      }))
+    })
+  }
+
+  const updateSplitPercentage = (idx: number, rawPct: string) => {
+    const parsed = rawPct === '' ? 0 : Math.min(100, Math.max(0, Number(rawPct)))
+    setSplits((prev) => {
+      const next = prev.map((item, i) => (i === idx ? { ...item, percentage: parsed } : item))
+      return applyPercentagesToAmounts(next, amount)
     })
   }
 
@@ -225,12 +309,20 @@ export default function TransactionFormModal({
   }
 
   const divideEqually = () => {
+    if (splits.length === 0) return
     const targetTotal = amount > 0 ? amount : splitsSum
-    if (targetTotal <= 0 || splits.length === 0) return
-    const base = Math.floor(targetTotal / splits.length)
-    const rem = targetTotal - base * splits.length
-    setSplits((prev) => prev.map((item, i) => ({ ...item, amount: i === 0 ? base + rem : base })))
-    setAmount(targetTotal)
+    const eqPct = Number((100 / splits.length).toFixed(2))
+    const remPct = Number((100 - eqPct * splits.length).toFixed(2))
+    const base = targetTotal > 0 ? Math.floor(targetTotal / splits.length) : 0
+    const rem = targetTotal > 0 ? targetTotal - base * splits.length : 0
+    setSplits((prev) =>
+      prev.map((item, i) => ({
+        ...item,
+        amount: i === 0 ? base + rem : base,
+        percentage: i === 0 ? Number((eqPct + remPct).toFixed(2)) : eqPct,
+      })),
+    )
+    if (targetTotal > 0) setAmount(targetTotal)
   }
 
   const submit = (e: React.FormEvent) => {
@@ -283,6 +375,16 @@ export default function TransactionFormModal({
         toast.error('As contas selecionadas na divisão devem ser distintas.')
         return
       }
+      if (splitUnit === 'PERCENT') {
+        if (amount <= 0) {
+          toast.error('Informe o valor total da transação para dividir por porcentagem.')
+          return
+        }
+        if (Math.abs(splitsPctSum - 100) > 0.1) {
+          toast.error(`A soma das porcentagens (${splitsPctSum}%) deve ser igual a 100%.`)
+          return
+        }
+      }
       if (splits.some((s) => s.amount <= 0)) {
         toast.error('Informe um valor maior que zero para cada conta participante.')
         return
@@ -306,7 +408,10 @@ export default function TransactionFormModal({
         recurrenceInstallments: installments,
         isInfinite: recurring && infinite,
         installmentAmountMode: recurring && !infinite ? installmentAmountMode : 'INSTALLMENT',
-        splits,
+        splits: splits.map(({ accountId: accId, amount: rowAmount }) => ({
+          accountId: accId,
+          amount: rowAmount,
+        })),
       })
     } else {
       if (!accountId || (type === 'TRANSFER' && !destId)) return
@@ -399,7 +504,7 @@ export default function TransactionFormModal({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label={isInstallmentPlan ? (installmentAmountMode === 'TOTAL' ? 'Valor total' : 'Valor da parcela') : 'Valor'}>
-            <MoneyInput value={amount} onChange={setAmount} />
+            <MoneyInput value={amount} onChange={handleTotalAmountChange} />
           </Field>
           <Field label="Data da compra">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
@@ -490,9 +595,28 @@ export default function TransactionFormModal({
             {activeSplit ? (
               <div className="space-y-2.5 rounded-2xl border border-border bg-surface-2/40 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-muted">
-                    Escolha quanto cada conta vai {type === 'INCOME' ? 'receber' : 'pagar'}:
-                  </p>
+                  <div className="inline-flex rounded-xl bg-surface p-0.5 border border-border">
+                    <button
+                      type="button"
+                      onClick={() => switchSplitUnit('AMOUNT')}
+                      className={clsx(
+                        'rounded-lg px-2.5 py-1 text-xs font-medium transition',
+                        splitUnit === 'AMOUNT' ? 'bg-primary text-white' : 'text-muted hover:text-text',
+                      )}
+                    >
+                      Por valor (R$)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchSplitUnit('PERCENT')}
+                      className={clsx(
+                        'rounded-lg px-2.5 py-1 text-xs font-medium transition',
+                        splitUnit === 'PERCENT' ? 'bg-primary text-white' : 'text-muted hover:text-text',
+                      )}
+                    >
+                      Por porcentagem (%)
+                    </button>
+                  </div>
                   <div className="flex gap-1.5">
                     <button
                       type="button"
@@ -513,57 +637,109 @@ export default function TransactionFormModal({
                   </div>
                 </div>
 
+                {splitUnit === 'PERCENT' && amount <= 0 && (
+                  <p className="rounded-lg bg-warn/10 px-2.5 py-1.5 text-xs text-warn">
+                    Preencha o campo <b>Valor</b> acima para calcular os valores de cada conta a partir da porcentagem.
+                  </p>
+                )}
+
                 <div className="space-y-2">
                   {splits.map((row, idx) => {
                     const usedByOthers = new Set(splits.filter((_, i) => i !== idx).map((s) => s.accountId))
                     const availableAccounts = accounts.filter((a) => !usedByOthers.has(a.id))
                     return (
-                      <div key={idx} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
-                        <Select
-                          value={row.accountId}
-                          onChange={(e) => updateSplitAccount(idx, e.target.value)}
-                          required
-                        >
-                          <option value="">Selecione a conta…</option>
-                          {availableAccounts.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.name}
-                              {a.owner ? ` (${fullName(a.owner)})` : ''}
-                            </option>
-                          ))}
-                        </Select>
-                        <MoneyInput value={row.amount} onChange={(cents) => updateSplitAmount(idx, cents)} />
-                        <button
-                          type="button"
-                          disabled={splits.length <= 2}
-                          onClick={() => removeSplitRow(idx)}
-                          className="rounded-lg p-2 text-muted hover:text-expense disabled:opacity-30"
-                          aria-label="Remover conta da divisão"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
+                      <div key={idx} className="space-y-1">
+                        <div className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
+                          <Select
+                            value={row.accountId}
+                            onChange={(e) => updateSplitAccount(idx, e.target.value)}
+                            required
+                          >
+                            <option value="">Selecione a conta…</option>
+                            {availableAccounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.name}
+                                {a.owner ? ` (${fullName(a.owner)})` : ''}
+                              </option>
+                            ))}
+                          </Select>
+                          {splitUnit === 'AMOUNT' ? (
+                            <MoneyInput value={row.amount} onChange={(cents) => updateSplitAmount(idx, cents)} />
+                          ) : (
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step="0.01"
+                                value={row.percentage || ''}
+                                placeholder="0"
+                                onChange={(e) => updateSplitPercentage(idx, e.target.value)}
+                                className="pr-7 text-right"
+                              />
+                              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted">
+                                %
+                              </span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            disabled={splits.length <= 2}
+                            onClick={() => removeSplitRow(idx)}
+                            className="rounded-lg p-2 text-muted hover:text-expense disabled:opacity-30"
+                            aria-label="Remover conta da divisão"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                        {splitUnit === 'PERCENT' && amount > 0 && (
+                          <div className="flex justify-end pr-10 text-[11px] text-muted">
+                            Equivale a <b className="ml-1 text-text">{formatMoney(row.amount)}</b>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-xs">
-                  <span className="text-muted">
-                    Soma das contas: <b className="text-text">{formatMoney(splitsSum)}</b>
-                  </span>
-                  {amount > 0 && splitsSum !== amount && (
-                    <button
-                      type="button"
-                      onClick={() => setAmount(splitsSum)}
-                      className={clsx(
-                        'font-medium underline',
-                        splitsSum < amount ? 'text-warn' : 'text-expense',
+                  {splitUnit === 'PERCENT' ? (
+                    <>
+                      <span className="text-muted">
+                        Total:{' '}
+                        <b className={clsx(Math.abs(splitsPctSum - 100) <= 0.05 ? 'text-income' : 'text-warn')}>
+                          {splitsPctSum}%
+                        </b>{' '}
+                        ({formatMoney(splitsSum)})
+                      </span>
+                      {Math.abs(splitsPctSum - 100) > 0.05 && (
+                        <span className={clsx('font-medium', splitsPctSum < 100 ? 'text-warn' : 'text-expense')}>
+                          {splitsPctSum < 100
+                            ? `Faltam ${Number((100 - splitsPctSum).toFixed(2))}% para 100%`
+                            : `Passou ${Number((splitsPctSum - 100).toFixed(2))}% de 100%`}
+                        </span>
                       )}
-                    >
-                      {splitsSum < amount
-                        ? `Faltam ${formatMoney(amount - splitsSum)} (usar soma)`
-                        : `Passou ${formatMoney(splitsSum - amount)} (usar soma)`}
-                    </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-muted">
+                        Soma das contas: <b className="text-text">{formatMoney(splitsSum)}</b>
+                      </span>
+                      {amount > 0 && splitsSum !== amount && (
+                        <button
+                          type="button"
+                          onClick={() => setAmount(splitsSum)}
+                          className={clsx(
+                            'font-medium underline',
+                            splitsSum < amount ? 'text-warn' : 'text-expense',
+                          )}
+                        >
+                          {splitsSum < amount
+                            ? `Faltam ${formatMoney(amount - splitsSum)} (usar soma)`
+                            : `Passou ${formatMoney(splitsSum - amount)} (usar soma)`}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
