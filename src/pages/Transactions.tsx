@@ -3,21 +3,23 @@ import { useQueries } from '@tanstack/react-query'
 import { Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { useAccessibleAccounts, useAllCategories, useCreditCards } from '@/lib/hooks'
-import type { Transaction, TransactionStatus, TransactionType } from '@/lib/types'
-import { formatMoney, txTypeLabel } from '@/lib/format'
+import type { Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
+import { formatMoney, fullName, txTypeLabel } from '@/lib/format'
 import { Button, Card, Empty, Field, Input, PageHeader, Select, Spinner } from '@/components/ui'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
 
-interface Filters { search: string; accountId: string; creditCardId: string; categoryId: string; type: '' | TransactionType; status: '' | TransactionStatus; recurring: boolean }
-const EMPTY: Filters = { search: '', accountId: '', creditCardId: '', categoryId: '', type: '', status: '', recurring: false }
+interface Filters { search: string; accountId: string; creditCardId: string; categoryId: string; responsibleId: string; type: '' | TransactionType; status: '' | TransactionStatus; recurring: boolean }
+const EMPTY: Filters = { search: '', accountId: '', creditCardId: '', categoryId: '', responsibleId: '', type: '', status: '', recurring: false }
 
 const chip = (active: boolean) => clsx('rounded-full border px-3 py-1.5 text-xs font-medium transition',
   active ? 'border-primary bg-primary/20 text-primary-hover' : 'border-border text-muted hover:text-text')
 
 export default function Transactions() {
+  const { user } = useAuth()
   const [period, setPeriod] = useState(currentPeriod())
   const [f, setF] = useState<Filters>(EMPTY)
   const [showFilters, setShowFilters] = useState(false)
@@ -40,6 +42,27 @@ export default function Transactions() {
     return [...m.values()]
   }, [queries])
 
+  const responsibles = useMemo(() => {
+    const map = new Map<string, UserSummary>()
+    if (user) {
+      map.set(user.id, { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email })
+    }
+    ;(accounts.data ?? []).forEach((a) => {
+      if (a.owner) map.set(a.owner.id, a.owner)
+    })
+    creditCards.forEach((c) => {
+      if (c.owner) map.set(c.owner.id, c.owner)
+    })
+    all.forEach((t) => {
+      if (t.responsible) map.set(t.responsible.id, t.responsible)
+    })
+    return [...map.values()].sort((a, b) => {
+      if (a.id === user?.id) return -1
+      if (b.id === user?.id) return 1
+      return fullName(a).localeCompare(fullName(b), 'pt-BR')
+    })
+  }, [user, accounts.data, creditCards, all])
+
   const filtered = useMemo(() => {
     const term = f.search.trim().toLowerCase()
     return all.filter((t) =>
@@ -47,6 +70,7 @@ export default function Transactions() {
       (!f.accountId || t.accountId === f.accountId || t.destinationAccountId === f.accountId) &&
       (!f.creditCardId || t.creditCardId === f.creditCardId) &&
       (!f.categoryId || (f.categoryId === 'none' ? !t.categoryId : t.categoryId === f.categoryId)) &&
+      (!f.responsibleId || t.responsibleId === f.responsibleId) &&
       (!f.type || t.type === f.type) &&
       (!f.status || t.status === f.status) &&
       (!f.recurring || !!t.recurrenceGroupId))
@@ -54,7 +78,7 @@ export default function Transactions() {
 
   const income = filtered.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
   const expense = filtered.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
-  const activeCount = [f.accountId, f.creditCardId, f.categoryId, f.type, f.status, f.recurring].filter(Boolean).length
+  const activeCount = [f.accountId, f.creditCardId, f.categoryId, f.responsibleId, f.type, f.status, f.recurring].filter(Boolean).length
   const accountNames = useMemo(() => new Map((accounts.data ?? []).map((a) => [a.id, a.name])), [accounts.data])
   const cardNames = useMemo(() => new Map(creditCards.map((c) => [c.id, c.name])), [creditCards])
 
@@ -96,7 +120,11 @@ export default function Transactions() {
             <Field label="Conta">
               <Select value={f.accountId} onChange={(e) => set('accountId', e.target.value)}>
                 <option value="">Todas as contas</option>
-                {accounts.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {accounts.data?.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}{a.owner ? ` (${fullName(a.owner)})` : ''}
+                  </option>
+                ))}
               </Select>
             </Field>
             <Field label="Cartão de crédito">
@@ -110,6 +138,16 @@ export default function Transactions() {
                 <option value="">Todas as categorias</option>
                 <option value="none">Sem categoria</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Responsável">
+              <Select value={f.responsibleId} onChange={(e) => set('responsibleId', e.target.value)}>
+                <option value="">Todos os responsáveis</option>
+                {responsibles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {fullName(r)}{r.id === user?.id ? ' (Você)' : ''}
+                  </option>
+                ))}
               </Select>
             </Field>
           </div>
