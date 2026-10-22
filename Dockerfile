@@ -9,8 +9,10 @@ ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 
-FROM nginx:1.27-alpine
-ENV API_UPSTREAM=http://finance_api:8080
-COPY nginx.conf /etc/nginx/templates/default.conf.template
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+FROM node:22-alpine
+WORKDIR /app
+RUN npm i -g serve
+COPY --from=build /app/dist ./dist
+USER node
+EXPOSE 3000
+CMD ["serve", "-s", "dist", "-l", "3000"]
