@@ -10,7 +10,7 @@ export interface User { id: string; firstName: string; lastName: string; email: 
 export interface AuthResponse { accessToken: string; tokenType: string; expiresIn: number; user: User }
 
 export interface Account {
-  id: string; ownerId: string; name: string; startBalance: number; balance: number
+  id: string; ownerId: string; owner?: UserSummary; name: string; startBalance: number; balance: number
   type: AccountType; tax: number | null; groupId: string | null; createdAt: string; updatedAt: string
 }
 export interface UserSummary { id: string; firstName: string; lastName: string; email: string }
@@ -62,6 +62,10 @@ export interface Transaction {
   installmentNumber?: number | null; totalInstallments?: number | null
   createdAt: string; updatedAt: string
 }
+export interface AccountSplitInput {
+  accountId: string
+  amount: number
+}
 export interface CreateTransactionInput {
   title: string; amount: number; date: string; accountId: string; type: TransactionType
   destinationAccountId?: string | null; categoryId?: string | null; status: TransactionStatus
@@ -69,6 +73,7 @@ export interface CreateTransactionInput {
   recurrenceInterval: number; recurrenceInstallments: number; isInfinite: boolean
   creditCardId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
   installmentAmountMode?: 'INSTALLMENT' | 'TOTAL'
+  splits?: AccountSplitInput[] | null
 }
 export interface UpdateTransactionInput {
   title: string; amount: number; date: string; categoryId?: string | null; status: TransactionStatus

@@ -86,9 +86,7 @@ export function useAccessibleAccounts() {
     ;(own.data ?? []).forEach((a) => map.set(a.id, a))
     groupAccQueries.forEach((q) =>
       (q.data ?? []).forEach((ga) => {
-        if (!map.has(ga.id)) {
-          map.set(ga.id, { ...ga, ownerId: ga.owner.id })
-        }
+        map.set(ga.id, { ...ga, ownerId: ga.owner.id, owner: ga.owner })
       }),
     )
     return [...map.values()]

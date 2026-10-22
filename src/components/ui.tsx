@@ -25,10 +25,10 @@ export function Button({ variant = 'primary', size = 'md', loading, className, c
   )
 }
 
-export function Field({ label, error, children, hint }: { label: string; error?: string; children: ReactNode; hint?: string }) {
+export function Field({ label, error, children, hint }: { label?: string; error?: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-xs font-medium text-muted">{label}</span>
+      {label && <span className="text-xs font-medium text-muted">{label}</span>}
       {children}
       {hint && !error && <span className="block text-xs text-muted">{hint}</span>}
       {error && <span className="block text-xs text-expense">{error}</span>}

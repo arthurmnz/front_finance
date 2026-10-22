@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Plus, Split, Trash2, Wand2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { ALL_MONEY, useAccessibleAccounts, useAction, useCreditCards, useGroupCategories, useMyCategories } from '@/lib/hooks'
 import type {
+  AccountSplitInput,
   CreateTransactionInput,
   RecurrenceFrequency,
   Transaction,
@@ -9,7 +12,7 @@ import type {
   TransactionType,
   UpdateTransactionInput,
 } from '@/lib/types'
-import { defaultInvoicePeriod, formatMoney, freqLabel, monthLabel, toISODate, txTypeLabel } from '@/lib/format'
+import { defaultInvoicePeriod, formatMoney, freqLabel, fullName, monthLabel, toISODate, txTypeLabel } from '@/lib/format'
 import { Button, Field, Input, Modal, MoneyInput, Select } from './ui'
 import clsx from 'clsx'
 
@@ -55,6 +58,12 @@ export default function TransactionFormModal({
   const [infinite, setInfinite] = useState(false)
   const [installmentAmountMode, setInstallmentAmountMode] = useState<'INSTALLMENT' | 'TOTAL'>('TOTAL')
   const [allFuture, setAllFuture] = useState(false)
+  const [splitMode, setSplitMode] = useState(false)
+  const [splits, setSplits] = useState<AccountSplitInput[]>([])
+
+  const canSplit = !editing && sourceMode === 'ACCOUNT' && type !== 'TRANSFER' && accounts.length >= 2
+  const activeSplit = canSplit && splitMode
+  const splitsSum = useMemo(() => splits.reduce((s, item) => s + item.amount, 0), [splits])
 
   const selectedCard = useMemo(() => creditCards.find((c) => c.id === creditCardId), [creditCards, creditCardId])
   const effectiveAccountId = useMemo(() => {
@@ -69,8 +78,14 @@ export default function TransactionFormModal({
     if (sourceMode === 'CARD' || transaction?.creditCardId) {
       return selectedCard?.groupId ?? selectedAccount?.groupId ?? undefined
     }
+    if (activeSplit) {
+      for (const s of splits) {
+        const acc = accounts.find((a) => a.id === s.accountId)
+        if (acc?.groupId) return acc.groupId
+      }
+    }
     return selectedAccount?.groupId ?? undefined
-  }, [sourceMode, transaction, selectedCard, selectedAccount])
+  }, [sourceMode, transaction, selectedCard, selectedAccount, activeSplit, splits, accounts])
   const groupCategories = useGroupCategories(effectiveGroupId).data ?? []
 
   useEffect(() => {
@@ -96,6 +111,8 @@ export default function TransactionFormModal({
     setInfinite(false)
     setInstallmentAmountMode('TOTAL')
     setAllFuture(false)
+    setSplitMode(false)
+    setSplits([])
 
     const cardObj = creditCards.find((c) => c.id === cid)
     if (t?.invoiceMonth && t?.invoiceYear) {
@@ -157,9 +174,69 @@ export default function TransactionFormModal({
     { invalidate: ALL_MONEY, success: editing ? 'Transação atualizada' : 'Transação criada', onSuccess: onClose },
   )
 
+  const toggleSplitMode = () => {
+    if (splitMode) {
+      setSplitMode(false)
+      return
+    }
+    const firstId = accountId || accounts[0]?.id || ''
+    const secondId = accounts.find((a) => a.id !== firstId)?.id || ''
+    const base = amount > 0 ? Math.floor(amount / 2) : 0
+    const rem = amount > 0 ? amount - base * 2 : 0
+    setSplits([
+      { accountId: firstId, amount: base + rem },
+      ...(secondId ? [{ accountId: secondId, amount: base }] : []),
+    ])
+    setSplitMode(true)
+  }
+
+  const addSplitRow = () => {
+    if (splits.length >= 10 || splits.length >= accounts.length) return
+    const used = new Set(splits.map((s) => s.accountId))
+    const nextAcc = accounts.find((a) => !used.has(a.id))
+    if (!nextAcc) return
+    const remaining = Math.max(0, amount - splitsSum)
+    setSplits((prev) => [...prev, { accountId: nextAcc.id, amount: remaining }])
+  }
+
+  const removeSplitRow = (idx: number) => {
+    if (splits.length <= 2) return
+    setSplits((prev) => {
+      const next = prev.filter((_, i) => i !== idx)
+      const nextSum = next.reduce((s, item) => s + item.amount, 0)
+      if (amount === splitsSum) setAmount(nextSum)
+      return next
+    })
+  }
+
+  const updateSplitAmount = (idx: number, cents: number) => {
+    setSplits((prev) => {
+      const next = prev.map((item, i) => (i === idx ? { ...item, amount: cents } : item))
+      const nextSum = next.reduce((s, item) => s + item.amount, 0)
+      if (amount === 0 || amount === splitsSum) {
+        setAmount(nextSum)
+      }
+      return next
+    })
+  }
+
+  const updateSplitAccount = (idx: number, newAccId: string) => {
+    setSplits((prev) => prev.map((item, i) => (i === idx ? { ...item, accountId: newAccId } : item)))
+  }
+
+  const divideEqually = () => {
+    const targetTotal = amount > 0 ? amount : splitsSum
+    if (targetTotal <= 0 || splits.length === 0) return
+    const base = Math.floor(targetTotal / splits.length)
+    const rem = targetTotal - base * splits.length
+    setSplits((prev) => prev.map((item, i) => ({ ...item, amount: i === 0 ? base + rem : base })))
+    setAmount(targetTotal)
+  }
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim() || amount <= 0) return
+    const effectiveTotal = activeSplit ? (amount > 0 ? amount : splitsSum) : amount
+    if (!title.trim() || effectiveTotal <= 0) return
     if (editing) {
       save.mutate({
         title: title.trim(),
@@ -191,6 +268,45 @@ export default function TransactionFormModal({
         invoiceMonth,
         invoiceYear,
         installmentAmountMode: recurring && !infinite ? installmentAmountMode : 'INSTALLMENT',
+      })
+    } else if (activeSplit) {
+      if (splits.length < 2 || splits.length > 10) {
+        toast.error('Selecione entre 2 e 10 contas para dividir a transação.')
+        return
+      }
+      if (splits.some((s) => !s.accountId)) {
+        toast.error('Selecione a conta em todas as linhas da divisão.')
+        return
+      }
+      const distinctIds = new Set(splits.map((s) => s.accountId))
+      if (distinctIds.size !== splits.length) {
+        toast.error('As contas selecionadas na divisão devem ser distintas.')
+        return
+      }
+      if (splits.some((s) => s.amount <= 0)) {
+        toast.error('Informe um valor maior que zero para cada conta participante.')
+        return
+      }
+      if (amount > 0 && splitsSum !== amount) {
+        toast.error(`A soma das contas (${formatMoney(splitsSum)}) deve ser igual ao valor total (${formatMoney(amount)}).`)
+        return
+      }
+      save.mutate({
+        title: title.trim(),
+        amount: splitsSum,
+        date,
+        accountId: splits[0].accountId,
+        type,
+        status,
+        destinationAccountId: null,
+        categoryId: categoryId || null,
+        isRecurring: recurring,
+        recurrenceFrequency: recurring ? freq : null,
+        recurrenceInterval: interval,
+        recurrenceInstallments: installments,
+        isInfinite: recurring && infinite,
+        installmentAmountMode: recurring && !infinite ? installmentAmountMode : 'INSTALLMENT',
+        splits,
       })
     } else {
       if (!accountId || (type === 'TRANSFER' && !destId)) return
@@ -349,16 +465,122 @@ export default function TransactionFormModal({
         )}
 
         {!editing && sourceMode === 'ACCOUNT' && (
-          <Field label={type === 'TRANSFER' ? 'Conta de origem' : 'Conta'}>
-            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
-              <option value="">Selecione…</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div className="space-y-3">
+            {canSplit && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted">
+                  {activeSplit ? `Dividindo entre ${splits.length} contas (máx. 10)` : 'Conta'}
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleSplitMode}
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
+                    activeSplit
+                      ? 'bg-primary text-white'
+                      : 'bg-surface-2 text-primary-hover hover:bg-primary/20',
+                  )}
+                >
+                  <Split className="size-3.5" />
+                  {activeSplit ? 'Usar apenas 1 conta' : 'Dividir entre várias contas'}
+                </button>
+              </div>
+            )}
+
+            {activeSplit ? (
+              <div className="space-y-2.5 rounded-2xl border border-border bg-surface-2/40 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted">
+                    Escolha quanto cada conta vai {type === 'INCOME' ? 'receber' : 'pagar'}:
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={divideEqually}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-medium text-text hover:bg-surface-2"
+                    >
+                      <Wand2 className="size-3" /> Dividir igualmente
+                    </button>
+                    {splits.length < 10 && splits.length < accounts.length && (
+                      <button
+                        type="button"
+                        onClick={addSplitRow}
+                        className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary-hover hover:bg-primary/25"
+                      >
+                        <Plus className="size-3" /> Conta
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {splits.map((row, idx) => {
+                    const usedByOthers = new Set(splits.filter((_, i) => i !== idx).map((s) => s.accountId))
+                    const availableAccounts = accounts.filter((a) => !usedByOthers.has(a.id))
+                    return (
+                      <div key={idx} className="grid grid-cols-[1fr_9rem_auto] items-center gap-2">
+                        <Select
+                          value={row.accountId}
+                          onChange={(e) => updateSplitAccount(idx, e.target.value)}
+                          required
+                        >
+                          <option value="">Selecione a conta…</option>
+                          {availableAccounts.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name}
+                              {a.owner ? ` (${fullName(a.owner)})` : ''}
+                            </option>
+                          ))}
+                        </Select>
+                        <MoneyInput value={row.amount} onChange={(cents) => updateSplitAmount(idx, cents)} />
+                        <button
+                          type="button"
+                          disabled={splits.length <= 2}
+                          onClick={() => removeSplitRow(idx)}
+                          className="rounded-lg p-2 text-muted hover:text-expense disabled:opacity-30"
+                          aria-label="Remover conta da divisão"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-xs">
+                  <span className="text-muted">
+                    Soma das contas: <b className="text-text">{formatMoney(splitsSum)}</b>
+                  </span>
+                  {amount > 0 && splitsSum !== amount && (
+                    <button
+                      type="button"
+                      onClick={() => setAmount(splitsSum)}
+                      className={clsx(
+                        'font-medium underline',
+                        splitsSum < amount ? 'text-warn' : 'text-expense',
+                      )}
+                    >
+                      {splitsSum < amount
+                        ? `Faltam ${formatMoney(amount - splitsSum)} (usar soma)`
+                        : `Passou ${formatMoney(splitsSum - amount)} (usar soma)`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <Field label={type === 'TRANSFER' ? 'Conta de origem' : canSplit ? undefined : 'Conta'}>
+                <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+                  <option value="">Selecione…</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                      {a.owner ? ` (${fullName(a.owner)})` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+          </div>
         )}
 
         {!editing && sourceMode === 'ACCOUNT' && type === 'TRANSFER' && (
