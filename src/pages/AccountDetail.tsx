@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { useAction, useAccounts, useAccountTransactions, useMyCategories } from '@/lib/hooks'
+import { useAccessibleAccounts, useAction, useAccountTransactions, useAllCategories } from '@/lib/hooks'
 import { accountTypeLabel, formatMoney } from '@/lib/format'
 import { Button, Card, ConfirmDialog, Empty, PageHeader, QueryState } from '@/components/ui'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
@@ -15,10 +15,10 @@ export default function AccountDetail() {
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const nav = useNavigate()
-  const accounts = useAccounts()
+  const accounts = useAccessibleAccounts()
   const account = accounts.data?.find((a) => a.id === id)
   const tx = useAccountTransactions(id, period.month, period.year)
-  const cats = useMyCategories().data ?? []
+  const cats = useAllCategories().data
 
   const del = useAction(() => api.delete(`/accounts/${id}`), { invalidate: [['accounts'], ['total-balance'], ['transactions'], ['groups']], success: 'Conta excluída', onSuccess: () => nav('/contas') })
 

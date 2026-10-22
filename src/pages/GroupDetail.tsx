@@ -182,7 +182,7 @@ export default function GroupDetail() {
               ) : (
                 <Card className="divide-y divide-border">
                   {accounts.data.map((a) => (
-                    <div key={a.id} className="flex items-center justify-between gap-3 p-3">
+                    <Link key={a.id} to={`/contas/${a.id}`} className="flex items-center justify-between gap-3 p-3 hover:bg-surface-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{a.name}</p>
                         <p className="truncate text-xs text-muted">
@@ -190,7 +190,7 @@ export default function GroupDetail() {
                         </p>
                       </div>
                       <p className="text-sm font-semibold">{formatMoney(a.balance)}</p>
-                    </div>
+                    </Link>
                   ))}
                 </Card>
               )}

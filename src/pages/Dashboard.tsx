@@ -4,7 +4,7 @@ import { useQueries } from '@tanstack/react-query'
 import { ArrowDownCircle, ArrowUpCircle, Eye, EyeOff, Plus } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '@/lib/api'
-import { useAccounts, useCreditCards, useMyCategories, useTotalBalance } from '@/lib/hooks'
+import { useAccounts, useAllCategories, useCreditCards, useTotalBalance } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import type { Transaction } from '@/lib/types'
 import { formatDate, formatMoney } from '@/lib/format'
@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [addingCard, setAddingCard] = useState(false)
   const creditCards = useCreditCards()
   const accounts = useAccounts()
-  const cats = useMyCategories().data ?? []
+  const cats = useAllCategories().data
   const balance = useTotalBalance(period.month, period.year, ignored)
 
   const txQueries = useQueries({

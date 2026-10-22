@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
-import { ALL_MONEY, useAccounts, useAction, useCreditCards, useMyCategories } from '@/lib/hooks'
+import { ALL_MONEY, useAccessibleAccounts, useAction, useCreditCards, useGroupCategories, useMyCategories } from '@/lib/hooks'
 import type {
   CreateTransactionInput,
   RecurrenceFrequency,
@@ -31,9 +31,9 @@ export default function TransactionFormModal({
   defaultInvoicePeriod: initialInvoicePeriod,
 }: Props) {
   const editing = !!transaction
-  const accounts = useAccounts().data ?? []
+  const accounts = useAccessibleAccounts().data ?? []
   const creditCards = useCreditCards().data ?? []
-  const categories = useMyCategories().data ?? []
+  const myCategories = useMyCategories().data ?? []
 
   const [sourceMode, setSourceMode] = useState<'ACCOUNT' | 'CARD'>('ACCOUNT')
   const [type, setType] = useState<TransactionType>('EXPENSE')
@@ -57,6 +57,21 @@ export default function TransactionFormModal({
   const [allFuture, setAllFuture] = useState(false)
 
   const selectedCard = useMemo(() => creditCards.find((c) => c.id === creditCardId), [creditCards, creditCardId])
+  const effectiveAccountId = useMemo(() => {
+    if (editing) return transaction?.accountId ?? ''
+    return sourceMode === 'CARD' ? (selectedCard?.accountId ?? '') : accountId
+  }, [editing, transaction, sourceMode, selectedCard, accountId])
+  const selectedAccount = useMemo(
+    () => accounts.find((a) => a.id === effectiveAccountId),
+    [accounts, effectiveAccountId],
+  )
+  const effectiveGroupId = useMemo(() => {
+    if (sourceMode === 'CARD' || transaction?.creditCardId) {
+      return selectedCard?.groupId ?? selectedAccount?.groupId ?? undefined
+    }
+    return selectedAccount?.groupId ?? undefined
+  }, [sourceMode, transaction, selectedCard, selectedAccount])
+  const groupCategories = useGroupCategories(effectiveGroupId).data ?? []
 
   useEffect(() => {
     if (!open) return
@@ -109,9 +124,13 @@ export default function TransactionFormModal({
     setInvoiceYear(def.year)
   }, [open, editing, sourceMode, selectedCard, date, invoiceManual])
 
-  const filteredCategories = useMemo(
-    () => categories.filter((c) => type === 'TRANSFER' || c.type === 'BOTH' || c.type === type),
-    [categories, type],
+  const filteredGroupCategories = useMemo(
+    () => groupCategories.filter((c) => type === 'TRANSFER' || c.type === 'BOTH' || c.type === type),
+    [groupCategories, type],
+  )
+  const filteredMyCategories = useMemo(
+    () => myCategories.filter((c) => type === 'TRANSFER' || c.type === 'BOTH' || c.type === type),
+    [myCategories, type],
   )
 
   const invoiceOptions = useMemo(() => {
@@ -353,11 +372,35 @@ export default function TransactionFormModal({
           <Field label="Categoria">
             <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
               <option value="">Sem categoria</option>
-              {filteredCategories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {effectiveGroupId && filteredGroupCategories.length > 0 ? (
+                <>
+                  <optgroup label="Categorias do grupo">
+                    {filteredGroupCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.icon ? `${c.icon} ` : ''}
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {filteredMyCategories.length > 0 && (
+                    <optgroup label="Minhas categorias">
+                      {filteredMyCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.icon ? `${c.icon} ` : ''}
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
+              ) : (
+                filteredMyCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.icon ? `${c.icon} ` : ''}
+                    {c.name}
+                  </option>
+                ))
+              )}
             </Select>
           </Field>
         )}

@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { api, errorMessage } from './api'
 import type * as T from './types'
@@ -43,6 +44,58 @@ export const useCategoryTransactions = (categoryId: string | undefined, month: n
 export const useMyCategories = () => useQuery({ queryKey: ['categories', 'me'], queryFn: () => get<T.Category[]>('/categories/me') })
 export const useGroupCategories = (groupId: string | undefined) =>
   useQuery({ queryKey: ['categories', 'group', groupId], enabled: !!groupId, queryFn: () => get<T.Category[]>(`/categories/group/${groupId}`) })
+
+/** Retorna todas as categorias acessíveis pelo usuário (pessoais + de todos os grupos dos quais participa). */
+export function useAllCategories() {
+  const mine = useMyCategories()
+  const groups = useGroups()
+  const groupQueries = useQueries({
+    queries: (groups.data ?? []).map((g) => ({
+      queryKey: ['categories', 'group', g.id],
+      queryFn: () => get<T.Category[]>(`/categories/group/${g.id}`),
+    })),
+  })
+  const data = useMemo(() => {
+    const map = new Map<string, T.Category>()
+    ;(mine.data ?? []).forEach((c) => map.set(c.id, c))
+    groupQueries.forEach((q) => (q.data ?? []).forEach((c) => map.set(c.id, c)))
+    return [...map.values()]
+  }, [mine.data, groupQueries])
+  return {
+    data,
+    myCategories: mine.data ?? [],
+    isLoading: mine.isLoading || groups.isLoading || groupQueries.some((q) => q.isLoading),
+  }
+}
+
+/** Retorna as contas próprias do usuário + contas vinculadas aos grupos dos quais participa. */
+export function useAccessibleAccounts() {
+  const own = useAccounts()
+  const groups = useGroups()
+  const groupAccQueries = useQueries({
+    queries: (groups.data ?? []).map((g) => ({
+      queryKey: ['groups', g.id, 'accounts'],
+      queryFn: () => get<T.GroupAccount[]>(`/groups/${g.id}/accounts`),
+    })),
+  })
+  const data = useMemo(() => {
+    const map = new Map<string, T.Account>()
+    ;(own.data ?? []).forEach((a) => map.set(a.id, a))
+    groupAccQueries.forEach((q) =>
+      (q.data ?? []).forEach((ga) => {
+        if (!map.has(ga.id)) {
+          map.set(ga.id, { ...ga, ownerId: ga.owner.id })
+        }
+      }),
+    )
+    return [...map.values()]
+  }, [own.data, groupAccQueries])
+  return {
+    ...own,
+    data,
+    isLoading: own.isLoading || groups.isLoading || groupAccQueries.some((q) => q.isLoading),
+  }
+}
 
 export const useFriendships = (status?: T.FriendshipStatus) =>
   useQuery({ queryKey: ['friendships', status ?? 'all'], queryFn: () => get<T.Friendship[]>('/friendships', { status }) })

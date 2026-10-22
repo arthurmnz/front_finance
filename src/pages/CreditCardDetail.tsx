@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Percent, Plus, Trash2, Users } from 'lucide-react'
 import { api } from '@/lib/api'
-import { ALL_MONEY, useAccounts, useAction, useCreditCardInvoice, useCreditCards, useMyCategories } from '@/lib/hooks'
+import { ALL_MONEY, useAccounts, useAction, useAllCategories, useCreditCardInvoice, useCreditCards } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import { formatDate, formatMoney, fullName, initials, toISODate } from '@/lib/format'
 import {
@@ -37,7 +37,7 @@ export default function CreditCardDetail() {
   const cards = useCreditCards()
   const card = cards.data?.find((c) => c.id === id)
   const accounts = useAccounts().data ?? []
-  const cats = useMyCategories().data ?? []
+  const cats = useAllCategories().data
 
   const [period, setPeriod] = useState(currentPeriod())
   const [periodInitialized, setPeriodInitialized] = useState(false)

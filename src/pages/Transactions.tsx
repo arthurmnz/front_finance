@@ -3,7 +3,7 @@ import { useQueries } from '@tanstack/react-query'
 import { Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
-import { useAccounts, useCreditCards, useMyCategories } from '@/lib/hooks'
+import { useAccessibleAccounts, useAllCategories, useCreditCards } from '@/lib/hooks'
 import type { Transaction, TransactionStatus, TransactionType } from '@/lib/types'
 import { formatMoney, txTypeLabel } from '@/lib/format'
 import { Button, Card, Empty, Field, Input, PageHeader, Select, Spinner } from '@/components/ui'
@@ -22,9 +22,9 @@ export default function Transactions() {
   const [f, setF] = useState<Filters>(EMPTY)
   const [showFilters, setShowFilters] = useState(false)
   const [adding, setAdding] = useState(false)
-  const accounts = useAccounts()
+  const accounts = useAccessibleAccounts()
   const creditCards = useCreditCards().data ?? []
-  const categories = useMyCategories().data ?? []
+  const categories = useAllCategories().data
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF((p) => ({ ...p, [k]: v }))
 
   const queries = useQueries({
