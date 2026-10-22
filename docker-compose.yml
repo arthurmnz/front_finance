@@ -1,0 +1,16 @@
+services:
+  front:
+    build:
+      context: .
+      args:
+        # Deixe vazio para o front chamar /api/... na mesma origem (via Nginx ou Cloudflare Tunnel)
+        VITE_API_URL: ${VITE_API_URL:-}
+    container_name: finance_front
+    restart: always
+    ports:
+      - "127.0.0.1:3000:80"
+    environment:
+      # URL interna ou host do backend para onde o Nginx vai repassar /api/*
+      - API_UPSTREAM=${API_UPSTREAM:-http://host.docker.internal:8080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
