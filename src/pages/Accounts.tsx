@@ -5,7 +5,7 @@ import { api } from '@/lib/api'
 import { useAccounts, useAction, useGroups } from '@/lib/hooks'
 import type { Account } from '@/lib/types'
 import { accountTypeLabel, formatMoney } from '@/lib/format'
-import { Badge, Button, Card, ConfirmDialog, Empty, Modal, PageHeader, QueryState, Select } from '@/components/ui'
+import { Badge, Button, Card, CardGridSkeleton, ConfirmDialog, Empty, Modal, PageHeader, QueryState, Select } from '@/components/ui'
 import AccountFormModal from '@/components/AccountFormModal'
 import { toast } from 'sonner'
 
@@ -33,7 +33,7 @@ export default function Accounts() {
   return (
     <>
       <PageHeader title="Contas" action={<Button onClick={() => setForm({ open: true })}><Plus className="size-4" /> Nova</Button>} />
-      <QueryState isLoading={q.isLoading} error={q.error}>
+      <QueryState isLoading={q.isLoading} error={q.error} skeleton={<CardGridSkeleton cards={4} />}>
         {!q.data?.length ? (
           <Empty title="Você ainda não tem contas." icon={<Wallet className="size-10" />}><Button onClick={() => setForm({ open: true })}>Criar primeira conta</Button></Empty>
         ) : (

@@ -65,7 +65,7 @@ export default function Calendar() {
       queryFn: () =>
         api
           .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, { params: period })
-          .then((r) => ({ card: c, invoice: r.data })),
+          .then((r) => r.data),
     })),
   })
 
@@ -111,15 +111,17 @@ export default function Calendar() {
 
     // Faturas de cartão vinculadas às contas filtradas com saldo restante a pagar no mês
     const invoicesByDay = new Map<string, { cardId: string; cardName: string; remainingAmount: number }[]>()
-    invoiceQueries.forEach((iq) => {
-      const data = iq.data
-      if (!data) return
-      if (!ids.has(data.card.accountId)) return
-      if (data.invoice.remainingAmount <= 0) return
-      const dueIso = data.invoice.dueDate.slice(0, 10)
+    const cardList = creditCards.data ?? []
+    invoiceQueries.forEach((iq, idx) => {
+      const inv = iq.data
+      const card = cardList[idx]
+      if (!inv || !card) return
+      if (!ids.has(card.accountId)) return
+      if ((inv.remainingAmount ?? 0) <= 0 || !inv.dueDate) return
+      const dueIso = inv.dueDate.slice(0, 10)
       invoicesByDay.set(dueIso, [
         ...(invoicesByDay.get(dueIso) ?? []),
-        { cardId: data.card.id, cardName: data.card.name, remainingAmount: data.invoice.remainingAmount },
+        { cardId: card.id, cardName: card.name, remainingAmount: inv.remainingAmount },
       ])
     })
 

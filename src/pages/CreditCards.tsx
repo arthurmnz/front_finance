@@ -7,7 +7,7 @@ import { useAccounts, useAction, useCreditCards, useGroups } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import type { CreditCard } from '@/lib/types'
 import { formatMoney, fullName } from '@/lib/format'
-import { Badge, Button, Card, ConfirmDialog, Empty, Modal, PageHeader, QueryState, Select } from '@/components/ui'
+import { Badge, Button, Card, CardGridSkeleton, ConfirmDialog, Empty, Modal, PageHeader, QueryState, Select } from '@/components/ui'
 import CreditCardFormModal from '@/components/CreditCardFormModal'
 
 export default function CreditCards() {
@@ -59,7 +59,7 @@ export default function CreditCards() {
         }
       />
 
-      <QueryState isLoading={q.isLoading} error={q.error}>
+      <QueryState isLoading={q.isLoading} error={q.error} skeleton={<CardGridSkeleton cards={4} />}>
         {!q.data?.length ? (
           <Empty title="Você ainda não tem cartões de crédito." icon={<CardIcon className="size-10" />}>
             <Button onClick={() => setForm({ open: true })}>Criar primeiro cartão</Button>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Percent, Plus, Trash2, Users } from 'lucide-react'
 import { api } from '@/lib/api'
-import { ALL_MONEY, useAccounts, useAction, useAllCategories, useCreditCardInvoice, useCreditCards } from '@/lib/hooks'
+import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCardInvoice, useCreditCards } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import { formatDate, formatMoney, fullName, initials, toISODate } from '@/lib/format'
 import {
@@ -10,7 +10,7 @@ import {
   Button,
   Card,
   ConfirmDialog,
-  Empty,
+  DetailSkeleton,
   Field,
   Input,
   Modal,
@@ -22,6 +22,7 @@ import {
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
+import NotFound from './NotFound'
 
 const statusLabel: Record<string, { label: string; tone: 'default' | 'income' | 'expense' | 'warn' | 'primary' }> = {
   OPEN: { label: 'Aberta', tone: 'primary' },
@@ -36,7 +37,7 @@ export default function CreditCardDetail() {
   const { user } = useAuth()
   const cards = useCreditCards()
   const card = cards.data?.find((c) => c.id === id)
-  const accounts = useAccounts().data ?? []
+  const accounts = useAccessibleAccounts().data ?? []
   const cats = useAllCategories().data
 
   const [period, setPeriod] = useState(currentPeriod())
@@ -59,13 +60,19 @@ export default function CreditCardDetail() {
 
   useEffect(() => {
     if (card && !periodInitialized) {
-      setPeriod({ month: card.currentInvoiceMonth, year: card.currentInvoiceYear })
+      if (card.currentInvoiceMonth && card.currentInvoiceYear) {
+        setPeriod({ month: card.currentInvoiceMonth, year: card.currentInvoiceYear })
+      }
       setPeriodInitialized(true)
     }
   }, [card, periodInitialized])
 
   const invoice = useCreditCardInvoice(id, period.month, period.year)
-  const inv = invoice.data
+  const rawInv = invoice.data as unknown
+  const inv =
+    rawInv && typeof rawInv === 'object' && 'invoice' in rawInv
+      ? (rawInv as { invoice: typeof invoice.data }).invoice
+      : invoice.data
 
   const del = useAction(() => api.delete(`/credit-cards/${id}`), {
     invalidate: ALL_MONEY,
@@ -103,7 +110,17 @@ export default function CreditCardDetail() {
     },
   )
 
-  if (cards.isSuccess && !card) return <Empty title="Cartão não encontrado." />
+  if (cards.isLoading) return <DetailSkeleton />
+  if (cards.isSuccess && !card) {
+    return (
+      <NotFound
+        title="Cartão não encontrado"
+        description="Este cartão de crédito não existe, foi excluído ou você não tem permissão para visualizá-lo."
+        backTo="/cartoes"
+        backLabel="Meus cartões"
+      />
+    )
+  }
 
   const openPayModal = () => {
     setPayAmount(inv?.remainingAmount ?? 0)
@@ -226,13 +243,13 @@ export default function CreditCardDetail() {
               )}
             </Card>
 
-            {inv.byResponsible.length > 0 && (
+            {(inv.byResponsible ?? []).length > 0 && (
               <Card className="mb-4 p-4">
                 <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
                   <Users className="size-3.5" /> Gastos por responsável nesta fatura
                 </h3>
                 <div className="divide-y divide-border">
-                  {inv.byResponsible.map((r) => (
+                  {(inv.byResponsible ?? []).map((r) => (
                     <div key={r.user.id} className="flex items-center gap-3 py-2 text-sm">
                       <div className="grid size-7 place-items-center rounded-full bg-primary/20 text-[11px] font-bold text-primary-hover">
                         {initials(r.user)}
@@ -245,7 +262,7 @@ export default function CreditCardDetail() {
               </Card>
             )}
 
-            <TransactionList items={inv.transactions} categories={cats} showResponsible />
+            <TransactionList items={inv.transactions ?? []} categories={cats} showResponsible />
           </>
         )}
       </QueryState>

@@ -41,7 +41,7 @@ export default function Dashboard() {
       queryFn: () =>
         api
           .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, { params: period })
-          .then((r) => ({ card: c, invoice: r.data })),
+          .then((r) => r.data),
     })),
   })
   const txLoading = txQueries.some((q) => q.isLoading)
@@ -80,11 +80,13 @@ export default function Dashboard() {
     })
 
     let unpaidCardInvoices = 0
-    invoiceQueries.forEach((iq) => {
-      const d = iq.data
-      if (!d) return
-      if (!activeIds.has(d.card.accountId)) return
-      unpaidCardInvoices += Math.max(0, d.invoice.remainingAmount)
+    const cardList = creditCards.data ?? []
+    invoiceQueries.forEach((iq, idx) => {
+      const inv = iq.data
+      const card = cardList[idx]
+      if (!inv || !card) return
+      if (!activeIds.has(card.accountId)) return
+      unpaidCardInvoices += Math.max(0, inv.remainingAmount ?? 0)
     })
 
     const projectedIncome = realizedIncome + pendingIncome

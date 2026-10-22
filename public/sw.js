@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finance-pwa-v1'
+const CACHE_NAME = 'finance-pwa-v2'
 
 self.addEventListener('install', () => {
   self.skipWaiting()
@@ -12,10 +12,6 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-self.addEventListener('fetch', (event) => {
-  const req = event.request
-  if (req.method !== 'GET' || req.url.includes('/api/')) return
-  event.respondWith(
-    fetch(req).catch(() => caches.match(req))
-  )
+self.addEventListener('fetch', () => {
+  // Network-first passthrough (required for PWA installability without breaking API/SPA requests)
 })

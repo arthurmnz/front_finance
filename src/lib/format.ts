@@ -1,7 +1,7 @@
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
 /** Valores no backend são centavos. */
-export const formatMoney = (cents: number) => brl.format(cents / 100)
+export const formatMoney = (cents?: number | null) => brl.format(((cents ?? 0) || 0) / 100)
 
 export const parseMoneyToCents = (v: string): number => {
   const digits = v.replace(/\D/g, '')
@@ -9,16 +9,21 @@ export const parseMoneyToCents = (v: string): number => {
 }
 export const centsToInput = (cents: number) => (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export const formatDate = (iso: string) => {
+export const formatDate = (iso?: string | null) => {
+  if (!iso || typeof iso !== 'string') return '—'
   const [y, m, d] = iso.slice(0, 10).split('-')
-  return `${d}/${m}/${y}`
+  return d && m && y ? `${d}/${m}/${y}` : iso
 }
 export const toISODate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-export const monthLabel = (month: number, year: number) =>
-  new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+export const monthLabel = (month: number, year: number) => {
+  const now = new Date()
+  const m = month >= 1 && month <= 12 ? month : now.getMonth() + 1
+  const y = year >= 1970 ? year : now.getFullYear()
+  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+}
 
-export const fullName = (u: { firstName: string; lastName: string }) => `${u.firstName} ${u.lastName}`.trim()
-export const initials = (u: { firstName: string; lastName: string }) => `${u.firstName[0] ?? ''}${u.lastName[0] ?? ''}`.toUpperCase()
+export const fullName = (u?: { firstName?: string; lastName?: string } | null) => `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim()
+export const initials = (u?: { firstName?: string; lastName?: string } | null) => `${u?.firstName?.[0] ?? ''}${u?.lastName?.[0] ?? ''}`.toUpperCase()
 
 export const accountTypeLabel: Record<string, string> = { CHECKING: 'Conta corrente', WALLET: 'Carteira', SAVINGS: 'Reservas', INVESTMENTS: 'Investimentos' }
 export const categoryTypeLabel: Record<string, string> = { EXPENSE: 'Despesa', INCOME: 'Receita', BOTH: 'Ambos' }

@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useAuth } from '@/lib/auth'
-import { Spinner } from '@/components/ui'
+import { DetailSkeleton } from '@/components/ui'
 import Layout from '@/components/Layout'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
@@ -18,15 +18,16 @@ import Friends from '@/pages/Friends'
 import Groups from '@/pages/Groups'
 import GroupDetail from '@/pages/GroupDetail'
 import Profile from '@/pages/Profile'
+import NotFound from '@/pages/NotFound'
 
 function Private({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="grid min-h-dvh place-items-center"><Spinner /></div>
+  if (loading) return <div className="mx-auto max-w-5xl p-4 sm:p-6"><DetailSkeleton /></div>
   return user ? <>{children}</> : <Navigate to="/login" replace />
 }
 function Public({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="grid min-h-dvh place-items-center"><Spinner /></div>
+  if (loading) return <div className="mx-auto max-w-md p-6"><DetailSkeleton /></div>
   return user ? <Navigate to="/" replace /> : <>{children}</>
 }
 
@@ -49,8 +50,9 @@ export default function App() {
         <Route path="grupos" element={<Groups />} />
         <Route path="grupos/:id" element={<GroupDetail />} />
         <Route path="perfil" element={<Profile />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

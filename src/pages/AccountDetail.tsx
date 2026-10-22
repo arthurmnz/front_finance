@@ -4,10 +4,11 @@ import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAccessibleAccounts, useAction, useAccountTransactions, useAllCategories } from '@/lib/hooks'
 import { accountTypeLabel, formatMoney } from '@/lib/format'
-import { Button, Card, ConfirmDialog, Empty, PageHeader, QueryState } from '@/components/ui'
+import { Button, Card, ConfirmDialog, DetailSkeleton, PageHeader, QueryState } from '@/components/ui'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
+import NotFound from './NotFound'
 
 export default function AccountDetail() {
   const { id } = useParams()
@@ -22,7 +23,17 @@ export default function AccountDetail() {
 
   const del = useAction(() => api.delete(`/accounts/${id}`), { invalidate: [['accounts'], ['total-balance'], ['transactions'], ['groups']], success: 'Conta excluída', onSuccess: () => nav('/contas') })
 
-  if (accounts.isSuccess && !account) return <Empty title="Conta não encontrada." />
+  if (accounts.isLoading) return <DetailSkeleton />
+  if (!account) {
+    return (
+      <NotFound
+        title="Conta não encontrada"
+        description="Esta conta bancária não existe, foi excluída ou você não tem acesso a ela."
+        backTo="/contas"
+        backLabel="Minhas contas"
+      />
+    )
+  }
   const items = (tx.data ?? []).filter((t) => !t.creditCardId)
   const income = items.filter((t) => t.type === 'INCOME' || (t.type === 'TRANSFER' && t.destinationAccountId === id)).reduce((s, t) => s + t.amount, 0)
   const expense = items.filter((t) => t.type === 'EXPENSE' || (t.type === 'TRANSFER' && t.accountId === id)).reduce((s, t) => s + t.amount, 0)
