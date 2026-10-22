@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Percent, Plus, Trash2, Users } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Percent, Plus, Search, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
+import clsx from 'clsx'
 import { api } from '@/lib/api'
 import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCardInvoice, useCreditCards } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
-import { formatDate, formatMoney, fullName, initials, toISODate } from '@/lib/format'
+import type { TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
+import { formatDate, formatMoney, fullName, initials, toISODate, txTypeLabel } from '@/lib/format'
 import {
   Badge,
   Button,
   Card,
   ConfirmDialog,
   DetailSkeleton,
+  Empty,
   Field,
   Input,
   Modal,
@@ -23,6 +26,31 @@ import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
 import NotFound from './NotFound'
+
+interface Filters {
+  search: string
+  accountId: string
+  categoryId: string
+  responsibleId: string
+  type: '' | TransactionType
+  status: '' | TransactionStatus
+  recurring: boolean
+}
+const EMPTY_FILTERS: Filters = {
+  search: '',
+  accountId: '',
+  categoryId: '',
+  responsibleId: '',
+  type: '',
+  status: '',
+  recurring: false,
+}
+
+const chip = (active: boolean) =>
+  clsx(
+    'rounded-full border px-3 py-1.5 text-xs font-medium transition',
+    active ? 'border-primary bg-primary/20 text-primary-hover' : 'border-border text-muted hover:text-text',
+  )
 
 const statusLabel: Record<string, { label: string; tone: 'default' | 'income' | 'expense' | 'warn' | 'primary' }> = {
   OPEN: { label: 'Aberta', tone: 'primary' },
@@ -42,10 +70,13 @@ export default function CreditCardDetail() {
 
   const [period, setPeriod] = useState(currentPeriod())
   const [periodInitialized, setPeriodInitialized] = useState(false)
+  const [f, setF] = useState<Filters>(EMPTY_FILTERS)
+  const [showFilters, setShowFilters] = useState(false)
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [paying, setPaying] = useState(false)
   const [editingRevolving, setEditingRevolving] = useState(false)
+  const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF((p) => ({ ...p, [k]: v }))
 
   // Campos de pagamento manual
   const [payAmount, setPayAmount] = useState(0)
@@ -73,6 +104,47 @@ export default function CreditCardDetail() {
     rawInv && typeof rawInv === 'object' && 'invoice' in rawInv
       ? (rawInv as { invoice: typeof invoice.data }).invoice
       : invoice.data
+
+  const allTransactions = useMemo(() => inv?.transactions ?? [], [inv?.transactions])
+
+  const responsibles = useMemo(() => {
+    const map = new Map<string, UserSummary>()
+    if (user) {
+      map.set(user.id, { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email })
+    }
+    if (card?.owner) map.set(card.owner.id, card.owner)
+    ;(inv?.byResponsible ?? []).forEach((r) => {
+      if (r.user) map.set(r.user.id, r.user)
+    })
+    allTransactions.forEach((t) => {
+      if (t.responsible) map.set(t.responsible.id, t.responsible)
+    })
+    return [...map.values()].sort((a, b) => {
+      if (a.id === user?.id) return -1
+      if (b.id === user?.id) return 1
+      return fullName(a).localeCompare(fullName(b), 'pt-BR')
+    })
+  }, [user, card?.owner, inv?.byResponsible, allTransactions])
+
+  const filteredTransactions = useMemo(() => {
+    const term = f.search.trim().toLowerCase()
+    return allTransactions.filter(
+      (t) =>
+        (!term || t.title.toLowerCase().includes(term)) &&
+        (!f.accountId || t.accountId === f.accountId || t.destinationAccountId === f.accountId) &&
+        (!f.categoryId || (f.categoryId === 'none' ? !t.categoryId : t.categoryId === f.categoryId)) &&
+        (!f.responsibleId || t.responsibleId === f.responsibleId) &&
+        (!f.type || t.type === f.type) &&
+        (!f.status || t.status === f.status) &&
+        (!f.recurring || !!t.recurrenceGroupId),
+    )
+  }, [allTransactions, f])
+
+  const activeCount = [f.accountId, f.categoryId, f.responsibleId, f.type, f.status, f.recurring].filter(Boolean).length
+  const filteredTotal = useMemo(
+    () => filteredTransactions.reduce((s, t) => s + t.amount, 0),
+    [filteredTransactions],
+  )
 
   const del = useAction(() => api.delete(`/credit-cards/${id}`), {
     invalidate: ALL_MONEY,
@@ -188,7 +260,15 @@ export default function CreditCardDetail() {
       )}
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <MonthPicker value={period} onChange={setPeriod} />
+        <div className="flex flex-wrap items-center gap-2">
+          <MonthPicker value={period} onChange={setPeriod} />
+          <Button variant="outline" size="sm" className="h-10" onClick={() => setShowFilters((v) => !v)}>
+            <SlidersHorizontal className="size-4" /> Filtros
+            {activeCount > 0 && (
+              <span className="rounded-full bg-primary px-1.5 text-[11px] text-white">{activeCount}</span>
+            )}
+          </Button>
+        </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={openRevolvingModal}>
             <Percent className="size-4" /> Rotativo / Saldo anterior
@@ -250,19 +330,129 @@ export default function CreditCardDetail() {
                 </h3>
                 <div className="divide-y divide-border">
                   {(inv.byResponsible ?? []).map((r) => (
-                    <div key={r.user.id} className="flex items-center gap-3 py-2 text-sm">
+                    <button
+                      type="button"
+                      key={r.user.id}
+                      onClick={() => set('responsibleId', f.responsibleId === r.user.id ? '' : r.user.id)}
+                      className={clsx(
+                        'flex w-full items-center gap-3 rounded-lg px-1.5 py-2 text-left text-sm transition hover:bg-surface-2',
+                        f.responsibleId === r.user.id && 'bg-primary/15 text-primary-hover',
+                      )}
+                      title="Clique para filtrar por este responsável"
+                    >
                       <div className="grid size-7 place-items-center rounded-full bg-primary/20 text-[11px] font-bold text-primary-hover">
                         {initials(r.user)}
                       </div>
                       <span className="flex-1 truncate">{fullName(r.user)}</span>
                       <span className="font-semibold">{formatMoney(r.amount)}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </Card>
             )}
 
-            <TransactionList items={inv.transactions ?? []} categories={cats} showResponsible />
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+              <Input
+                className="pl-9"
+                placeholder="Buscar por título na fatura…"
+                value={f.search}
+                onChange={(e) => set('search', e.target.value)}
+              />
+            </div>
+
+            {showFilters && (
+              <Card className="mb-4 space-y-4 p-4">
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted">Tipo</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button className={chip(f.type === '')} onClick={() => set('type', '')}>
+                      Todos
+                    </button>
+                    {(['EXPENSE', 'INCOME', 'TRANSFER'] as const).map((t) => (
+                      <button key={t} className={chip(f.type === t)} onClick={() => set('type', t)}>
+                        {txTypeLabel[t]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted">Situação</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button className={chip(f.status === '')} onClick={() => set('status', '')}>
+                      Todas
+                    </button>
+                    <button className={chip(f.status === 'PENDING')} onClick={() => set('status', 'PENDING')}>
+                      Pendentes
+                    </button>
+                    <button className={chip(f.status === 'COMPLETED')} onClick={() => set('status', 'COMPLETED')}>
+                      Concluídas
+                    </button>
+                    <button className={chip(f.recurring)} onClick={() => set('recurring', !f.recurring)}>
+                      Recorrentes / Parceladas
+                    </button>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Conta vinculada">
+                    <Select value={f.accountId} onChange={(e) => set('accountId', e.target.value)}>
+                      <option value="">Todas as contas</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                          {a.owner ? ` (${fullName(a.owner)})` : ''}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Categoria">
+                    <Select value={f.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
+                      <option value="">Todas as categorias</option>
+                      <option value="none">Sem categoria</option>
+                      {cats.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Responsável">
+                    <Select value={f.responsibleId} onChange={(e) => set('responsibleId', e.target.value)}>
+                      <option value="">Todos os responsáveis</option>
+                      {responsibles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {fullName(r)}
+                          {r.id === user?.id ? ' (Você)' : ''}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                {activeCount > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setF((p) => ({ ...EMPTY_FILTERS, search: p.search }))}>
+                    <X className="size-4" /> Limpar filtros
+                  </Button>
+                )}
+              </Card>
+            )}
+
+            {(activeCount > 0 || f.search.trim().length > 0) && (
+              <div className="mb-3 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 text-xs">
+                <span className="text-muted">
+                  Exibindo <b className="text-text">{filteredTransactions.length}</b> de {allTransactions.length}{' '}
+                  lançamento(s)
+                </span>
+                <span className="text-muted">
+                  Total filtrado: <b className="text-expense">{formatMoney(filteredTotal)}</b>
+                </span>
+              </div>
+            )}
+
+            {allTransactions.length > 0 && !filteredTransactions.length ? (
+              <Empty title="Nenhum lançamento na fatura com esses filtros." />
+            ) : (
+              <TransactionList items={filteredTransactions} categories={cats} showResponsible />
+            )}
           </>
         )}
       </QueryState>
