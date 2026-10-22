@@ -9,6 +9,6 @@ export default defineConfig({
   server: {
     port: 5173,
     // Em dev, /api é encaminhado ao backend (mesma origem => cookie do refresh token funciona sem CORS)
-    proxy: { '/api': { target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8080', changeOrigin: true } },
+    proxy: { '/api': { target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:5000', changeOrigin: true } },
   },
 })
