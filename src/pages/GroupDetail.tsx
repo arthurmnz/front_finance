@@ -23,7 +23,6 @@ import clsx from 'clsx'
 import { api } from '@/lib/api'
 import {
   useAction,
-  useAllCategories,
   useGroup,
   useGroupAccountRequests,
   useGroupAccounts,
@@ -93,7 +92,8 @@ export default function GroupDetail() {
   const accounts = useGroupAccounts(tab === 'accounts' || needsEcosystemData ? id : undefined)
   const cards = useGroupCreditCards(tab === 'cards' || needsEcosystemData ? id : undefined)
   const categories = useGroupCategories(tab === 'categories' || needsEcosystemData ? id : undefined)
-  const allCategories = useAllCategories()
+  const groupCategories = categories.data ?? []
+  const groupCategoryIds = useMemo(() => new Set(groupCategories.map((c) => c.id)), [groupCategories])
   const requests = useGroupAccountRequests(id, isAdmin)
   const cardRequests = useGroupCreditCardRequests(id, isAdmin)
 
@@ -119,17 +119,28 @@ export default function GroupDetail() {
   const txLoading =
     accounts.isLoading ||
     cards.isLoading ||
+    categories.isLoading ||
     txAccountQueries.some((q) => q.isLoading) ||
     txCardQueries.some((q) => q.isLoading)
 
   const invStamp = txCardQueries.map((q) => q.dataUpdatedAt).join(',')
 
   const allGroupTransactions = useMemo(() => {
+    if (categories.isLoading) return []
+    const isAllowedInGroup = (t: Transaction) => !t.categoryId || groupCategoryIds.has(t.categoryId)
     const map = new Map<string, Transaction>()
-    txAccountQueries.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
-    txCardQueries.forEach((q) => q.data?.transactions?.forEach((t) => map.set(t.id, t)))
+    txAccountQueries.forEach((q) =>
+      q.data?.forEach((t) => {
+        if (isAllowedInGroup(t)) map.set(t.id, t)
+      }),
+    )
+    txCardQueries.forEach((q) =>
+      q.data?.transactions?.forEach((t) => {
+        if (isAllowedInGroup(t)) map.set(t.id, t)
+      }),
+    )
     return [...map.values()]
-  }, [txAccountQueries, txCardQueries])
+  }, [txAccountQueries, txCardQueries, groupCategoryIds, categories.isLoading])
 
   const groupSummary = useMemo(() => {
     const activeAccounts = (accounts.data ?? []).filter((a) => !ignored.includes(a.id))
@@ -163,7 +174,10 @@ export default function GroupDetail() {
       const card = cardList[idx]
       if (!inv || !card) return
       if (ignored.includes(card.accountId)) return
-      unpaidCardInvoices += Math.max(0, inv.remainingAmount ?? 0)
+      const groupInvoiceTotal = (inv.transactions ?? [])
+        .filter((t) => !t.categoryId || groupCategoryIds.has(t.categoryId))
+        .reduce((s, t) => s + t.amount, 0)
+      unpaidCardInvoices += Math.min(Math.max(0, inv.remainingAmount ?? 0), groupInvoiceTotal)
     })
 
     const projectedIncome = realizedIncome + pendingIncome
@@ -179,7 +193,7 @@ export default function GroupDetail() {
       projectedExpense,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts.data, cards.data, ignored, allGroupTransactions, invStamp])
+  }, [accounts.data, cards.data, ignored, allGroupTransactions, groupCategoryIds, invStamp])
 
   const byCategory = useMemo(() => {
     const map = new Map<string, number>()
@@ -191,11 +205,11 @@ export default function GroupDetail() {
       })
     return [...map.entries()]
       .map(([catId, value], i) => {
-        const c = allCategories.data.find((cat) => cat.id === catId)
+        const c = groupCategories.find((cat) => cat.id === catId)
         return { name: c?.name ?? 'Sem categoria', value, color: c?.color ?? PALETTE[i % PALETTE.length] }
       })
       .sort((a, b) => b.value - a.value)
-  }, [allGroupTransactions, allCategories.data])
+  }, [allGroupTransactions, groupCategories])
 
   const upcoming = useMemo(
     () =>
@@ -715,9 +729,9 @@ export default function GroupDetail() {
                     </Field>
                     <Field label="Categoria">
                       <Select value={txFilters.categoryId} onChange={(e) => setTxF('categoryId', e.target.value)}>
-                        <option value="">Todas as categorias</option>
+                        <option value="">Todas as categorias do grupo</option>
                         <option value="none">Sem categoria</option>
-                        {allCategories.data.map((c) => (
+                        {groupCategories.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}
                           </option>
@@ -780,7 +794,7 @@ export default function GroupDetail() {
               ) : (
                 <TransactionList
                   items={filteredTransactions}
-                  categories={allCategories.data}
+                  categories={groupCategories}
                   groupByDay
                   accountNames={accountNames}
                   cardNames={cardNames}
