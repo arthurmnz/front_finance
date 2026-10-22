@@ -1,7 +1,8 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { AuthResponse } from './types'
 
-const baseURL = `${(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')}/api/v1`
+const defaultApiUrl = import.meta.env.PROD ? 'https://api-finance.devmnz.com.br' : ''
+const baseURL = `${(import.meta.env.VITE_API_URL ?? defaultApiUrl).replace(/\/$/, '')}/api/v1`
 
 export const api = axios.create({ baseURL, withCredentials: true })
 
