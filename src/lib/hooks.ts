@@ -55,12 +55,14 @@ export function useAllCategories() {
       queryFn: () => get<T.Category[]>(`/categories/group/${g.id}`),
     })),
   })
+  const groupStamp = groupQueries.map((q) => q.dataUpdatedAt).join(',')
   const data = useMemo(() => {
     const map = new Map<string, T.Category>()
     ;(mine.data ?? []).forEach((c) => map.set(c.id, c))
     groupQueries.forEach((q) => (q.data ?? []).forEach((c) => map.set(c.id, c)))
     return [...map.values()]
-  }, [mine.data, groupQueries])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine.data, groupStamp])
   return {
     data,
     myCategories: mine.data ?? [],
@@ -78,6 +80,7 @@ export function useAccessibleAccounts() {
       queryFn: () => get<T.GroupAccount[]>(`/groups/${g.id}/accounts`),
     })),
   })
+  const groupAccStamp = groupAccQueries.map((q) => q.dataUpdatedAt).join(',')
   const data = useMemo(() => {
     const map = new Map<string, T.Account>()
     ;(own.data ?? []).forEach((a) => map.set(a.id, a))
@@ -89,7 +92,8 @@ export function useAccessibleAccounts() {
       }),
     )
     return [...map.values()]
-  }, [own.data, groupAccQueries])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [own.data, groupAccStamp])
   return {
     ...own,
     data,

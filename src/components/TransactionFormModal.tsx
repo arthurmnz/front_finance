@@ -114,7 +114,15 @@ export default function TransactionFormModal({
     } else {
       setInvoiceManual(false)
     }
-  }, [open, transaction, defaultAccountId, defaultCreditCardId, initialInvoicePeriod, accounts, creditCards])
+    // Inicializa apenas quando o modal abre ou a transação alvo muda
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, transaction?.id, defaultAccountId, defaultCreditCardId, initialInvoicePeriod?.month, initialInvoicePeriod?.year])
+
+  useEffect(() => {
+    if (!open || editing) return
+    if (!accountId && accounts[0]?.id) setAccountId(defaultAccountId ?? accounts[0].id)
+    if (!creditCardId && creditCards[0]?.id) setCreditCardId(defaultCreditCardId ?? creditCards[0].id)
+  }, [open, editing, accountId, creditCardId, accounts, creditCards, defaultAccountId, defaultCreditCardId])
 
   // Recalcula automaticamente a fatura quando a data ou cartão mudam (se o usuário não editou manualmente a fatura)
   useEffect(() => {
