@@ -114,6 +114,48 @@ export const useGroupCreditCards = (id: string | undefined) => useQuery({ queryK
 export const useGroupCreditCardRequests = (id: string | undefined, enabled = true) =>
   useQuery({ queryKey: ['groups', id, 'credit-card-requests'], enabled: !!id && enabled, queryFn: () => get<T.CreditCardGroupRequest[]>(`/groups/${id}/credit-card-requests`) })
 
+export const useGroupUsedCategories = (groupId: string | undefined) =>
+  useQuery({
+    queryKey: ['groups', groupId, 'used-categories'],
+    enabled: !!groupId,
+    queryFn: () => get<T.GroupUsedCategory[]>(`/groups/${groupId}/used-categories`),
+  })
+
+export const useGroupDebts = (groupId: string | undefined) =>
+  useQuery({
+    queryKey: ['groups', groupId, 'debts'],
+    enabled: !!groupId,
+    queryFn: () => get<T.GroupDebtsResponse>(`/groups/${groupId}/debts`),
+  })
+
+export const useUserDebtsSummary = () =>
+  useQuery({
+    queryKey: ['users', 'me', 'debts-summary'],
+    queryFn: () => get<T.UserDebtsSummary>('/users/me/debts-summary'),
+  })
+
+export const useResponsibleTransactions = (month?: number, year?: number) =>
+  useQuery({
+    queryKey: ['transactions', 'responsible', 'me', month, year],
+    queryFn: () => get<T.Transaction[]>('/transactions/responsible/me', { month, year }),
+  })
+
+export function useSettleDebt(groupId: string | undefined) {
+  return useAction<T.SettleDebtInput, T.DebtSettlement>(
+    (input) => api.post<T.DebtSettlement>(`/groups/${groupId}/debts/settle`, input).then((r) => r.data),
+    {
+      invalidate: [
+        ['groups', groupId, 'debts'],
+        ['users', 'me', 'debts-summary'],
+        ['accounts'],
+        ['total-balance'],
+        ['transactions'],
+      ],
+      success: 'Acerto realizado com sucesso!',
+    },
+  )
+}
+
 // ---------- Mutations ----------
 export function useAction<V, R = unknown>(
   fn: (v: V) => Promise<R>,

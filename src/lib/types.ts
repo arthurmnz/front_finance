@@ -86,3 +86,85 @@ export interface GroupSummary { id: string; name: string; myRole: GroupRole; mem
 export interface GroupMember { user: UserSummary; role: GroupRole; joinedAt: string }
 export interface Group extends GroupSummary { members: GroupMember[]; updatedAt: string }
 export interface GroupInvitation { id: string; group: { id: string; name: string }; inviter: UserSummary; status: string; createdAt: string; updatedAt: string }
+
+export interface GroupUsedCategory {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  isPersonal: boolean
+  ownerId: string | null
+}
+
+export interface MemberDebtDetail {
+  debtorId: string
+  creditorId: string
+  grossAmount: number
+  settledAmount: number
+  remainingAmount: number
+  transactions: Transaction[]
+}
+
+export interface PairDebtBalance {
+  debtor: UserSummary
+  creditor: UserSummary
+  netAmount: number
+  grossDebts: MemberDebtDetail[]
+}
+
+export interface GroupMonthlyDebt {
+  month: number
+  year: number
+  userBalances: PairDebtBalance[]
+}
+
+export interface DebtSettlement {
+  id: string
+  groupId: string
+  debtorId: string
+  debtor: UserSummary | null
+  creditorId: string
+  creditor: UserSummary | null
+  amount: number
+  targetMonth: number
+  targetYear: number
+  date: string
+  transactionId: string | null
+  notes: string | null
+  createdAt: string
+}
+
+export interface GroupDebtsResponse {
+  groupId: string
+  totalOwedByMe: number
+  totalReceivableByMe: number
+  monthlyBalances: GroupMonthlyDebt[]
+  settlements: DebtSettlement[]
+}
+
+export interface SettleDebtInput {
+  creditorId: string
+  amount: number
+  targetMonth: number
+  targetYear: number
+  sourceAccountId: string
+  destinationAccountId: string
+  notes?: string | null
+}
+
+export interface UserDebtGroupSummary {
+  groupId: string
+  groupName: string
+  owedCurrentMonth: number
+  receivableCurrentMonth: number
+  owedTotal: number
+  receivableTotal: number
+}
+
+export interface UserDebtsSummary {
+  totalOwedCurrentMonth: number
+  totalReceivableCurrentMonth: number
+  totalOwedAllMonths: number
+  totalReceivableAllMonths: number
+  groups: UserDebtGroupSummary[]
+}

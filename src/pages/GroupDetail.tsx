@@ -1,17 +1,21 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
 import {
   ArrowDownCircle,
   ArrowLeft,
   ArrowUpCircle,
+  Calendar,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CreditCard as CardIcon,
   Eye,
   EyeOff,
   LogOut,
   Plus,
+  Receipt,
   Search,
   SlidersHorizontal,
   Trash2,
@@ -29,10 +33,12 @@ import {
   useGroupCategories,
   useGroupCreditCardRequests,
   useGroupCreditCards,
+  useGroupDebts,
+  useGroupUsedCategories,
 } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import type { CreditCardInvoice, GroupMember, GroupRole, Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
-import { accountTypeLabel, formatDate, formatMoney, fullName, initials, roleLabel, txTypeLabel } from '@/lib/format'
+import { accountTypeLabel, formatDate, formatMoney, fullName, initials, monthLabel, roleLabel, txTypeLabel } from '@/lib/format'
 import { normalizeCategoryColor } from '@/lib/palette'
 import {
   Badge,
@@ -54,8 +60,9 @@ import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import CategoryManager from '@/components/CategoryManager'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
+import SettleDebtModal from '@/components/SettleDebtModal'
 
-type Tab = 'overview' | 'transactions' | 'members' | 'accounts' | 'cards' | 'categories' | 'requests' | 'settings'
+type Tab = 'overview' | 'transactions' | 'settlements' | 'members' | 'accounts' | 'cards' | 'categories' | 'requests' | 'settings'
 
 interface TxFilters {
   search: string
@@ -89,13 +96,32 @@ const chip = (active: boolean) =>
 export default function GroupDetail() {
   const { id } = useParams()
   const nav = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
-  const [tab, setTab] = useState<Tab>('overview')
+  const initialTab = (searchParams.get('tab') as Tab) || 'overview'
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [period, setPeriod] = useState(currentPeriod())
   const [ignored, setIgnored] = useState<string[]>([])
   const [txFilters, setTxFilters] = useState<TxFilters>(EMPTY_TX_FILTERS)
   const [showTxFilters, setShowTxFilters] = useState(false)
   const [addingTx, setAddingTx] = useState(false)
+  const [settleTarget, setSettleTarget] = useState<{
+    creditor: UserSummary
+    targetMonth: number
+    targetYear: number
+    suggestedAmount: number
+  } | null>(null)
+  const [expandedPairs, setExpandedPairs] = useState<Set<string>>(new Set())
+
+  const toggleExpandPair = (key: string) => {
+    setExpandedPairs((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   const setTxF = <K extends keyof TxFilters>(k: K, v: TxFilters[K]) => setTxFilters((p) => ({ ...p, [k]: v }))
   const toggleIgnore = (accId: string) =>
     setIgnored((p) => (p.includes(accId) ? p.filter((x) => x !== accId) : [...p, accId]))
@@ -104,12 +130,15 @@ export default function GroupDetail() {
   const g = group.data
   const isOwner = g?.myRole === 'OWNER'
   const isAdmin = isOwner || g?.myRole === 'ADMIN'
-  const needsEcosystemData = tab === 'overview' || tab === 'transactions'
+  const needsEcosystemData = tab === 'overview' || tab === 'transactions' || tab === 'settlements'
   const accounts = useGroupAccounts(tab === 'accounts' || needsEcosystemData ? id : undefined)
   const cards = useGroupCreditCards(tab === 'cards' || needsEcosystemData ? id : undefined)
   const categories = useGroupCategories(tab === 'categories' || needsEcosystemData ? id : undefined)
   const groupCategories = categories.data ?? []
-  const groupCategoryIds = useMemo(() => new Set(groupCategories.map((c) => c.id)), [groupCategories])
+  const usedCategoriesQuery = useGroupUsedCategories(needsEcosystemData ? id : undefined)
+  const usedCategories = usedCategoriesQuery.data ?? []
+  const groupDebtsQuery = useGroupDebts(tab === 'settlements' || tab === 'overview' ? id : undefined)
+  const groupDebts = groupDebtsQuery.data
   const requests = useGroupAccountRequests(id, isAdmin)
   const cardRequests = useGroupCreditCardRequests(id, isAdmin)
 
@@ -136,27 +165,26 @@ export default function GroupDetail() {
     accounts.isLoading ||
     cards.isLoading ||
     categories.isLoading ||
+    usedCategoriesQuery.isLoading ||
     txAccountQueries.some((q) => q.isLoading) ||
     txCardQueries.some((q) => q.isLoading)
 
   const invStamp = txCardQueries.map((q) => q.dataUpdatedAt).join(',')
 
   const allGroupTransactions = useMemo(() => {
-    if (categories.isLoading) return []
-    const isAllowedInGroup = (t: Transaction) => !t.categoryId || groupCategoryIds.has(t.categoryId)
     const map = new Map<string, Transaction>()
     txAccountQueries.forEach((q) =>
       q.data?.forEach((t) => {
-        if (isAllowedInGroup(t)) map.set(t.id, t)
+        map.set(t.id, t)
       }),
     )
     txCardQueries.forEach((q) =>
       q.data?.transactions?.forEach((t) => {
-        if (isAllowedInGroup(t)) map.set(t.id, t)
+        map.set(t.id, t)
       }),
     )
     return [...map.values()]
-  }, [txAccountQueries, txCardQueries, groupCategoryIds, categories.isLoading])
+  }, [txAccountQueries, txCardQueries])
 
   const groupSummary = useMemo(() => {
     const activeAccounts = (accounts.data ?? []).filter((a) => !ignored.includes(a.id))
@@ -191,7 +219,6 @@ export default function GroupDetail() {
       if (!inv || !card) return
       if (ignored.includes(card.accountId)) return
       const groupInvoiceTotal = (inv.transactions ?? [])
-        .filter((t) => !t.categoryId || groupCategoryIds.has(t.categoryId))
         .reduce((s, t) => s + t.amount, 0)
       unpaidCardInvoices += Math.min(Math.max(0, inv.remainingAmount ?? 0), groupInvoiceTotal)
     })
@@ -209,23 +236,36 @@ export default function GroupDetail() {
       projectedExpense,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts.data, cards.data, ignored, allGroupTransactions, groupCategoryIds, invStamp])
+  }, [accounts.data, cards.data, ignored, allGroupTransactions, invStamp])
 
   const byCategory = useMemo(() => {
-    const map = new Map<string, number>()
+    const catMap = new Map<string, { id?: string; name: string; value: number; color: string; isPrivateToOther: boolean }>()
+
     allGroupTransactions
       .filter((t) => t.type === 'EXPENSE')
       .forEach((t) => {
-        const k = t.categoryId ?? 'none'
-        map.set(k, (map.get(k) ?? 0) + t.amount)
+        const cat = usedCategories.find((c) => c.id === t.categoryId) ?? groupCategories.find((c) => c.id === t.categoryId)
+        const name = cat?.name ?? 'Sem categoria'
+        const isPersonal = cat ? ('isPersonal' in cat ? cat.isPersonal : Boolean(cat.userId)) : false
+        const ownerId = cat ? ('ownerId' in cat ? cat.ownerId : cat.userId) : null
+        const isPrivate = Boolean(isPersonal && ownerId !== user?.id)
+        const existing = catMap.get(name)
+        if (existing) {
+          existing.value += t.amount
+          if (isPrivate) existing.isPrivateToOther = true
+        } else {
+          catMap.set(name, {
+            id: cat?.id,
+            name,
+            value: t.amount,
+            color: normalizeCategoryColor(cat?.color),
+            isPrivateToOther: isPrivate,
+          })
+        }
       })
-    return [...map.entries()]
-      .map(([catId, value], i) => {
-        const c = groupCategories.find((cat) => cat.id === catId)
-        return { name: c?.name ?? 'Sem categoria', value, color: normalizeCategoryColor(c?.color, i) }
-      })
-      .sort((a, b) => b.value - a.value)
-  }, [allGroupTransactions, groupCategories])
+
+    return [...catMap.values()].sort((a, b) => b.value - a.value)
+  }, [allGroupTransactions, usedCategories, groupCategories, user?.id])
 
   const upcoming = useMemo(
     () =>
@@ -386,6 +426,7 @@ export default function GroupDetail() {
               tabs={[
                 { key: 'overview', label: 'Resumo' },
                 { key: 'transactions', label: 'Transações' },
+                { key: 'settlements', label: 'Acertos' },
                 { key: 'members', label: 'Membros' },
                 { key: 'accounts', label: 'Contas' },
                 { key: 'cards', label: 'Cartões' },
@@ -558,6 +599,11 @@ export default function GroupDetail() {
                           <li key={i} className="flex items-center gap-2 text-xs text-text-muted">
                             <span className="size-2 rounded-full shrink-0" style={{ background: c.color }} />
                             <span className="truncate">{c.name}</span>
+                            {c.isPrivateToOther && (
+                              <span className="rounded bg-surface-2 px-1 text-[10px] text-text-dim">
+                                privada
+                              </span>
+                            )}
                             <span className="ml-auto font-medium text-white tabular-nums">{formatMoney(c.value)}</span>
                           </li>
                         ))}
@@ -831,6 +877,225 @@ export default function GroupDetail() {
             </div>
           )}
 
+          {tab === 'settlements' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <Card className="p-4 bg-surface-1">
+                  <p className="text-xs text-text-dim">Você deve no total (todos os meses)</p>
+                  <p className="mt-1 text-2xl font-bold text-rose-400 tabular-nums">
+                    {formatMoney(groupDebts?.totalOwedByMe ?? 0)}
+                  </p>
+                </Card>
+                <Card className="p-4 bg-surface-1">
+                  <p className="text-xs text-text-dim">Você tem a receber (todos os meses)</p>
+                  <p className="mt-1 text-2xl font-bold text-lime tabular-nums">
+                    {formatMoney(groupDebts?.totalReceivableByMe ?? 0)}
+                  </p>
+                </Card>
+              </div>
+
+              {groupDebtsQuery.isLoading ? (
+                <Spinner />
+              ) : !groupDebts?.monthlyBalances.length || groupDebts.monthlyBalances.every((m) => !m.userBalances.length) ? (
+                <Empty title="Nenhum acerto pendente ou compra compartilhada no grupo.">
+                  <p className="text-xs text-text-dim">
+                    Quando um membro utilizar o cartão de outro membro neste grupo, o rateio e controle de quitação por fatura aparecerão aqui.
+                  </p>
+                </Empty>
+              ) : (
+                <div className="space-y-4">
+                  {groupDebts.monthlyBalances
+                    .filter((m) => m.userBalances.length > 0)
+                    .map((m) => {
+                      const now = new Date()
+                      const isCurrentMonth = m.month === now.getMonth() + 1 && m.year === now.getFullYear()
+                      const isFutureMonth = m.year > now.getFullYear() || (m.year === now.getFullYear() && m.month > now.getMonth() + 1)
+
+                      return (
+                        <Card key={`${m.year}-${m.month}`} className="p-4">
+                          <div className="mb-3 flex items-center justify-between border-b border-border/60 pb-3">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="size-4 text-violet" />
+                              <h3 className="font-semibold text-white capitalize">
+                                {monthLabel(m.month, m.year)}
+                              </h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isCurrentMonth && <Badge tone="primary">Mês Atual</Badge>}
+                              {isFutureMonth && <Badge tone="default">Fatura Futura</Badge>}
+                            </div>
+                          </div>
+
+                          <ul className="divide-y divide-border/60">
+                            {m.userBalances.map((b) => {
+                              const pairKey = `${m.year}-${m.month}-${b.debtor.id}-${b.creditor.id}`
+                              const isExpanded = expandedPairs.has(pairKey)
+                              const isDebtor = b.debtor.id === user?.id
+                              const isCreditor = b.creditor.id === user?.id
+
+                              return (
+                                <li key={pairKey} className="py-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-white">
+                                        {isDebtor ? (
+                                          <>
+                                            Você deve{' '}
+                                            <span className="font-bold text-rose-400 tabular-nums">
+                                              {formatMoney(b.netAmount)}
+                                            </span>{' '}
+                                            para {fullName(b.creditor)}
+                                          </>
+                                        ) : isCreditor ? (
+                                          <>
+                                            {fullName(b.debtor)} deve{' '}
+                                            <span className="font-bold text-lime tabular-nums">
+                                              {formatMoney(b.netAmount)}
+                                            </span>{' '}
+                                            para você
+                                          </>
+                                        ) : (
+                                          <>
+                                            {fullName(b.debtor)} deve{' '}
+                                            <span className="font-semibold text-white tabular-nums">
+                                              {formatMoney(b.netAmount)}
+                                            </span>{' '}
+                                            para {fullName(b.creditor)}
+                                          </>
+                                        )}
+                                      </p>
+                                      {b.netAmount === 0 && (
+                                        <p className="text-xs text-lime mt-0.5">Quitado para este mês 🎉</p>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      {isDebtor && b.netAmount > 0 && (
+                                        <Button
+                                          size="sm"
+                                          variant="primary"
+                                          onClick={() =>
+                                            setSettleTarget({
+                                              creditor: b.creditor,
+                                              targetMonth: m.month,
+                                              targetYear: m.year,
+                                              suggestedAmount: b.netAmount,
+                                            })
+                                          }
+                                        >
+                                          Quitar mês
+                                        </Button>
+                                      )}
+
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 text-xs gap-1"
+                                        onClick={() => toggleExpandPair(pairKey)}
+                                      >
+                                        {isExpanded ? (
+                                          <>
+                                            Ocultar detalhes <ChevronUp className="size-3.5" />
+                                          </>
+                                        ) : (
+                                          <>
+                                            Ver detalhes <ChevronDown className="size-3.5" />
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {isExpanded && (
+                                    <div className="mt-3 rounded-xl bg-surface-2 p-3 space-y-3">
+                                      <p className="text-xs font-semibold text-text-dim">
+                                        Detalhamento das compras na fatura ({m.month.toString().padStart(2, '0')}/{m.year})
+                                      </p>
+
+                                      {b.grossDebts.map((gd, idx) => (
+                                        <div key={idx} className="space-y-2 border-t border-border/40 pt-2 text-xs">
+                                          <div className="flex items-center justify-between text-text-muted">
+                                            <span>
+                                              Compras no cartão do credor:{' '}
+                                              <strong className="text-white tabular-nums">
+                                                {formatMoney(gd.grossAmount)}
+                                              </strong>
+                                            </span>
+                                            {gd.settledAmount > 0 && (
+                                              <span className="text-lime">
+                                                Já abatido: {formatMoney(gd.settledAmount)}
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          <ul className="space-y-1">
+                                            {gd.transactions.map((tx) => (
+                                              <li
+                                                key={tx.id}
+                                                className="flex items-center justify-between rounded-lg bg-surface-1 px-2.5 py-1.5"
+                                              >
+                                                <div className="min-w-0 pr-2">
+                                                  <p className="truncate text-white font-medium">{tx.title}</p>
+                                                  <p className="text-[11px] text-text-dim">
+                                                    {formatDate(tx.date)}
+                                                    {tx.installmentNumber && tx.totalInstallments
+                                                      ? ` · Parcela ${tx.installmentNumber}/${tx.totalInstallments}`
+                                                      : ''}
+                                                  </p>
+                                                </div>
+                                                <span className="shrink-0 font-semibold text-white tabular-nums">
+                                                  {formatMoney(tx.amount)}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </Card>
+                      )
+                    })}
+                </div>
+              )}
+
+              {groupDebts && groupDebts.settlements.length > 0 && (
+                <Card className="p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Receipt className="size-4 text-lime" />
+                    <h3 className="font-semibold text-white">Histórico de Quitações / Acertos</h3>
+                  </div>
+
+                  <ul className="divide-y divide-border/60">
+                    {groupDebts.settlements.map((s) => (
+                      <li key={s.id} className="py-2.5 flex items-center justify-between text-xs">
+                        <div>
+                          <p className="text-white font-medium">
+                            {fullName(s.debtor)} transferiu{' '}
+                            <span className="text-lime font-bold tabular-nums">
+                              {formatMoney(s.amount)}
+                            </span>{' '}
+                            para {fullName(s.creditor)}
+                          </p>
+                          <p className="text-text-dim text-[11px]">
+                            {formatDate(s.date)} · Referente à fatura{' '}
+                            {s.targetMonth.toString().padStart(2, '0')}/{s.targetYear}
+                            {s.notes ? ` · "${s.notes}"` : ''}
+                          </p>
+                        </div>
+                        <Badge tone="primary">Acerto Efetuado</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+            </div>
+          )}
+
           {tab === 'members' && (
             <Card className="divide-y divide-border">
               {g.members.map((m) => (
@@ -1095,6 +1360,19 @@ export default function GroupDetail() {
             defaultAccountId={accounts.data?.[0]?.id}
             defaultCreditCardId={!accounts.data?.length ? cards.data?.[0]?.id : undefined}
           />
+          {settleTarget && (
+            <SettleDebtModal
+              open={!!settleTarget}
+              onClose={() => setSettleTarget(null)}
+              groupId={id!}
+              creditor={settleTarget.creditor}
+              targetMonth={settleTarget.targetMonth}
+              targetYear={settleTarget.targetYear}
+              suggestedAmount={settleTarget.suggestedAmount}
+              groupAccounts={accounts.data ?? []}
+              groupCards={cards.data ?? []}
+            />
+          )}
         </>
       )}
     </QueryState>

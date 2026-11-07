@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
-import { ArrowDownCircle, ArrowUpCircle, ChevronRight, Eye, EyeOff, Plus } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, ChevronRight, Eye, EyeOff, Plus, Users } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '@/lib/api'
-import { useAccounts, useAllCategories, useCreditCards, useTotalBalance } from '@/lib/hooks'
+import { useAccounts, useAllCategories, useCreditCards, useResponsibleTransactions, useTotalBalance, useUserDebtsSummary } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import type { CreditCardInvoice, Transaction } from '@/lib/types'
 import { formatDate, formatMoney } from '@/lib/format'
 import { normalizeCategoryColor } from '@/lib/palette'
-import { Button, Card, Empty, PageHeader, Spinner } from '@/components/ui'
+import { Badge, Button, Card, Empty, PageHeader, Spinner } from '@/components/ui'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import TransactionFormModal from '@/components/TransactionFormModal'
 import AccountFormModal from '@/components/AccountFormModal'
@@ -27,6 +27,8 @@ export default function Dashboard() {
   const accounts = useAccounts()
   const cats = useAllCategories().data
   const balance = useTotalBalance(period.month, period.year, ignored)
+  const responsibleTxs = useResponsibleTransactions(period.month, period.year)
+  const debtsSummary = useUserDebtsSummary()
 
   const txQueries = useQueries({
     queries: (accounts.data ?? []).map((a) => ({
@@ -103,9 +105,20 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts.data, ignored, balance.data, allTx, invStamp])
 
+  const combinedExpenses = useMemo(() => {
+    const map = new Map<string, Transaction>()
+    allTx.filter((t) => t.type === 'EXPENSE').forEach((t) => map.set(t.id, t))
+    ;(responsibleTxs.data ?? [])
+      .filter((t) => t.type === 'EXPENSE' && t.responsibleId === user?.id)
+      .forEach((t) => {
+        if (!map.has(t.id)) map.set(t.id, t)
+      })
+    return [...map.values()]
+  }, [allTx, responsibleTxs.data, user?.id])
+
   const byCategory = useMemo(() => {
     const map = new Map<string, number>()
-    allTx.filter((t) => t.type === 'EXPENSE').forEach((t) => {
+    combinedExpenses.forEach((t) => {
       const k = t.categoryId ?? 'none'
       map.set(k, (map.get(k) ?? 0) + t.amount)
     })
@@ -116,7 +129,7 @@ export default function Dashboard() {
         return { name: c?.name ?? 'Sem categoria', value, color: col }
       })
       .sort((a, b) => b.value - a.value)
-  }, [allTx, cats])
+  }, [combinedExpenses, cats])
 
   const upcoming = allTx
     .filter((t) => t.status === 'PENDING')
@@ -379,6 +392,95 @@ export default function Dashboard() {
               </li>
             ))}
           </ul>
+        )}
+      </Card>
+
+      <Card
+        onClick={() => nav('/grupos')}
+        className="mt-4 cursor-pointer p-4 transition hover:border-violet/40"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <Link
+            to="/grupos"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 font-semibold text-white hover:text-lime transition"
+          >
+            <Users className="size-4 text-violet" />
+            Acertos entre Membros / Cartão Compartilhado
+            <ChevronRight className="size-4 text-text-dim" />
+          </Link>
+          {debtsSummary.data && (
+            <div className="flex items-center gap-2">
+              {debtsSummary.data.totalOwedCurrentMonth > 0 && (
+                <Badge tone="neutral">
+                  A pagar: {formatMoney(debtsSummary.data.totalOwedCurrentMonth)}
+                </Badge>
+              )}
+              {debtsSummary.data.totalReceivableCurrentMonth > 0 && (
+                <Badge tone="income">
+                  A receber: {formatMoney(debtsSummary.data.totalReceivableCurrentMonth)}
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+
+        {debtsSummary.isLoading ? (
+          <Spinner />
+        ) : !debtsSummary.data?.groups.length ? (
+          <p className="text-xs text-text-dim py-1">Nenhum acerto pendente com membros nos grupos 🎉</p>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3 pb-2 pt-1 border-b border-border/60">
+              <div className="rounded-xl bg-surface-2 p-3">
+                <span className="text-[11px] text-text-muted">Total a pagar (mês)</span>
+                <p className="mt-0.5 text-lg font-bold text-white tabular-nums">
+                  {formatMoney(debtsSummary.data.totalOwedCurrentMonth)}
+                </p>
+              </div>
+              <div className="rounded-xl bg-surface-2 p-3">
+                <span className="text-[11px] text-text-muted">Total a receber (mês)</span>
+                <p className="mt-0.5 text-lg font-bold text-lime tabular-nums">
+                  {formatMoney(debtsSummary.data.totalReceivableCurrentMonth)}
+                </p>
+              </div>
+            </div>
+
+            <ul className="divide-y divide-border pt-1">
+              {debtsSummary.data.groups.map((g) => (
+                <li key={g.groupId} className="py-2.5">
+                  <Link
+                    to={`/grupos/${g.groupId}?tab=settlements`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center justify-between text-sm hover:text-lime transition"
+                  >
+                    <div>
+                      <p className="font-medium text-white">{g.groupName}</p>
+                      <p className="text-xs text-text-dim">
+                        Total acumulado: {g.owedTotal > 0 ? `Deve ${formatMoney(g.owedTotal)}` : 'Em dia'}
+                        {g.receivableTotal > 0 ? ` · Tem a receber ${formatMoney(g.receivableTotal)}` : ''}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {g.owedCurrentMonth > 0 && (
+                        <p className="text-xs font-semibold text-rose-400 tabular-nums">
+                          −{formatMoney(g.owedCurrentMonth)} neste mês
+                        </p>
+                      )}
+                      {g.receivableCurrentMonth > 0 && (
+                        <p className="text-xs font-semibold text-lime tabular-nums">
+                          +{formatMoney(g.receivableCurrentMonth)} neste mês
+                        </p>
+                      )}
+                      {g.owedCurrentMonth === 0 && g.receivableCurrentMonth === 0 && (
+                        <span className="text-xs text-text-dim">Ver acertos</span>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </Card>
 
