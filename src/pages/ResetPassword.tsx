@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { CheckCircle, KeyRound, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, errorMessage } from '@/lib/api'
-import { Button, Card, Field, Input } from '@/components/ui'
+import { Button, Card, Field, PasswordInput } from '@/components/ui'
 
 const schema = z
   .object({
@@ -111,8 +111,7 @@ export default function ResetPassword() {
               error={errors.newPassword?.message}
               hint="Mín. 8 caracteres, maiúscula, minúscula, número e símbolo"
             >
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 placeholder="••••••••"
                 {...register('newPassword')}
@@ -120,8 +119,7 @@ export default function ResetPassword() {
             </Field>
 
             <Field label="Confirmar nova senha" error={errors.confirmPassword?.message}>
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 placeholder="••••••••"
                 {...register('confirmPassword')}

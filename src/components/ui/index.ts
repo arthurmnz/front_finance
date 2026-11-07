@@ -1,5 +1,6 @@
 export * from './Button'
 export * from './Input'
+export * from './PasswordInput'
 export * from './MoneyInput'
 export * from './NumberInput'
 export * from './Textarea'

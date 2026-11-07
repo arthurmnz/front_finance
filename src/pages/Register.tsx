@@ -7,7 +7,7 @@ import { Landmark } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, errorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { Button, Card, Field, Input } from '@/components/ui'
+import { Button, Card, Field, Input, PasswordInput } from '@/components/ui'
 
 const schema = z.object({
   firstName: z.string().min(1, 'Informe o nome'),
@@ -68,8 +68,7 @@ export default function Register() {
             </Field>
 
             <Field label="Senha" error={errors.password?.message}>
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 placeholder="••••••••"
                 {...register('password')}

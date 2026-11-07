@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Landmark } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { errorMessage } from '@/lib/api'
-import { Button, Card, Field, Input } from '@/components/ui'
+import { Button, Card, Field, Input, PasswordInput } from '@/components/ui'
 
 const schema = z.object({
   email: z.string().email('E-mail inválido'),
@@ -53,8 +53,7 @@ export default function Login() {
 
             <div>
               <Field label="Senha" error={errors.password?.message}>
-                <Input
-                  type="password"
+                <PasswordInput
                   autoComplete="current-password"
                   placeholder="••••••••"
                   {...register('password')}
