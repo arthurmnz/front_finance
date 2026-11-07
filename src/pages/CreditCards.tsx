@@ -7,7 +7,18 @@ import { useAccounts, useAction, useCreditCards, useGroups } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import type { CreditCard } from '@/lib/types'
 import { formatMoney, fullName } from '@/lib/format'
-import { Badge, Button, Card, CardGridSkeleton, ConfirmDialog, Empty, Modal, PageHeader, QueryState, Select } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  CardGridSkeleton,
+  ConfirmDialog,
+  Empty,
+  Modal,
+  PageHeader,
+  QueryState,
+  Select,
+} from '@/components/ui'
 import CreditCardFormModal from '@/components/CreditCardFormModal'
 
 export default function CreditCards() {
@@ -73,33 +84,33 @@ export default function CreditCards() {
                 <Card key={c.id} className="p-4">
                   <Link to={`/cartoes/${c.id}`} className="block space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="grid size-11 place-items-center rounded-xl bg-primary/15 text-primary-hover">
+                      <div className="grid size-11 place-items-center rounded-xl bg-violet/15 text-violet-hover">
                         <CardIcon className="size-5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold">{c.name}</p>
-                        <p className="truncate text-xs text-muted">
+                        <p className="truncate font-semibold text-white">{c.name}</p>
+                        <p className="truncate text-xs text-text-dim">
                           Fecha dia {c.closingDay} · Vence dia {c.dueDay} · {accountName(c.accountId)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[11px] text-muted">Fatura atual</p>
-                        <p className="text-base font-bold text-expense">{formatMoney(c.currentInvoiceAmount)}</p>
+                        <p className="text-[11px] text-text-dim">Fatura atual</p>
+                        <p className="text-base font-bold text-white tabular-nums">−{formatMoney(c.currentInvoiceAmount)}</p>
                       </div>
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <div className="flex justify-between text-xs">
-                        <span className="text-muted">Usado: {formatMoney(c.usedLimit)}</span>
-                        <span className="font-medium text-income">Disponível: {formatMoney(c.availableLimit)}</span>
+                        <span className="text-text-dim">Usado: <b className="text-white tabular-nums">{formatMoney(c.usedLimit)}</b></span>
+                        <span className="font-medium text-lime tabular-nums">Disponível: {formatMoney(c.availableLimit)}</span>
                       </div>
                       <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
                         <div
-                          className={`h-full rounded-full ${pct >= 90 ? 'bg-expense' : pct >= 70 ? 'bg-warn' : 'bg-primary'}`}
+                          className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-white' : pct >= 70 ? 'bg-violet' : 'bg-lime'}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <p className="text-[11px] text-muted">Limite total: {formatMoney(c.limitAmount)}</p>
+                      <p className="text-[11px] text-text-dim">Limite total: {formatMoney(c.limitAmount)}</p>
                     </div>
                   </Link>
 
@@ -114,7 +125,6 @@ export default function CreditCards() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="hover:!text-expense"
                           onClick={() => setDeleting(c)}
                           aria-label="Excluir cartão"
                         >
@@ -158,7 +168,7 @@ export default function CreditCards() {
         onConfirm={() => deleting && del.mutate(deleting.id)}
       />
       <Modal open={!!linking} onClose={() => setLinking(undefined)} title="Vincular cartão a um grupo">
-        <p className="mb-3 text-sm text-muted">
+        <p className="mb-3 text-xs text-text-muted leading-relaxed">
           Se você for dono/admin do grupo, o vínculo é imediato. Caso contrário, será enviada uma solicitação.
         </p>
         <Select value={groupId} onChange={(e) => setGroupId(e.target.value)}>

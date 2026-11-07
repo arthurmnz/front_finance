@@ -5,6 +5,8 @@ import { DetailSkeleton } from '@/components/ui'
 import Layout from '@/components/Layout'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
+import ForgotPassword from '@/pages/ForgotPassword'
+import ResetPassword from '@/pages/ResetPassword'
 import Dashboard from '@/pages/Dashboard'
 import Accounts from '@/pages/Accounts'
 import CreditCards from '@/pages/CreditCards'
@@ -36,6 +38,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Public><Login /></Public>} />
       <Route path="/cadastro" element={<Public><Register /></Public>} />
+      <Route path="/esqueci-senha" element={<Public><ForgotPassword /></Public>} />
+      <Route path="/redefinir-senha" element={<Public><ResetPassword /></Public>} />
       <Route element={<Private><Layout /></Private>}>
         <Route index element={<Dashboard />} />
         <Route path="transacoes" element={<Transactions />} />

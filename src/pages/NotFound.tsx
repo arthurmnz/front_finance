@@ -20,14 +20,14 @@ export default function NotFound({
   return (
     <div className="flex min-h-[70dvh] items-center justify-center px-4 py-10">
       <Card className="w-full max-w-md p-6 text-center sm:p-8">
-        <div className="mx-auto mb-4 grid size-16 place-items-center rounded-2xl bg-primary/15 text-primary-hover">
+        <div className="mx-auto mb-4 grid size-16 place-items-center rounded-2xl bg-violet/20 text-lime">
           <Compass className="size-8" />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-primary-hover">Erro 404</p>
-        <h1 className="mt-1 text-xl font-bold sm:text-2xl">{title}</h1>
-        <p className="mt-2 text-sm text-muted">{description}</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-lime">Erro 404</p>
+        <h1 className="mt-1 text-xl font-bold text-white sm:text-2xl">{title}</h1>
+        <p className="mt-2 text-xs text-text-muted leading-relaxed">{description}</p>
 
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
           {backTo ? (
             <Link to={backTo} className="flex-1">
               <Button variant="outline" className="w-full">

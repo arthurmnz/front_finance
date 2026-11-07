@@ -1,25 +1,108 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0b0f17;
-  --color-surface: #121826;
-  --color-surface-2: #1a2233;
-  --color-border: #263047;
-  --color-muted: #8b95a9;
-  --color-text: #e6eaf2;
-  --color-primary: #6366f1;
-  --color-primary-hover: #7c7ff5;
-  --color-income: #34d399;
-  --color-expense: #f87171;
-  --color-warn: #fbbf24;
+  --color-black: #000000;
+  --color-white: #ffffff;
+
+  --color-bg: #000000;
+  --color-surface: #070709;
+  --color-surface-1: #0e0e13;
+  --color-surface-2: #16161f;
+  --color-surface-3: #1e1e2b;
+
+  --color-border: #20202d;
+  --color-border-strong: #323247;
+
+  --color-text: #ffffff;
+  --color-text-muted: rgba(255, 255, 255, 0.72);
+  --color-text-dim: rgba(255, 255, 255, 0.64);
+  --color-text-faint: rgba(255, 255, 255, 0.25);
+
+  --color-violet: #7D39EB;
+  --color-violet-hover: #9253f5;
+  --color-violet-active: #6626d0;
+  --color-violet-subtle: rgba(125, 57, 235, 0.15);
+
+  --color-lime: #C6FF33;
+  --color-lime-hover: #d5ff5c;
+  --color-lime-active: #b1eb21;
+  --color-lime-subtle: rgba(198, 255, 51, 0.12);
+
+  /* Aliases para marca e status */
+  --color-primary: #7D39EB;
+  --color-primary-hover: #9253f5;
+  --color-primary-active: #6626d0;
+  --color-primary-subtle: rgba(125, 57, 235, 0.15);
+
+  --color-income: #C6FF33;
+  --color-income-hover: #d5ff5c;
+  --color-income-subtle: rgba(198, 255, 51, 0.12);
+
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-html, body, #root { height: 100%; }
-body { background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); -webkit-tap-highlight-color: transparent; }
-input, select, textarea { color-scheme: dark; }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-/* Padding inferior do modal: 1.25rem + área segura (não pode sobrescrever o p-5 do Tailwind) */
-.modal-body { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 8px; }
+html, body, #root {
+  height: 100%;
+  background-color: #000000;
+  color: #ffffff;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  caret-color: var(--color-lime);
+}
+
+::selection {
+  background-color: var(--color-violet);
+  color: #ffffff;
+}
+
+/* Scrollbar fina temática */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-3);
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+}
+
+/* Tabular nums para alinhamento uniforme de dígitos */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Safe areas para navegação mobile */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.modal-body {
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+/* Focus visível com ring lime e offset preto */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #000000, 0 0 0 4px var(--color-lime);
+}
+
+/* Remove spinners nativos de input number no Chrome/Safari/Firefox */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

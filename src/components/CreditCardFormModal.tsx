@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { useAccounts, useAction } from '@/lib/hooks'
 import type { CreditCard, CreditCardInput } from '@/lib/types'
-import { Button, Field, Input, Modal, MoneyInput, Select } from './ui'
+import { Button, Field, Input, Modal, MoneyInput, NumberInput, Select } from './ui'
 
 export default function CreditCardFormModal({
   open,
@@ -41,6 +41,7 @@ export default function CreditCardFormModal({
   return (
     <Modal open={open} onClose={onClose} title={card ? 'Editar cartão de crédito' : 'Novo cartão de crédito'}>
       <form
+        noValidate
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault()
@@ -71,24 +72,22 @@ export default function CreditCardFormModal({
           <MoneyInput value={limitAmount} onChange={setLimitAmount} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Dia de fechamento (faturamento)" hint="1 a 31">
-            <Input
-              type="number"
+          <Field label="Dia de fechamento" hint="1 a 31">
+            <NumberInput
+              showControls
               min={1}
               max={31}
               value={closingDay}
               onChange={(e) => setClosingDay(Number(e.target.value))}
-              required
             />
           </Field>
           <Field label="Dia de vencimento" hint="1 a 31">
-            <Input
-              type="number"
+            <NumberInput
+              showControls
               min={1}
               max={31}
               value={dueDay}
               onChange={(e) => setDueDay(Number(e.target.value))}
-              required
             />
           </Field>
         </div>

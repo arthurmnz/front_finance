@@ -33,13 +33,27 @@ import {
 import { useAuth } from '@/lib/auth'
 import type { CreditCardInvoice, GroupMember, GroupRole, Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
 import { accountTypeLabel, formatDate, formatMoney, fullName, initials, roleLabel, txTypeLabel } from '@/lib/format'
-import { Badge, Button, Card, ConfirmDialog, Empty, Field, Input, ListSkeleton, Modal, PageHeader, QueryState, Select, Spinner, Tabs } from '@/components/ui'
+import { normalizeCategoryColor } from '@/lib/palette'
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  Empty,
+  Field,
+  Input,
+  ListSkeleton,
+  Modal,
+  PageHeader,
+  QueryState,
+  Select,
+  Spinner,
+  Tabs,
+} from '@/components/ui'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import CategoryManager from '@/components/CategoryManager'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
-
-const PALETTE = ['#6366f1', '#f87171', '#34d399', '#fbbf24', '#38bdf8', '#e879f9', '#fb923c', '#a3e635']
 
 type Tab = 'overview' | 'transactions' | 'members' | 'accounts' | 'cards' | 'categories' | 'requests' | 'settings'
 
@@ -66,8 +80,10 @@ const EMPTY_TX_FILTERS: TxFilters = {
 
 const chip = (active: boolean) =>
   clsx(
-    'rounded-full border px-3 py-1.5 text-xs font-medium transition',
-    active ? 'border-primary bg-primary/20 text-primary-hover' : 'border-border text-muted hover:text-text',
+    'rounded-xl border px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
+    active
+      ? 'border-violet bg-violet text-white font-semibold shadow-sm shadow-violet/25'
+      : 'border-border text-text-muted hover:bg-surface-2 hover:text-white',
   )
 
 export default function GroupDetail() {
@@ -206,7 +222,7 @@ export default function GroupDetail() {
     return [...map.entries()]
       .map(([catId, value], i) => {
         const c = groupCategories.find((cat) => cat.id === catId)
-        return { name: c?.name ?? 'Sem categoria', value, color: c?.color ?? PALETTE[i % PALETTE.length] }
+        return { name: c?.name ?? 'Sem categoria', value, color: normalizeCategoryColor(c?.color, i) }
       })
       .sort((a, b) => b.value - a.value)
   }, [allGroupTransactions, groupCategories])
@@ -257,6 +273,7 @@ export default function GroupDetail() {
 
   const txIncome = filteredTransactions.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
   const txExpense = filteredTransactions.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
+  const txNet = txIncome - txExpense
   const activeTxFilterCount = [
     txFilters.accountId,
     txFilters.creditCardId,
@@ -341,7 +358,7 @@ export default function GroupDetail() {
         <>
           <PageHeader
             back={
-              <Link to="/grupos" className="mb-1 inline-flex items-center gap-1 text-xs text-muted hover:text-text">
+              <Link to="/grupos" className="mb-1 inline-flex items-center gap-1 text-xs text-text-dim hover:text-white transition">
                 <ArrowLeft className="size-3" /> Grupos
               </Link>
             }
@@ -390,18 +407,18 @@ export default function GroupDetail() {
                 )}
               </div>
 
-              <Card className="bg-gradient-to-br from-primary/25 to-surface p-5">
+              <Card className="p-5 bg-surface-1 border border-border">
                 <div className="grid grid-cols-2 gap-4 border-b border-border/60 pb-4">
                   <div>
-                    <p className="text-xs text-muted">Saldo total do grupo</p>
-                    <p className="mt-0.5 text-2xl font-bold sm:text-3xl">
+                    <p className="text-xs text-text-dim">Saldo total do grupo</p>
+                    <p className="mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight text-white tabular-nums">
                       {!accounts.isLoading ? formatMoney(groupSummary.currentBalance) : '—'}
                     </p>
                   </div>
                   <div className="border-l border-border/60 pl-4">
-                    <p className="text-xs text-muted">Saldo projetado</p>
+                    <p className="text-xs text-text-dim">Saldo projetado</p>
                     <p
-                      className={`mt-0.5 text-2xl font-bold sm:text-3xl ${groupSummary.projectedBalance < 0 ? 'text-expense' : 'text-primary-hover'}`}
+                      className={`mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums ${groupSummary.projectedBalance < 0 ? 'text-white' : 'text-lime'}`}
                     >
                       {!accounts.isLoading ? formatMoney(groupSummary.projectedBalance) : '—'}
                     </p>
@@ -410,33 +427,37 @@ export default function GroupDetail() {
 
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <ArrowUpCircle className="size-7 shrink-0 text-income" />
+                    <div className="flex items-center gap-2.5">
+                      <ArrowUpCircle className="size-6 shrink-0 text-lime" />
                       <div className="min-w-0">
-                        <p className="text-xs text-muted">Receitas</p>
-                        <p className="truncate font-semibold text-income">{formatMoney(groupSummary.realizedIncome)}</p>
+                        <p className="text-xs text-text-dim">Receitas</p>
+                        <p className="truncate font-semibold text-lime tabular-nums">
+                          {formatMoney(groupSummary.realizedIncome)}
+                        </p>
                       </div>
                     </div>
-                    <div className="rounded-lg bg-surface/60 px-2.5 py-1.5">
-                      <p className="text-[11px] text-muted">Receitas projetadas</p>
-                      <p className="text-sm font-semibold text-income/90">{formatMoney(groupSummary.projectedIncome)}</p>
+                    <div className="rounded-xl bg-surface-2 px-3 py-2">
+                      <p className="text-[11px] text-text-dim">Receitas projetadas</p>
+                      <p className="text-xs font-semibold text-lime tabular-nums">
+                        {formatMoney(groupSummary.projectedIncome)}
+                      </p>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <ArrowDownCircle className="size-7 shrink-0 text-expense" />
+                    <div className="flex items-center gap-2.5">
+                      <ArrowDownCircle className="size-6 shrink-0 text-white" />
                       <div className="min-w-0">
-                        <p className="text-xs text-muted">Despesas</p>
-                        <p className="truncate font-semibold text-expense">
-                          {formatMoney(groupSummary.realizedExpense)}
+                        <p className="text-xs text-text-dim">Despesas</p>
+                        <p className="truncate font-semibold text-white tabular-nums">
+                          −{formatMoney(groupSummary.realizedExpense)}
                         </p>
                       </div>
                     </div>
-                    <div className="rounded-lg bg-surface/60 px-2.5 py-1.5">
-                      <p className="text-[11px] text-muted">Despesas projetadas</p>
-                      <p className="text-sm font-semibold text-expense/90">
-                        {formatMoney(groupSummary.projectedExpense)}
+                    <div className="rounded-xl bg-surface-2 px-3 py-2">
+                      <p className="text-[11px] text-text-dim">Despesas projetadas</p>
+                      <p className="text-xs font-semibold text-white tabular-nums">
+                        −{formatMoney(groupSummary.projectedExpense)}
                       </p>
                     </div>
                   </div>
@@ -446,7 +467,7 @@ export default function GroupDetail() {
               <div className="grid gap-4 md:grid-cols-2">
                 <Card
                   onClick={() => setTab('accounts')}
-                  className="cursor-pointer p-4 transition hover:border-primary/40"
+                  className="cursor-pointer p-4 transition hover:border-violet/40"
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <button
@@ -455,12 +476,12 @@ export default function GroupDetail() {
                         e.stopPropagation()
                         setTab('accounts')
                       }}
-                      className="inline-flex items-center gap-1 font-semibold hover:text-primary-hover"
+                      className="inline-flex items-center gap-1 font-semibold text-white hover:text-lime transition"
                     >
-                      Contas do grupo <ChevronRight className="size-4 text-muted" />
+                      Contas do grupo <ChevronRight className="size-4 text-text-dim" />
                     </button>
                   </div>
-                  <p className="mb-3 text-xs text-muted">Toque no olho para ignorar uma conta do saldo total.</p>
+                  <p className="mb-3 text-xs text-text-dim">Toque no olho para ignorar uma conta do saldo total.</p>
                   {accounts.isLoading ? (
                     <Spinner />
                   ) : !accounts.data?.length ? (
@@ -475,21 +496,25 @@ export default function GroupDetail() {
                               e.stopPropagation()
                               toggleIgnore(a.id)
                             }}
-                            className="p-1 text-muted hover:text-text"
+                            className="p-1 text-text-dim hover:text-white transition"
                             aria-label="Ignorar no saldo"
                           >
-                            {ignored.includes(a.id) ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                            {ignored.includes(a.id) ? (
+                              <EyeOff className="size-4 text-text-dim" />
+                            ) : (
+                              <Eye className="size-4 text-lime" />
+                            )}
                           </button>
                           <Link
                             to={`/contas/${a.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className={`flex flex-1 items-center justify-between hover:text-primary-hover ${ignored.includes(a.id) ? 'opacity-40' : ''}`}
+                            className={`flex flex-1 items-center justify-between hover:text-lime transition ${ignored.includes(a.id) ? 'opacity-40' : ''}`}
                           >
                             <div className="min-w-0">
-                              <span className="block truncate text-sm">{a.name}</span>
-                              <span className="block truncate text-xs text-muted">{fullName(a.owner)}</span>
+                              <span className="block truncate text-sm text-white">{a.name}</span>
+                              <span className="block truncate text-xs text-text-dim">{fullName(a.owner)}</span>
                             </div>
-                            <span className={`text-sm font-semibold ${a.balance < 0 ? 'text-expense' : ''}`}>
+                            <span className="text-sm font-semibold text-white tabular-nums">
                               {formatMoney(a.balance)}
                             </span>
                           </Link>
@@ -500,7 +525,7 @@ export default function GroupDetail() {
                 </Card>
 
                 <Card className="p-4">
-                  <h2 className="mb-3 font-semibold">Despesas por categoria</h2>
+                  <h2 className="mb-3 font-semibold text-white">Despesas por categoria</h2>
                   {txLoading ? (
                     <Spinner />
                   ) : !byCategory.length ? (
@@ -518,20 +543,22 @@ export default function GroupDetail() {
                             <Tooltip
                               formatter={(v) => formatMoney(Number(v))}
                               contentStyle={{
-                                background: '#1a2233',
-                                border: '1px solid #263047',
+                                background: '#0e0e13',
+                                border: '1px solid #20202d',
                                 borderRadius: 12,
+                                color: '#ffffff',
                               }}
+                              itemStyle={{ color: '#ffffff' }}
                             />
                           </PieChart>
                         </ResponsiveContainer>
                       </div>
                       <ul className="mt-2 space-y-1.5">
                         {byCategory.slice(0, 5).map((c, i) => (
-                          <li key={i} className="flex items-center gap-2 text-sm">
-                            <span className="size-2.5 rounded-full" style={{ background: c.color }} />
-                            {c.name}
-                            <span className="ml-auto font-medium">{formatMoney(c.value)}</span>
+                          <li key={i} className="flex items-center gap-2 text-xs text-text-muted">
+                            <span className="size-2 rounded-full shrink-0" style={{ background: c.color }} />
+                            <span className="truncate">{c.name}</span>
+                            <span className="ml-auto font-medium text-white tabular-nums">{formatMoney(c.value)}</span>
                           </li>
                         ))}
                       </ul>
@@ -540,7 +567,7 @@ export default function GroupDetail() {
                 </Card>
               </div>
 
-              <Card onClick={() => setTab('cards')} className="cursor-pointer p-4 transition hover:border-primary/40">
+              <Card onClick={() => setTab('cards')} className="cursor-pointer p-4 transition hover:border-violet/40">
                 <div className="mb-2 flex items-center justify-between">
                   <button
                     type="button"
@@ -548,9 +575,9 @@ export default function GroupDetail() {
                       e.stopPropagation()
                       setTab('cards')
                     }}
-                    className="inline-flex items-center gap-1 font-semibold hover:text-primary-hover"
+                    className="inline-flex items-center gap-1 font-semibold text-white hover:text-lime transition"
                   >
-                    Cartões de crédito <ChevronRight className="size-4 text-muted" />
+                    Cartões de crédito <ChevronRight className="size-4 text-text-dim" />
                   </button>
                 </div>
                 {cards.isLoading ? (
@@ -564,21 +591,21 @@ export default function GroupDetail() {
                         <Link
                           to={`/cartoes/${c.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="flex items-center justify-between text-sm hover:text-primary-hover"
+                          className="flex items-center justify-between text-sm hover:text-lime transition"
                         >
                           <div>
-                            <p className="font-medium">
+                            <p className="font-medium text-white">
                               {c.name}
-                              {c.owner ? <span className="text-xs font-normal text-muted"> · {fullName(c.owner)}</span> : null}
+                              {c.owner ? <span className="text-xs font-normal text-text-dim"> · {fullName(c.owner)}</span> : null}
                             </p>
-                            <p className="text-xs text-muted">
-                              Disponível: <span className="text-income">{formatMoney(c.availableLimit)}</span> · Vence
+                            <p className="text-xs text-text-dim">
+                              Disponível: <span className="text-lime">{formatMoney(c.availableLimit)}</span> · Vence
                               dia {c.dueDay}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs text-muted">Fatura atual</p>
-                            <p className="font-semibold text-expense">{formatMoney(c.currentInvoiceAmount)}</p>
+                            <p className="text-[11px] text-text-dim">Fatura atual</p>
+                            <p className="font-semibold text-white tabular-nums">−{formatMoney(c.currentInvoiceAmount)}</p>
                           </div>
                         </Link>
                       </li>
@@ -589,12 +616,12 @@ export default function GroupDetail() {
 
               <Card className="p-4">
                 <div className="mb-2 flex items-center justify-between">
-                  <h2 className="font-semibold">Próximas pendentes</h2>
+                  <h2 className="font-semibold text-white">Próximas pendentes</h2>
                   {upcoming.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setTab('transactions')}
-                      className="text-xs font-medium text-primary-hover hover:underline"
+                      className="text-xs font-medium text-lime hover:underline"
                     >
                       Ver todas
                     </button>
@@ -609,8 +636,8 @@ export default function GroupDetail() {
                     {upcoming.map((t) => (
                       <li key={t.id} className="flex items-center justify-between py-2.5 text-sm">
                         <div>
-                          <p className="font-medium">{t.title}</p>
-                          <p className="text-xs text-muted">
+                          <p className="font-medium text-white">{t.title}</p>
+                          <p className="text-xs text-text-dim">
                             {formatDate(t.date)}
                             {accountNames.get(t.accountId) ? ` · ${accountNames.get(t.accountId)}` : ''}
                           </p>
@@ -618,12 +645,11 @@ export default function GroupDetail() {
                         <span
                           className={
                             t.type === 'INCOME'
-                              ? 'font-semibold text-income'
-                              : t.type === 'EXPENSE'
-                                ? 'font-semibold text-expense'
-                                : 'font-semibold'
+                              ? 'font-semibold text-lime tabular-nums'
+                              : 'font-semibold text-white tabular-nums'
                           }
                         >
+                          {t.type === 'INCOME' ? '+' : '−'}
                           {formatMoney(t.amount)}
                         </span>
                       </li>
@@ -642,7 +668,7 @@ export default function GroupDetail() {
                   <Button variant="outline" size="sm" className="h-10" onClick={() => setShowTxFilters((v) => !v)}>
                     <SlidersHorizontal className="size-4" /> Filtros
                     {activeTxFilterCount > 0 && (
-                      <span className="rounded-full bg-primary px-1.5 text-[11px] text-white">
+                      <span className="rounded-full bg-violet px-1.5 py-0.2 text-[10px] font-bold text-white">
                         {activeTxFilterCount}
                       </span>
                     )}
@@ -656,7 +682,7 @@ export default function GroupDetail() {
               </div>
 
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+                <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-text-dim" />
                 <Input
                   className="pl-9"
                   placeholder="Buscar por título…"
@@ -668,7 +694,7 @@ export default function GroupDetail() {
               {showTxFilters && (
                 <Card className="space-y-4 p-4">
                   <div>
-                    <p className="mb-2 text-xs font-medium text-muted">Tipo</p>
+                    <p className="mb-2 text-xs font-medium text-text-dim">Tipo</p>
                     <div className="flex flex-wrap gap-2">
                       <button className={chip(txFilters.type === '')} onClick={() => setTxF('type', '')}>
                         Todos
@@ -681,7 +707,7 @@ export default function GroupDetail() {
                     </div>
                   </div>
                   <div>
-                    <p className="mb-2 text-xs font-medium text-muted">Situação</p>
+                    <p className="mb-2 text-xs font-medium text-text-dim">Situação</p>
                     <div className="flex flex-wrap gap-2">
                       <button className={chip(txFilters.status === '')} onClick={() => setTxF('status', '')}>
                         Todas
@@ -764,17 +790,18 @@ export default function GroupDetail() {
 
               <Card className="grid grid-cols-3 divide-x divide-border text-center">
                 <div className="p-3">
-                  <p className="text-xs text-muted">Receitas</p>
-                  <p className="text-sm font-semibold text-income">{formatMoney(txIncome)}</p>
+                  <p className="text-xs text-text-dim">Receitas</p>
+                  <p className="text-sm font-semibold text-lime tabular-nums">{formatMoney(txIncome)}</p>
                 </div>
                 <div className="p-3">
-                  <p className="text-xs text-muted">Despesas</p>
-                  <p className="text-sm font-semibold text-expense">{formatMoney(txExpense)}</p>
+                  <p className="text-xs text-text-dim">Despesas</p>
+                  <p className="text-sm font-semibold text-white tabular-nums">−{formatMoney(txExpense)}</p>
                 </div>
                 <div className="p-3">
-                  <p className="text-xs text-muted">Resultado</p>
-                  <p className={clsx('text-sm font-semibold', txIncome - txExpense < 0 && 'text-expense')}>
-                    {formatMoney(txIncome - txExpense)}
+                  <p className="text-xs text-text-dim">Resultado</p>
+                  <p className={clsx('text-sm font-semibold tabular-nums', txNet > 0 ? 'text-lime' : 'text-white')}>
+                    {txNet > 0 ? '+' : txNet < 0 ? '−' : ''}
+                    {formatMoney(Math.abs(txNet))}
                   </p>
                 </div>
               </Card>
@@ -807,30 +834,33 @@ export default function GroupDetail() {
           {tab === 'members' && (
             <Card className="divide-y divide-border">
               {g.members.map((m) => (
-                <div key={m.user.id} className="flex items-center gap-3 p-3">
-                  <div className="grid size-10 place-items-center rounded-full bg-primary/20 text-xs font-bold text-primary-hover">
+                <div key={m.user.id} className="flex items-center gap-3 p-3.5 hover:bg-surface-2/40 transition">
+                  <div className="grid size-10 place-items-center rounded-full bg-violet/20 text-xs font-bold text-violet-hover">
                     {initials(m.user)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{fullName(m.user)}</p>
-                    <p className="truncate text-xs text-muted">{m.user.email}</p>
+                    <p className="truncate text-sm font-medium text-white">{fullName(m.user)}</p>
+                    <p className="truncate text-xs text-text-dim">{m.user.email}</p>
                   </div>
                   {canManage(m) && isOwner ? (
-                    <Select
-                      className="!h-9 !w-28 text-xs"
-                      value={m.role}
-                      onChange={(e) => setRole.mutate({ email: m.user.email, role: e.target.value as GroupRole })}
-                    >
-                      <option value="ADMIN">Admin</option>
-                      <option value="MEMBER">Membro</option>
-                    </Select>
+                    <div className="w-32">
+                      <Select
+                        className="!h-9 text-xs"
+                        value={m.role}
+                        onChange={(e) => setRole.mutate({ email: m.user.email, role: e.target.value as GroupRole })}
+                      >
+                        <option value="ADMIN">Admin</option>
+                        <option value="MEMBER">Membro</option>
+                      </Select>
+                    </div>
                   ) : (
                     <Badge tone={m.role === 'OWNER' ? 'primary' : 'default'}>{roleLabel[m.role]}</Badge>
                   )}
                   {canManage(m) && (
                     <button
+                      type="button"
                       onClick={() => setRemoving(m)}
-                      className="p-1.5 text-muted hover:text-expense"
+                      className="p-1.5 text-text-dim hover:text-white transition"
                       aria-label="Remover"
                     >
                       <Trash2 className="size-4" />
@@ -848,14 +878,18 @@ export default function GroupDetail() {
               ) : (
                 <Card className="divide-y divide-border">
                   {accounts.data.map((a) => (
-                    <Link key={a.id} to={`/contas/${a.id}`} className="flex items-center justify-between gap-3 p-3 hover:bg-surface-2">
+                    <Link
+                      key={a.id}
+                      to={`/contas/${a.id}`}
+                      className="flex items-center justify-between gap-3 p-3.5 hover:bg-surface-2/50 transition"
+                    >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{a.name}</p>
-                        <p className="truncate text-xs text-muted">
+                        <p className="truncate text-sm font-medium text-white">{a.name}</p>
+                        <p className="truncate text-xs text-text-dim">
                           {accountTypeLabel[a.type]} · {fullName(a.owner)}
                         </p>
                       </div>
-                      <p className="text-sm font-semibold">{formatMoney(a.balance)}</p>
+                      <p className="text-sm font-semibold text-white tabular-nums">{formatMoney(a.balance)}</p>
                     </Link>
                   ))}
                 </Card>
@@ -873,23 +907,23 @@ export default function GroupDetail() {
                     <Link
                       key={c.id}
                       to={`/cartoes/${c.id}`}
-                      className="flex items-center justify-between gap-3 p-3 hover:bg-surface-2"
+                      className="flex items-center justify-between gap-3 p-3.5 hover:bg-surface-2/50 transition"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="grid size-9 place-items-center rounded-xl bg-primary/15 text-primary-hover">
+                        <div className="grid size-9 place-items-center rounded-xl bg-violet/15 text-violet-hover">
                           <CardIcon className="size-4" />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{c.name}</p>
-                          <p className="truncate text-xs text-muted">
+                          <p className="truncate text-sm font-medium text-white">{c.name}</p>
+                          <p className="truncate text-xs text-text-dim">
                             Fecha dia {c.closingDay} · Vence dia {c.dueDay}
                             {c.owner ? ` · ${fullName(c.owner)}` : ''}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-muted">Disponível</p>
-                        <p className="text-sm font-semibold text-income">{formatMoney(c.availableLimit)}</p>
+                        <p className="text-xs text-text-dim">Disponível</p>
+                        <p className="text-sm font-semibold text-lime tabular-nums">{formatMoney(c.availableLimit)}</p>
                       </div>
                     </Link>
                   ))}
@@ -911,12 +945,12 @@ export default function GroupDetail() {
               ) : (
                 <Card className="divide-y divide-border">
                   {requests.data?.map((r) => (
-                    <div key={r.id} className="flex items-center gap-3 p-3">
+                    <div key={r.id} className="flex items-center gap-3 p-3.5">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">Conta: {r.account.name}</p>
-                        <p className="truncate text-xs text-muted">Solicitada por {fullName(r.requester)}</p>
+                        <p className="truncate text-sm font-medium text-white">Conta: {r.account.name}</p>
+                        <p className="truncate text-xs text-text-dim">Solicitada por {fullName(r.requester)}</p>
                       </div>
-                      <Button size="sm" onClick={() => acceptReq.mutate(r.id)}>
+                      <Button size="sm" variant="lime" onClick={() => acceptReq.mutate(r.id)}>
                         <Check className="size-4" />
                       </Button>
                       <Button size="sm" variant="danger" onClick={() => rejectReq.mutate(r.id)}>
@@ -925,12 +959,12 @@ export default function GroupDetail() {
                     </div>
                   ))}
                   {cardRequests.data?.map((r) => (
-                    <div key={r.id} className="flex items-center gap-3 p-3">
+                    <div key={r.id} className="flex items-center gap-3 p-3.5">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">Cartão: {r.creditCard.name}</p>
-                        <p className="truncate text-xs text-muted">Solicitado por {fullName(r.requester)}</p>
+                        <p className="truncate text-sm font-medium text-white">Cartão: {r.creditCard.name}</p>
+                        <p className="truncate text-xs text-text-dim">Solicitado por {fullName(r.requester)}</p>
                       </div>
-                      <Button size="sm" onClick={() => acceptCardReq.mutate(r.id)}>
+                      <Button size="sm" variant="lime" onClick={() => acceptCardReq.mutate(r.id)}>
                         <Check className="size-4" />
                       </Button>
                       <Button size="sm" variant="danger" onClick={() => rejectCardReq.mutate(r.id)}>
@@ -948,6 +982,7 @@ export default function GroupDetail() {
               {isAdmin && (
                 <Card className="p-4">
                   <form
+                    noValidate
                     className="space-y-3"
                     onSubmit={(e) => {
                       e.preventDefault()
@@ -971,6 +1006,7 @@ export default function GroupDetail() {
               {isOwner && (
                 <Card className="p-4">
                   <form
+                    noValidate
                     className="space-y-3"
                     onSubmit={(e) => {
                       e.preventDefault()
@@ -1006,21 +1042,29 @@ export default function GroupDetail() {
                     <Trash2 className="size-4" /> Excluir grupo
                   </Button>
                 )}
-                {isOwner && <p className="text-xs text-muted">Para sair, transfira a propriedade antes.</p>}
+                {isOwner && <p className="text-xs text-text-dim">Para sair, transfira a propriedade antes.</p>}
               </Card>
             </div>
           )}
 
           <Modal open={inviting} onClose={() => setInviting(false)} title="Convidar membro">
             <form
+              noValidate
               className="space-y-4"
               onSubmit={(e) => {
                 e.preventDefault()
-                invite.mutate(email.trim())
+                if (email.trim()) invite.mutate(email.trim())
               }}
             >
               <Field label="E-mail">
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  required
+                  autoFocus
+                />
               </Field>
               <Button type="submit" className="w-full" loading={invite.isPending}>
                 Enviar convite

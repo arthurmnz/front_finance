@@ -11,7 +11,9 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   ConfirmDialog,
+  DatePicker,
   DetailSkeleton,
   Empty,
   Field,
@@ -48,14 +50,16 @@ const EMPTY_FILTERS: Filters = {
 
 const chip = (active: boolean) =>
   clsx(
-    'rounded-full border px-3 py-1.5 text-xs font-medium transition',
-    active ? 'border-primary bg-primary/20 text-primary-hover' : 'border-border text-muted hover:text-text',
+    'rounded-xl border px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
+    active
+      ? 'border-violet bg-violet text-white font-semibold shadow-sm shadow-violet/25'
+      : 'border-border text-text-muted hover:bg-surface-2 hover:text-white',
   )
 
-const statusLabel: Record<string, { label: string; tone: 'default' | 'income' | 'expense' | 'warn' | 'primary' }> = {
+const statusLabel: Record<string, { label: string; tone: 'default' | 'income' | 'primary' }> = {
   OPEN: { label: 'Aberta', tone: 'primary' },
-  CLOSED: { label: 'Fechada', tone: 'warn' },
-  PARTIALLY_PAID: { label: 'Paga parcialmente', tone: 'warn' },
+  CLOSED: { label: 'Fechada', tone: 'default' },
+  PARTIALLY_PAID: { label: 'Paga parcialmente', tone: 'default' },
   PAID: { label: 'Paga', tone: 'income' },
 }
 
@@ -66,7 +70,7 @@ export default function CreditCardDetail() {
   const cards = useCreditCards()
   const card = cards.data?.find((c) => c.id === id)
   const accounts = useAccessibleAccounts().data ?? []
-  const cats = useAllCategories().data
+  const cats = useAllCategories().data ?? []
 
   const [period, setPeriod] = useState(currentPeriod())
   const [periodInitialized, setPeriodInitialized] = useState(false)
@@ -154,13 +158,17 @@ export default function CreditCardDetail() {
 
   const pay = useAction(
     () =>
-      api.post(`/credit-cards/${id}/invoice/pay`, {
-        amount: payAmount,
-        accountId: payAccountId || card?.accountId,
-        date: payDate,
-        rollRemainingToNextMonth: rollRemaining,
-        nextMonthRevolvingInterest: nextRevolving > 0 ? nextRevolving : null,
-      }, { params: period }),
+      api.post(
+        `/credit-cards/${id}/invoice/pay`,
+        {
+          amount: payAmount,
+          accountId: payAccountId || card?.accountId,
+          date: payDate,
+          rollRemainingToNextMonth: rollRemaining,
+          nextMonthRevolvingInterest: nextRevolving > 0 ? nextRevolving : null,
+        },
+        { params: period },
+      ),
     {
       invalidate: ALL_MONEY,
       success: 'Pagamento registrado com sucesso',
@@ -217,7 +225,7 @@ export default function CreditCardDetail() {
     <>
       <PageHeader
         back={
-          <Link to="/cartoes" className="mb-1 inline-flex items-center gap-1 text-xs text-muted hover:text-text">
+          <Link to="/cartoes" className="mb-1 inline-flex items-center gap-1 text-xs text-text-dim hover:text-white transition">
             <ArrowLeft className="size-3" /> Cartões
           </Link>
         }
@@ -241,21 +249,21 @@ export default function CreditCardDetail() {
         <Card className="mb-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-xs text-muted">Limite disponível</p>
-              <p className="text-2xl font-bold text-income">{formatMoney(card.availableLimit)}</p>
+              <p className="text-xs text-text-dim">Limite disponível</p>
+              <p className="text-2xl font-bold text-lime tabular-nums">{formatMoney(card.availableLimit)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-muted">Limite comprometido</p>
-              <p className="text-lg font-semibold">{formatMoney(card.usedLimit)}</p>
+              <p className="text-xs text-text-dim">Limite comprometido</p>
+              <p className="text-lg font-semibold text-white tabular-nums">{formatMoney(card.usedLimit)}</p>
             </div>
           </div>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-2">
             <div
-              className={`h-full rounded-full ${pct >= 90 ? 'bg-expense' : pct >= 70 ? 'bg-warn' : 'bg-primary'}`}
+              className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-white' : pct >= 70 ? 'bg-violet' : 'bg-lime'}`}
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="mt-1 text-xs text-muted">Limite total: {formatMoney(card.limitAmount)}</p>
+          <p className="mt-1 text-xs text-text-dim">Limite total: {formatMoney(card.limitAmount)}</p>
         </Card>
       )}
 
@@ -265,7 +273,7 @@ export default function CreditCardDetail() {
           <Button variant="outline" size="sm" className="h-10" onClick={() => setShowFilters((v) => !v)}>
             <SlidersHorizontal className="size-4" /> Filtros
             {activeCount > 0 && (
-              <span className="rounded-full bg-primary px-1.5 text-[11px] text-white">{activeCount}</span>
+              <span className="rounded-full bg-violet px-1.5 py-0.2 text-[10px] font-bold text-white">{activeCount}</span>
             )}
           </Button>
         </div>
@@ -286,21 +294,23 @@ export default function CreditCardDetail() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-xs text-muted">Total da fatura</p>
+                    <p className="text-xs text-text-dim">Total da fatura</p>
                     {st && <Badge tone={st.tone}>{st.label}</Badge>}
                   </div>
-                  <p className="text-3xl font-bold">{formatMoney(inv.totalAmount)}</p>
-                  <p className="mt-0.5 text-xs text-muted">
+                  <p className="text-3xl font-bold text-white tracking-tight tabular-nums mt-0.5">
+                    {formatMoney(inv.totalAmount)}
+                  </p>
+                  <p className="mt-1 text-xs text-text-dim">
                     Fechamento: {formatDate(inv.closingDate)} · Vencimento: {formatDate(inv.dueDate)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-muted">Restante a pagar</p>
-                  <p className={`text-xl font-bold ${inv.remainingAmount > 0 ? 'text-expense' : 'text-income'}`}>
+                  <p className="text-xs text-text-dim">Restante a pagar</p>
+                  <p className={`text-xl font-bold tabular-nums ${inv.remainingAmount > 0 ? 'text-white' : 'text-lime'}`}>
                     {formatMoney(inv.remainingAmount)}
                   </p>
                   {inv.paidAmount > 0 && (
-                    <p className="text-xs text-income">Já pago: {formatMoney(inv.paidAmount)}</p>
+                    <p className="text-xs text-lime tabular-nums">Já pago: {formatMoney(inv.paidAmount)}</p>
                   )}
                 </div>
               </div>
@@ -308,16 +318,16 @@ export default function CreditCardDetail() {
               {(inv.carriedOverAmount > 0 || inv.revolvingInterestAmount > 0) && (
                 <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-xs">
                   <div>
-                    <p className="text-muted">Compras do mês</p>
-                    <p className="font-semibold">{formatMoney(inv.purchasesAmount)}</p>
+                    <p className="text-text-dim">Compras do mês</p>
+                    <p className="font-semibold text-white tabular-nums">{formatMoney(inv.purchasesAmount)}</p>
                   </div>
                   <div>
-                    <p className="text-muted">Saldo anterior rolado</p>
-                    <p className="font-semibold text-warn">{formatMoney(inv.carriedOverAmount)}</p>
+                    <p className="text-text-dim">Saldo anterior rolado</p>
+                    <p className="font-semibold text-white tabular-nums">{formatMoney(inv.carriedOverAmount)}</p>
                   </div>
                   <div>
-                    <p className="text-muted">Juros do rotativo</p>
-                    <p className="font-semibold text-expense">{formatMoney(inv.revolvingInterestAmount)}</p>
+                    <p className="text-text-dim">Juros do rotativo</p>
+                    <p className="font-semibold text-white tabular-nums">{formatMoney(inv.revolvingInterestAmount)}</p>
                   </div>
                 </div>
               )}
@@ -325,7 +335,7 @@ export default function CreditCardDetail() {
 
             {(inv.byResponsible ?? []).length > 0 && (
               <Card className="mb-4 p-4">
-                <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+                <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-dim">
                   <Users className="size-3.5" /> Gastos por responsável nesta fatura
                 </h3>
                 <div className="divide-y divide-border">
@@ -335,16 +345,16 @@ export default function CreditCardDetail() {
                       key={r.user.id}
                       onClick={() => set('responsibleId', f.responsibleId === r.user.id ? '' : r.user.id)}
                       className={clsx(
-                        'flex w-full items-center gap-3 rounded-lg px-1.5 py-2 text-left text-sm transition hover:bg-surface-2',
-                        f.responsibleId === r.user.id && 'bg-primary/15 text-primary-hover',
+                        'flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm transition hover:bg-surface-2 cursor-pointer',
+                        f.responsibleId === r.user.id && 'bg-violet/15 text-white',
                       )}
                       title="Clique para filtrar por este responsável"
                     >
-                      <div className="grid size-7 place-items-center rounded-full bg-primary/20 text-[11px] font-bold text-primary-hover">
+                      <div className="grid size-7 place-items-center rounded-full bg-violet/20 text-[11px] font-bold text-violet-hover">
                         {initials(r.user)}
                       </div>
-                      <span className="flex-1 truncate">{fullName(r.user)}</span>
-                      <span className="font-semibold">{formatMoney(r.amount)}</span>
+                      <span className="flex-1 truncate text-white">{fullName(r.user)}</span>
+                      <span className="font-semibold tabular-nums text-white">{formatMoney(r.amount)}</span>
                     </button>
                   ))}
                 </div>
@@ -352,7 +362,7 @@ export default function CreditCardDetail() {
             )}
 
             <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+              <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-text-dim" />
               <Input
                 className="pl-9"
                 placeholder="Buscar por título na fatura…"
@@ -364,7 +374,7 @@ export default function CreditCardDetail() {
             {showFilters && (
               <Card className="mb-4 space-y-4 p-4">
                 <div>
-                  <p className="mb-2 text-xs font-medium text-muted">Tipo</p>
+                  <p className="mb-2 text-xs font-medium text-text-dim">Tipo</p>
                   <div className="flex flex-wrap gap-2">
                     <button className={chip(f.type === '')} onClick={() => set('type', '')}>
                       Todos
@@ -377,7 +387,7 @@ export default function CreditCardDetail() {
                   </div>
                 </div>
                 <div>
-                  <p className="mb-2 text-xs font-medium text-muted">Situação</p>
+                  <p className="mb-2 text-xs font-medium text-text-dim">Situação</p>
                   <div className="flex flex-wrap gap-2">
                     <button className={chip(f.status === '')} onClick={() => set('status', '')}>
                       Todas
@@ -437,13 +447,13 @@ export default function CreditCardDetail() {
             )}
 
             {(activeCount > 0 || f.search.trim().length > 0) && (
-              <div className="mb-3 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 text-xs">
-                <span className="text-muted">
-                  Exibindo <b className="text-text">{filteredTransactions.length}</b> de {allTransactions.length}{' '}
+              <div className="mb-3 flex items-center justify-between rounded-xl border border-border bg-surface-1 px-3.5 py-2 text-xs">
+                <span className="text-text-dim">
+                  Exibindo <b className="text-white">{filteredTransactions.length}</b> de {allTransactions.length}{' '}
                   lançamento(s)
                 </span>
-                <span className="text-muted">
-                  Total filtrado: <b className="text-expense">{formatMoney(filteredTotal)}</b>
+                <span className="text-text-dim">
+                  Total filtrado: <b className="text-white tabular-nums">{formatMoney(filteredTotal)}</b>
                 </span>
               </div>
             )}
@@ -466,13 +476,14 @@ export default function CreditCardDetail() {
 
       <Modal open={paying} onClose={() => setPaying(false)} title="Pagamento manual da fatura">
         <form
+          noValidate
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault()
             pay.mutate()
           }}
         >
-          <p className="text-xs text-muted">
+          <p className="text-xs text-text-muted leading-relaxed">
             Informe quanto deseja pagar agora. Se pagar menos que o total (ou R$ 0,00 para apenas rolar a fatura), o
             saldo restante pode ser transferido para a fatura do mês seguinte junto com os juros do rotativo.
           </p>
@@ -493,24 +504,18 @@ export default function CreditCardDetail() {
               </Select>
             </Field>
             <Field label="Data do pagamento">
-              <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} required />
+              <DatePicker value={payDate} onChange={(e) => setPayDate(e.target.value)} required />
             </Field>
           </div>
 
           {isPartialPayment && inv && (
-            <div className="space-y-3 rounded-xl border border-warn/40 bg-warn/10 p-3">
-              <p className="text-xs font-medium text-warn">
+            <div className="space-y-3 rounded-2xl border border-white/10 bg-surface-2 p-3.5">
+              <p className="text-xs font-medium text-white">
                 Restarão {formatMoney(Math.max(0, inv.remainingAmount - payAmount))} sem pagar nesta fatura.
               </p>
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-indigo-500"
-                  checked={rollRemaining}
-                  onChange={(e) => setRollRemaining(e.target.checked)}
-                />
+              <Checkbox checked={rollRemaining} onChange={setRollRemaining}>
                 Transferir saldo restante não pago para a fatura do mês seguinte
-              </label>
+              </Checkbox>
               <Field
                 label="Valor do rotativo (juros/encargos) para o mês seguinte"
                 hint="Você também pode informar ou editar esse valor depois direto na fatura seguinte."
@@ -528,6 +533,7 @@ export default function CreditCardDetail() {
 
       <Modal open={editingRevolving} onClose={() => setEditingRevolving(false)} title="Rotativo e saldo anterior desta fatura">
         <form
+          noValidate
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault()

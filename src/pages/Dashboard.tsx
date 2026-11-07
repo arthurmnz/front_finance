@@ -8,13 +8,12 @@ import { useAccounts, useAllCategories, useCreditCards, useTotalBalance } from '
 import { useAuth } from '@/lib/auth'
 import type { CreditCardInvoice, Transaction } from '@/lib/types'
 import { formatDate, formatMoney } from '@/lib/format'
+import { normalizeCategoryColor } from '@/lib/palette'
 import { Button, Card, Empty, PageHeader, Spinner } from '@/components/ui'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import TransactionFormModal from '@/components/TransactionFormModal'
 import AccountFormModal from '@/components/AccountFormModal'
 import CreditCardFormModal from '@/components/CreditCardFormModal'
-
-const PALETTE = ['#6366f1', '#f87171', '#34d399', '#fbbf24', '#38bdf8', '#e879f9', '#fb923c', '#a3e635']
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -110,31 +109,51 @@ export default function Dashboard() {
       const k = t.categoryId ?? 'none'
       map.set(k, (map.get(k) ?? 0) + t.amount)
     })
-    return [...map.entries()].map(([id, value], i) => {
-      const c = cats.find((c) => c.id === id)
-      return { name: c?.name ?? 'Sem categoria', value, color: c?.color ?? PALETTE[i % PALETTE.length] }
-    }).sort((a, b) => b.value - a.value)
+    return [...map.entries()]
+      .map(([id, value], i) => {
+        const c = cats?.find((cat) => cat.id === id)
+        const col = normalizeCategoryColor(c?.color, i)
+        return { name: c?.name ?? 'Sem categoria', value, color: col }
+      })
+      .sort((a, b) => b.value - a.value)
   }, [allTx, cats])
 
-  const upcoming = allTx.filter((t) => t.status === 'PENDING').sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5)
-  const toggleIgnore = (id: string) => setIgnored((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+  const upcoming = allTx
+    .filter((t) => t.status === 'PENDING')
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 5)
+
+  const toggleIgnore = (id: string) =>
+    setIgnored((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
 
   return (
     <>
-      <PageHeader title={`Olá, ${user?.firstName ?? ''}`} subtitle="Resumo das suas finanças" action={<Button onClick={() => setAdding(true)}><Plus className="size-4" /> Nova</Button>} />
-      <div className="mb-4"><MonthPicker value={period} onChange={setPeriod} /></div>
+      <PageHeader
+        title={`Olá, ${user?.firstName ?? ''}`}
+        subtitle="Resumo das suas finanças"
+        action={
+          <Button onClick={() => setAdding(true)}>
+            <Plus className="size-4" /> Nova
+          </Button>
+        }
+      />
+      <div className="mb-4">
+        <MonthPicker value={period} onChange={setPeriod} />
+      </div>
 
-      <Card className="mb-4 bg-gradient-to-br from-primary/25 to-surface p-5">
+      <Card className="mb-5 p-5 bg-surface-1 border border-border">
         <div className="grid grid-cols-2 gap-4 border-b border-border/60 pb-4">
           <div>
-            <p className="text-xs text-muted">Saldo total</p>
-            <p className="mt-0.5 text-2xl font-bold sm:text-3xl">
+            <p className="text-xs text-text-muted">Saldo total</p>
+            <p className="mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight text-white tabular-nums">
               {balance.data ? formatMoney(summary.currentBalance) : '—'}
             </p>
           </div>
           <div className="border-l border-border/60 pl-4">
-            <p className="text-xs text-muted">Saldo projetado</p>
-            <p className={`mt-0.5 text-2xl font-bold sm:text-3xl ${summary.projectedBalance < 0 ? 'text-expense' : 'text-primary-hover'}`}>
+            <p className="text-xs text-text-muted">Saldo projetado</p>
+            <p
+              className={`mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums ${summary.projectedBalance < 0 ? 'text-white' : 'text-lime'}`}
+            >
               {balance.data ? formatMoney(summary.projectedBalance) : '—'}
             </p>
           </div>
@@ -142,55 +161,110 @@ export default function Dashboard() {
 
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <ArrowUpCircle className="size-7 shrink-0 text-income" />
+            <div className="flex items-center gap-2.5">
+              <ArrowUpCircle className="size-6 shrink-0 text-lime" />
               <div className="min-w-0">
-                <p className="text-xs text-muted">Receitas</p>
-                <p className="truncate font-semibold text-income">{formatMoney(summary.realizedIncome)}</p>
+                <p className="text-xs text-text-muted">Receitas</p>
+                <p className="truncate font-semibold text-lime tabular-nums">
+                  {formatMoney(summary.realizedIncome)}
+                </p>
               </div>
             </div>
-            <div className="rounded-lg bg-surface/60 px-2.5 py-1.5">
-              <p className="text-[11px] text-muted">Receitas projetadas</p>
-              <p className="text-sm font-semibold text-income/90">{formatMoney(summary.projectedIncome)}</p>
+            <div className="rounded-xl bg-surface-2 px-3 py-2">
+              <p className="text-[11px] text-text-dim">Receitas projetadas</p>
+              <p className="text-xs font-semibold text-lime tabular-nums">
+                {formatMoney(summary.projectedIncome)}
+              </p>
             </div>
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <ArrowDownCircle className="size-7 shrink-0 text-expense" />
+            <div className="flex items-center gap-2.5">
+              <ArrowDownCircle className="size-6 shrink-0 text-white" />
               <div className="min-w-0">
-                <p className="text-xs text-muted">Despesas</p>
-                <p className="truncate font-semibold text-expense">{formatMoney(summary.realizedExpense)}</p>
+                <p className="text-xs text-text-muted">Despesas</p>
+                <p className="truncate font-semibold text-white tabular-nums">
+                  −{formatMoney(summary.realizedExpense)}
+                </p>
               </div>
             </div>
-            <div className="rounded-lg bg-surface/60 px-2.5 py-1.5">
-              <p className="text-[11px] text-muted">Despesas projetadas</p>
-              <p className="text-sm font-semibold text-expense/90">{formatMoney(summary.projectedExpense)}</p>
+            <div className="rounded-xl bg-surface-2 px-3 py-2">
+              <p className="text-[11px] text-text-dim">Despesas projetadas</p>
+              <p className="text-xs font-semibold text-white tabular-nums">
+                −{formatMoney(summary.projectedExpense)}
+              </p>
             </div>
           </div>
         </div>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card onClick={() => nav('/contas')} className="cursor-pointer p-4 transition hover:border-primary/40">
+        <Card
+          onClick={() => nav('/contas')}
+          className="cursor-pointer p-4 transition hover:border-violet/40"
+        >
           <div className="mb-1 flex items-center justify-between">
-            <Link to="/contas" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 font-semibold hover:text-primary-hover">
-              Contas <ChevronRight className="size-4 text-muted" />
+            <Link
+              to="/contas"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 font-semibold text-white hover:text-lime transition"
+            >
+              Contas <ChevronRight className="size-4 text-text-dim" />
             </Link>
-            <button onClick={(e) => { e.stopPropagation(); setAddingAccount(true) }} aria-label="Nova conta" title="Nova conta"
-              className="grid size-8 place-items-center rounded-full bg-primary/15 text-primary-hover transition hover:bg-primary/25"><Plus className="size-4" /></button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setAddingAccount(true)
+              }}
+              aria-label="Nova conta"
+              title="Nova conta"
+              className="grid size-8 place-items-center rounded-xl bg-violet/15 text-violet-hover transition hover:bg-violet/25"
+            >
+              <Plus className="size-4" />
+            </button>
           </div>
-          <p className="mb-3 text-xs text-muted">Toque no olho para ignorar uma conta do saldo total.</p>
-          {accounts.isLoading ? <Spinner /> : !accounts.data?.length ? <Empty title="Sem contas."><Button size="sm" onClick={(e) => { e.stopPropagation(); setAddingAccount(true) }}>Criar conta</Button></Empty> : (
+          <p className="mb-3 text-xs text-text-dim">Toque no olho para ignorar uma conta do saldo total.</p>
+          {accounts.isLoading ? (
+            <Spinner />
+          ) : !accounts.data?.length ? (
+            <Empty title="Sem contas.">
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setAddingAccount(true)
+                }}
+              >
+                Criar conta
+              </Button>
+            </Empty>
+          ) : (
             <ul className="divide-y divide-border">
               {accounts.data.map((a) => (
                 <li key={a.id} className="flex items-center gap-2 py-2.5">
-                  <button onClick={(e) => { e.stopPropagation(); toggleIgnore(a.id) }} className="p-1 text-muted hover:text-text" aria-label="Ignorar no saldo">
-                    {ignored.includes(a.id) ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleIgnore(a.id)
+                    }}
+                    className="p-1 text-text-muted hover:text-white transition"
+                    aria-label="Ignorar no saldo"
+                  >
+                    {ignored.includes(a.id) ? (
+                      <EyeOff className="size-4 text-text-dim" />
+                    ) : (
+                      <Eye className="size-4 text-lime" />
+                    )}
                   </button>
-                  <Link to={`/contas/${a.id}`} onClick={(e) => e.stopPropagation()} className={`flex flex-1 items-center justify-between hover:text-primary-hover ${ignored.includes(a.id) ? 'opacity-40' : ''}`}>
-                    <span className="text-sm">{a.name}</span>
-                    <span className={`text-sm font-semibold ${a.balance < 0 ? 'text-expense' : ''}`}>{formatMoney(a.balance)}</span>
+                  <Link
+                    to={`/contas/${a.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`flex flex-1 items-center justify-between hover:text-lime transition ${ignored.includes(a.id) ? 'opacity-40' : ''}`}
+                  >
+                    <span className="text-sm text-white">{a.name}</span>
+                    <span className="text-sm font-semibold tabular-nums text-white">
+                      {formatMoney(a.balance)}
+                    </span>
                   </Link>
                 </li>
               ))}
@@ -199,24 +273,40 @@ export default function Dashboard() {
         </Card>
 
         <Card className="p-4">
-          <h2 className="mb-3 font-semibold">Despesas por categoria</h2>
-          {txLoading ? <Spinner /> : !byCategory.length ? <Empty title="Sem despesas no período." /> : (
+          <h2 className="mb-3 font-semibold text-white">Despesas por categoria</h2>
+          {txLoading ? (
+            <Spinner />
+          ) : !byCategory.length ? (
+            <Empty title="Sem despesas no período." />
+          ) : (
             <>
               <div className="h-44">
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie data={byCategory} dataKey="value" innerRadius={45} outerRadius={75} stroke="none">
-                      {byCategory.map((c, i) => <Cell key={i} fill={c.color} />)}
+                      {byCategory.map((c, i) => (
+                        <Cell key={i} fill={c.color} />
+                      ))}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(Number(v))} contentStyle={{ background: '#1a2233', border: '1px solid #263047', borderRadius: 12 }} />
+                    <Tooltip
+                      formatter={(v) => formatMoney(Number(v))}
+                      contentStyle={{
+                        background: '#0e0e13',
+                        border: '1px solid #20202d',
+                        borderRadius: 12,
+                        color: '#ffffff',
+                      }}
+                      itemStyle={{ color: '#ffffff' }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
               <ul className="mt-2 space-y-1.5">
                 {byCategory.slice(0, 5).map((c, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm">
-                    <span className="size-2.5 rounded-full" style={{ background: c.color }} />{c.name}
-                    <span className="ml-auto font-medium">{formatMoney(c.value)}</span>
+                  <li key={i} className="flex items-center gap-2 text-xs text-text-muted">
+                    <span className="size-2 rounded-full shrink-0" style={{ background: c.color }} />
+                    <span className="truncate">{c.name}</span>
+                    <span className="ml-auto font-medium text-white tabular-nums">{formatMoney(c.value)}</span>
                   </li>
                 ))}
               </ul>
@@ -225,28 +315,65 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <Card onClick={() => nav('/cartoes')} className="mt-4 cursor-pointer p-4 transition hover:border-primary/40">
+      <Card
+        onClick={() => nav('/cartoes')}
+        className="mt-4 cursor-pointer p-4 transition hover:border-violet/40"
+      >
         <div className="mb-2 flex items-center justify-between">
-          <Link to="/cartoes" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 font-semibold hover:text-primary-hover">
-            Cartões de crédito <ChevronRight className="size-4 text-muted" />
+          <Link
+            to="/cartoes"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 font-semibold text-white hover:text-lime transition"
+          >
+            Cartões de crédito <ChevronRight className="size-4 text-text-dim" />
           </Link>
-          <button onClick={(e) => { e.stopPropagation(); setAddingCard(true) }} aria-label="Novo cartão" title="Novo cartão"
-            className="grid size-8 place-items-center rounded-full bg-primary/15 text-primary-hover transition hover:bg-primary/25"><Plus className="size-4" /></button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setAddingCard(true)
+            }}
+            aria-label="Novo cartão"
+            title="Novo cartão"
+            className="grid size-8 place-items-center rounded-xl bg-violet/15 text-violet-hover transition hover:bg-violet/25"
+          >
+            <Plus className="size-4" />
+          </button>
         </div>
-        {creditCards.isLoading ? <Spinner /> : !creditCards.data?.length ? (
-          <Empty title="Sem cartões de crédito."><Button size="sm" onClick={(e) => { e.stopPropagation(); setAddingCard(true) }}>Criar cartão</Button></Empty>
+        {creditCards.isLoading ? (
+          <Spinner />
+        ) : !creditCards.data?.length ? (
+          <Empty title="Sem cartões de crédito.">
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setAddingCard(true)
+              }}
+            >
+              Criar cartão
+            </Button>
+          </Empty>
         ) : (
           <ul className="divide-y divide-border">
             {creditCards.data.map((c) => (
               <li key={c.id} className="py-2.5">
-                <Link to={`/cartoes/${c.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center justify-between text-sm hover:text-primary-hover">
+                <Link
+                  to={`/cartoes/${c.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center justify-between text-sm hover:text-lime transition"
+                >
                   <div>
-                    <p className="font-medium">{c.name}</p>
-                    <p className="text-xs text-muted">Disponível: <span className="text-income">{formatMoney(c.availableLimit)}</span> · Vence dia {c.dueDay}</p>
+                    <p className="font-medium text-white">{c.name}</p>
+                    <p className="text-xs text-text-dim">
+                      Disponível: <span className="text-lime">{formatMoney(c.availableLimit)}</span> · Vence dia{' '}
+                      {c.dueDay}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-muted">Fatura atual</p>
-                    <p className="font-semibold text-expense">{formatMoney(c.currentInvoiceAmount)}</p>
+                    <p className="text-[11px] text-text-dim">Fatura atual</p>
+                    <p className="font-semibold text-white tabular-nums">
+                      −{formatMoney(c.currentInvoiceAmount)}
+                    </p>
                   </div>
                 </Link>
               </li>
@@ -256,18 +383,35 @@ export default function Dashboard() {
       </Card>
 
       <Card className="mt-4 p-4">
-        <h2 className="mb-2 font-semibold">Próximas pendentes</h2>
-        {txLoading ? <Spinner /> : !upcoming.length ? <Empty title="Nada pendente neste mês 🎉" /> : (
+        <h2 className="mb-2 font-semibold text-white">Próximas pendentes</h2>
+        {txLoading ? (
+          <Spinner />
+        ) : !upcoming.length ? (
+          <Empty title="Nada pendente neste mês 🎉" />
+        ) : (
           <ul className="divide-y divide-border">
             {upcoming.map((t) => (
               <li key={t.id} className="flex items-center justify-between py-2.5 text-sm">
-                <div><p className="font-medium">{t.title}</p><p className="text-xs text-muted">{formatDate(t.date)}</p></div>
-                <span className={t.type === 'INCOME' ? 'font-semibold text-income' : t.type === 'EXPENSE' ? 'font-semibold text-expense' : 'font-semibold'}>{formatMoney(t.amount)}</span>
+                <div>
+                  <p className="font-medium text-white">{t.title}</p>
+                  <p className="text-xs text-text-dim">{formatDate(t.date)}</p>
+                </div>
+                <span
+                  className={
+                    t.type === 'INCOME'
+                      ? 'font-semibold text-lime tabular-nums'
+                      : 'font-semibold text-white tabular-nums'
+                  }
+                >
+                  {t.type === 'INCOME' ? '+' : '−'}
+                  {formatMoney(t.amount)}
+                </span>
               </li>
             ))}
           </ul>
         )}
       </Card>
+
       <AccountFormModal open={addingAccount} onClose={() => setAddingAccount(false)} />
       <CreditCardFormModal open={addingCard} onClose={() => setAddingCard(false)} />
       <TransactionFormModal open={adding} onClose={() => setAdding(false)} />

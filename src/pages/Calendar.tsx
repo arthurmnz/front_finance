@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
-import { AlertTriangle, CreditCard as CardIcon, Settings2, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertCircle, CreditCard as CardIcon, Settings2, TrendingDown, TrendingUp } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
 import { useAccounts, useCreditCards, useMyCategories } from '@/lib/hooks'
@@ -30,10 +30,11 @@ function useWarningThreshold(userId?: string) {
 type Level = 'positive' | 'warning' | 'negative'
 const levelOf = (balance: number, threshold: number): Level =>
   balance < 0 ? 'negative' : balance < threshold ? 'warning' : 'positive'
+
 const levelCell: Record<Level, string> = {
-  positive: 'bg-income/15 border-income/30',
-  warning: 'bg-warn/15 border-warn/40',
-  negative: 'bg-expense/20 border-expense/40',
+  positive: 'bg-lime-subtle border-lime/25 text-lime',
+  warning: 'bg-violet-subtle border-violet/30 text-white',
+  negative: 'bg-surface-2 border-white/20 text-white',
 }
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -80,8 +81,6 @@ export default function Calendar() {
     const all = new Map<string, Transaction>()
     queries.forEach((q) => q.data?.forEach((t) => all.set(t.id, t)))
 
-    // Compras no cartão de crédito não afetam diretamente o saldo da conta na data da compra;
-    // elas saem da conta vinculada no dia do vencimento da fatura (ou quando o usuário registra pagamento manual).
     const effect = (t: Transaction) => {
       if (t.creditCardId) return 0
       let v = 0
@@ -109,7 +108,6 @@ export default function Calendar() {
       if (k >= first) byDay.set(k, [...(byDay.get(k) ?? []), t])
     })
 
-    // Faturas de cartão vinculadas às contas filtradas com saldo restante a pagar no mês
     const invoicesByDay = new Map<string, { cardId: string; cardName: string; remainingAmount: number }[]>()
     const cardList = creditCards.data ?? []
     invoiceQueries.forEach((iq, idx) => {
@@ -151,7 +149,10 @@ export default function Calendar() {
 
   return (
     <>
-      <PageHeader title="Calendário" subtitle="Saldo projetado dia a dia, contando transações pendentes e faturas de cartão" />
+      <PageHeader
+        title="Calendário"
+        subtitle="Saldo projetado dia a dia, contando transações pendentes e faturas de cartão"
+      />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <MonthPicker
           value={period}
@@ -160,18 +161,20 @@ export default function Calendar() {
             setSelected(undefined)
           }}
         />
-        <Select className="!h-10 !w-auto" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-          <option value="">Todas as contas</option>
-          {visibleAccounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </Select>
+        <div className="w-48">
+          <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            <option value="">Todas as contas</option>
+            {visibleAccounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </div>
         <Button
           variant="outline"
           size="sm"
-          className="h-10"
+          className="h-11"
           onClick={() => {
             setDraft(threshold)
             setConfiguring(true)
@@ -183,13 +186,16 @@ export default function Calendar() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button
+          type="button"
           onClick={() => {
             setTypes([])
             setAccountId('')
           }}
           className={clsx(
-            'rounded-full border px-3 py-1.5 text-xs font-medium transition',
-            !types.length ? 'border-primary bg-primary/20 text-primary-hover' : 'border-border text-muted hover:text-text',
+            'rounded-xl border px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
+            !types.length
+              ? 'border-violet bg-violet text-white font-semibold shadow-sm shadow-violet/25'
+              : 'border-border text-text-muted hover:bg-surface-2 hover:text-white',
           )}
         >
           Todos os tipos
@@ -197,10 +203,13 @@ export default function Calendar() {
         {(Object.keys(accountTypeLabel) as AccountType[]).map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => toggleType(t)}
             className={clsx(
-              'rounded-full border px-3 py-1.5 text-xs font-medium transition',
-              types.includes(t) ? 'border-primary bg-primary/20 text-primary-hover' : 'border-border text-muted hover:text-text',
+              'rounded-xl border px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
+              types.includes(t)
+                ? 'border-violet bg-violet text-white font-semibold shadow-sm shadow-violet/25'
+                : 'border-border text-text-muted hover:bg-surface-2 hover:text-white',
             )}
           >
             {accountTypeLabel[t]}
@@ -215,38 +224,38 @@ export default function Calendar() {
       ) : (
         <>
           <div className="mb-4 grid grid-cols-3 gap-3">
-            <Card className="p-3">
-              <p className="text-xs text-muted">Início do mês</p>
-              <p className="text-sm font-semibold sm:text-base">{formatMoney(projection.opening)}</p>
+            <Card className="p-3.5">
+              <p className="text-xs text-text-dim">Início do mês</p>
+              <p className="text-sm font-semibold sm:text-base text-white tabular-nums">{formatMoney(projection.opening)}</p>
             </Card>
-            <Card className="p-3">
-              <p className="text-xs text-muted">Fim do mês</p>
+            <Card className="p-3.5">
+              <p className="text-xs text-text-dim">Fim do mês</p>
               <p
                 className={clsx(
-                  'flex items-center gap-1 text-sm font-semibold sm:text-base',
-                  projection.closing < projection.opening ? 'text-expense' : 'text-income',
+                  'flex items-center gap-1 text-sm font-semibold sm:text-base tabular-nums',
+                  projection.closing >= projection.opening ? 'text-lime' : 'text-white',
                 )}
               >
                 {projection.closing < projection.opening ? (
-                  <TrendingDown className="size-4" />
+                  <TrendingDown className="size-4 shrink-0 text-white" />
                 ) : (
-                  <TrendingUp className="size-4" />
+                  <TrendingUp className="size-4 shrink-0 text-lime" />
                 )}
                 {formatMoney(projection.closing)}
               </p>
             </Card>
-            <Card className="p-3">
-              <p className="text-xs text-muted">Menor saldo</p>
-              <p className={clsx('text-sm font-semibold sm:text-base', projection.min.balance < 0 && 'text-expense')}>
+            <Card className="p-3.5">
+              <p className="text-xs text-text-dim">Menor saldo</p>
+              <p className="text-sm font-semibold sm:text-base text-white tabular-nums">
                 {formatMoney(projection.min.balance)}
               </p>
-              <p className="text-[11px] text-muted">dia {projection.min.day}</p>
+              <p className="text-[11px] text-text-dim">dia {projection.min.day}</p>
             </Card>
           </div>
 
           {projection.firstNegative && (
-            <div className="mb-4 flex items-start gap-2 rounded-xl border border-expense/40 bg-expense/10 p-3 text-sm text-expense">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-white/15 bg-surface-2 p-3.5 text-xs text-white">
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-lime" />
               <span>
                 O saldo fica negativo a partir do dia {projection.firstNegative.day} (
                 {formatMoney(projection.firstNegative.balance)}).
@@ -254,8 +263,8 @@ export default function Calendar() {
             </div>
           )}
 
-          <Card className="p-2 sm:p-3">
-            <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-medium text-muted">
+          <Card className="p-3 sm:p-4">
+            <div className="mb-2 grid grid-cols-7 text-center text-[10px] font-semibold uppercase tracking-wider text-text-dim">
               {WEEKDAYS.map((d) => (
                 <div key={d} className="py-1">
                   {d}
@@ -269,57 +278,53 @@ export default function Calendar() {
               {projection.days.map((d) => (
                 <button
                   key={d.date}
+                  type="button"
                   onClick={() => setSelected(d.date === selected ? undefined : d.date)}
                   className={clsx(
-                    'flex min-h-16 flex-col items-center justify-between rounded-lg border p-1 text-center transition sm:min-h-20 sm:p-1.5',
+                    'flex min-h-16 flex-col items-center justify-between rounded-xl border p-1 text-center transition cursor-pointer select-none sm:min-h-20 sm:p-1.5',
                     levelCell[levelOf(d.balance, threshold)],
-                    d.date === selected && '!border-primary ring-2 ring-primary/60',
-                    d.date === today && 'outline outline-1 outline-primary',
+                    d.date === selected && '!border-lime ring-2 ring-lime/60',
+                    d.date === today && 'outline outline-1 outline-lime',
                   )}
                 >
-                  <span className={clsx('text-xs font-medium', d.date === today ? 'text-primary-hover' : 'text-muted')}>
+                  <span className={clsx('text-xs font-medium', d.date === today ? 'text-lime font-bold' : 'text-text-muted')}>
                     {d.day}
                   </span>
                   {d.delta !== 0 && (
-                    <span className={clsx('text-[10px] leading-none', d.delta > 0 ? 'text-income' : 'text-expense')}>
-                      {d.delta > 0 ? '+' : ''}
-                      {formatCompact(d.delta)}
+                    <span className={clsx('text-[10px] leading-none tabular-nums font-medium', d.delta > 0 ? 'text-lime' : 'text-white')}>
+                      {d.delta > 0 ? '+' : '−'}
+                      {formatCompact(Math.abs(d.delta))}
                     </span>
                   )}
-                  <span
-                    className={clsx(
-                      'text-[11px] font-semibold leading-none sm:text-xs',
-                      d.balance < 0 ? 'text-expense' : d.balance > 0 ? 'text-text' : 'text-muted',
-                    )}
-                  >
+                  <span className="text-[11px] font-semibold leading-none sm:text-xs tabular-nums text-white">
                     {formatCompact(d.balance)}
                   </span>
                 </button>
               ))}
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-muted">
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-border pt-3 px-1 text-xs text-text-dim">
               <span className="flex items-center gap-1.5">
-                <i className="size-2.5 rounded-sm bg-income" /> Positivo (≥ {formatMoney(threshold)})
+                <i className="size-2 rounded-full bg-lime shrink-0" /> Positivo (≥ {formatMoney(threshold)})
               </span>
               <span className="flex items-center gap-1.5">
-                <i className="size-2.5 rounded-sm bg-warn" /> Atenção (abaixo de {formatMoney(threshold)})
+                <i className="size-2 rounded-full bg-violet shrink-0" /> Atenção (abaixo de {formatMoney(threshold)})
               </span>
               <span className="flex items-center gap-1.5">
-                <i className="size-2.5 rounded-sm bg-expense" /> Negativo
+                <i className="size-2 rounded-full bg-white shrink-0" /> Negativo
               </span>
             </div>
-            <p className="mt-1 px-1 text-[11px] text-muted">
+            <p className="mt-1 px-1 text-[11px] text-text-dim">
               Em cada dia: movimentação (incluindo vencimento de fatura de cartão) e saldo projetado ao final do dia.
             </p>
           </Card>
 
           {sel && (
-            <div className="mt-4 space-y-3">
+            <div className="mt-5 space-y-3">
               <div className="flex items-center justify-between px-1">
-                <h2 className="font-semibold">Dia {sel.day}</h2>
-                <span className="text-sm text-muted">
-                  Saldo:{' '}
-                  <b className={clsx(sel.balance < 0 ? 'text-expense' : 'text-text')}>{formatMoney(sel.balance)}</b>
+                <h2 className="font-semibold text-white">Dia {sel.day}</h2>
+                <span className="text-xs text-text-muted">
+                  Saldo ao final do dia:{' '}
+                  <b className="text-white tabular-nums">{formatMoney(sel.balance)}</b>
                 </span>
               </div>
               {sel.invoices.length > 0 && (
@@ -328,17 +333,17 @@ export default function Calendar() {
                     <Link
                       key={inv.cardId}
                       to={`/cartoes/${inv.cardId}`}
-                      className="flex items-center gap-3 p-3 hover:bg-surface-2"
+                      className="flex items-center gap-3 p-3 hover:bg-surface-2 transition"
                     >
-                      <div className="grid size-9 place-items-center rounded-full bg-primary/15 text-primary-hover">
+                      <div className="grid size-9 place-items-center rounded-xl bg-violet/15 text-violet-hover">
                         <CardIcon className="size-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">Vencimento fatura {inv.cardName}</p>
-                        <p className="text-xs text-muted">Saída prevista na conta vinculada</p>
+                        <p className="truncate text-sm font-medium text-white">Vencimento fatura {inv.cardName}</p>
+                        <p className="text-xs text-text-dim">Saída prevista na conta vinculada</p>
                       </div>
-                      <Badge tone="warn">Fatura</Badge>
-                      <p className="text-sm font-semibold text-expense">−{formatMoney(inv.remainingAmount)}</p>
+                      <Badge tone="primary">Fatura</Badge>
+                      <p className="text-sm font-semibold text-white tabular-nums">−{formatMoney(inv.remainingAmount)}</p>
                     </Link>
                   ))}
                 </Card>
@@ -357,8 +362,10 @@ export default function Calendar() {
           )}
         </>
       )}
+
       <Modal open={configuring} onClose={() => setConfiguring(false)} title="Valor de atenção">
         <form
+          noValidate
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault()
@@ -366,9 +373,9 @@ export default function Calendar() {
             setConfiguring(false)
           }}
         >
-          <p className="text-sm text-muted">
-            Dias com saldo projetado abaixo deste valor (e não negativo) ficam em{' '}
-            <b className="text-warn">amarelo</b>. Saldo negativo fica em vermelho e o restante em verde.
+          <p className="text-xs text-text-muted leading-relaxed">
+            Dias com saldo projetado abaixo deste valor (e não negativo) recebem destaque de atenção em violeta. Saldo
+            negativo é destacado em branco e os demais em lime.
           </p>
           <Field label="Valor de atenção">
             <MoneyInput value={draft} onChange={setDraft} />

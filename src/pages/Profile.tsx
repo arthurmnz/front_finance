@@ -55,12 +55,12 @@ export default function Profile() {
     <>
       <PageHeader title="Perfil" />
       <Card className="mb-4 flex items-center gap-4 p-4">
-        <div className="grid size-14 place-items-center rounded-full bg-primary/20 text-lg font-bold text-primary-hover">
+        <div className="grid size-14 place-items-center rounded-2xl bg-violet/20 text-lg font-bold text-violet-hover">
           {initials(user)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className=" truncate font-semibold">{fullName(user)}</p>
-          <p className="truncate text-sm text-muted">{user.email}</p>
+          <p className="truncate font-semibold text-white">{fullName(user)}</p>
+          <p className="truncate text-xs text-text-dim">{user.email}</p>
         </div>
         <Button size="sm" variant="outline" onClick={handleInstall}>
           <Download className="size-4" /> Instalar App
@@ -68,35 +68,36 @@ export default function Profile() {
       </Card>
 
       <Card className="mb-4 divide-y divide-border md:hidden">
-        <Link to="/contas" className="flex items-center gap-3 p-4">
-          <Wallet className="size-5 text-primary-hover" />
-          <span className="flex-1 text-sm font-medium">Contas</span>
-          <ChevronRight className="size-4 text-muted" />
+        <Link to="/contas" className="flex items-center gap-3 p-4 hover:bg-surface-2 transition">
+          <Wallet className="size-5 text-lime" />
+          <span className="flex-1 text-sm font-medium text-white">Contas</span>
+          <ChevronRight className="size-4 text-text-dim" />
         </Link>
-        <Link to="/cartoes" className="flex items-center gap-3 p-4">
-          <CreditCard className="size-5 text-primary-hover" />
-          <span className="flex-1 text-sm font-medium">Cartões de Crédito</span>
-          <ChevronRight className="size-4 text-muted" />
+        <Link to="/cartoes" className="flex items-center gap-3 p-4 hover:bg-surface-2 transition">
+          <CreditCard className="size-5 text-lime" />
+          <span className="flex-1 text-sm font-medium text-white">Cartões de Crédito</span>
+          <ChevronRight className="size-4 text-text-dim" />
         </Link>
-        <Link to="/categorias" className="flex items-center gap-3 p-4">
-          <Tags className="size-5 text-primary-hover" />
-          <span className="flex-1 text-sm font-medium">Categorias</span>
-          <ChevronRight className="size-4 text-muted" />
+        <Link to="/categorias" className="flex items-center gap-3 p-4 hover:bg-surface-2 transition">
+          <Tags className="size-5 text-lime" />
+          <span className="flex-1 text-sm font-medium text-white">Categorias</span>
+          <ChevronRight className="size-4 text-text-dim" />
         </Link>
-        <Link to="/amigos" className="flex items-center gap-3 p-4">
-          <Users className="size-5 text-primary-hover" />
-          <span className="flex-1 text-sm font-medium">Amigos</span>
-          <ChevronRight className="size-4 text-muted" />
+        <Link to="/amigos" className="flex items-center gap-3 p-4 hover:bg-surface-2 transition">
+          <Users className="size-5 text-lime" />
+          <span className="flex-1 text-sm font-medium text-white">Amigos</span>
+          <ChevronRight className="size-4 text-text-dim" />
         </Link>
-        <Link to="/grupos" className="flex items-center gap-3 p-4">
-          <UsersRound className="size-5 text-primary-hover" />
-          <span className="flex-1 text-sm font-medium">Grupos</span>
-          <ChevronRight className="size-4 text-muted" />
+        <Link to="/grupos" className="flex items-center gap-3 p-4 hover:bg-surface-2 transition">
+          <UsersRound className="size-5 text-lime" />
+          <span className="flex-1 text-sm font-medium text-white">Grupos</span>
+          <ChevronRight className="size-4 text-text-dim" />
         </Link>
       </Card>
 
       <Card className="p-4">
         <form
+          noValidate
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault()
@@ -122,7 +123,7 @@ export default function Profile() {
 
       <div className="mt-4 space-y-2">
         <Button variant="outline" className="w-full" onClick={logout}>
-          <LogOut className="size-4" /> Sair
+          <LogOut className="size-4" /> Sair da conta
         </Button>
         <Button variant="danger" className="w-full" onClick={() => setDeleting(true)}>
           <Trash2 className="size-4" /> Excluir minha conta
@@ -130,19 +131,25 @@ export default function Profile() {
       </div>
 
       <Modal open={showInstallHelp} onClose={() => setShowInstallHelp(false)} title="Como instalar no celular">
-        <div className="space-y-4 text-sm text-muted">
-          <div className="flex items-start gap-3 rounded-xl bg-surface-2 p-3">
-            <Smartphone className="mt-0.5 size-5 shrink-0 text-primary-hover" />
+        <div className="space-y-4 text-xs text-text-muted leading-relaxed">
+          <div className="flex items-start gap-3 rounded-2xl bg-surface-2 p-3.5 border border-border">
+            <Smartphone className="mt-0.5 size-5 shrink-0 text-lime" />
             <div>
-              <p className="font-semibold text-text">No Android (Chrome)</p>
-              <p>Toque nos três pontinhos (⋮) no canto superior direito do navegador e selecione <b>"Instalar aplicativo"</b> ou <b>"Adicionar à tela inicial"</b>.</p>
+              <p className="font-semibold text-white mb-0.5">No Android (Chrome)</p>
+              <p>
+                Toque nos três pontinhos (⋮) no canto superior direito do navegador e selecione{' '}
+                <b className="text-white">"Instalar aplicativo"</b> ou <b className="text-white">"Adicionar à tela inicial"</b>.
+              </p>
             </div>
           </div>
-          <div className="flex items-start gap-3 rounded-xl bg-surface-2 p-3">
-            <Smartphone className="mt-0.5 size-5 shrink-0 text-primary-hover" />
+          <div className="flex items-start gap-3 rounded-2xl bg-surface-2 p-3.5 border border-border">
+            <Smartphone className="mt-0.5 size-5 shrink-0 text-lime" />
             <div>
-              <p className="font-semibold text-text">No iPhone / iOS (Safari)</p>
-              <p>Toque no ícone de <b>Compartilhar</b> (quadrado com seta para cima na barra inferior) e escolha <b>"Adicionar à Tela de Início"</b>.</p>
+              <p className="font-semibold text-white mb-0.5">No iPhone / iOS (Safari)</p>
+              <p>
+                Toque no ícone de <b className="text-white">Compartilhar</b> (quadrado com seta para cima na barra inferior)
+                e escolha <b className="text-white">"Adicionar à Tela de Início"</b>.
+              </p>
             </div>
           </div>
           <Button className="w-full" onClick={() => setShowInstallHelp(false)}>

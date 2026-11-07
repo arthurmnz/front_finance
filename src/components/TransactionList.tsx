@@ -5,7 +5,8 @@ import { api } from '@/lib/api'
 import { ALL_MONEY, useAction } from '@/lib/hooks'
 import type { Category, Transaction } from '@/lib/types'
 import { formatDate, formatMoney, fullName } from '@/lib/format'
-import { Badge, Card, ConfirmDialog, Empty } from './ui'
+import { normalizeCategoryColor } from '@/lib/palette'
+import { Badge, Card, Checkbox, ConfirmDialog, Empty } from './ui'
 import TransactionFormModal from './TransactionFormModal'
 
 const dayLabel = (iso: string) => {
@@ -56,36 +57,39 @@ export default function TransactionList({
     const incoming = t.type === 'INCOME' || (t.type === 'TRANSFER' && !!accountId && t.destinationAccountId === accountId)
     const done = t.status === 'COMPLETED'
     const isCard = !!t.creditCardId
+    const catColor = cat ? normalizeCategoryColor(cat.color) : undefined
+
     return (
-      <div key={t.id} className="flex items-center gap-3 p-3">
+      <div key={t.id} className="flex items-center gap-3 p-3 transition hover:bg-surface-2/40">
         {isCard ? (
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/15 text-primary-hover" title="Compra no cartão">
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet/15 text-violet-hover" title="Compra no cartão">
             <CardIcon className="size-4" />
           </div>
         ) : (
           <button
+            type="button"
             onClick={() => toggle.mutate(t.id)}
             title={done ? 'Marcar como pendente' : 'Marcar como concluída'}
             className={clsx(
-              'grid size-9 shrink-0 place-items-center rounded-full transition',
-              done ? 'bg-income/15 text-income' : 'bg-warn/15 text-warn',
+              'grid size-9 shrink-0 place-items-center rounded-xl transition cursor-pointer',
+              done ? 'bg-lime-subtle text-lime' : 'bg-surface-2 text-text-muted hover:text-white',
             )}
           >
             {done ? <Check className="size-4" /> : <Clock className="size-4" />}
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium text-white">
             {t.title}
             {t.installmentNumber && t.totalInstallments && (
               <Badge tone="primary">
                 {t.installmentNumber}/{t.totalInstallments}
               </Badge>
             )}
-            {t.recurrenceGroupId && !t.installmentNumber && <Repeat className="size-3 shrink-0 text-muted" />}
-            {t.type === 'TRANSFER' && <ArrowLeftRight className="size-3 shrink-0 text-muted" />}
+            {t.recurrenceGroupId && !t.installmentNumber && <Repeat className="size-3 shrink-0 text-text-dim" />}
+            {t.type === 'TRANSFER' && <ArrowLeftRight className="size-3 shrink-0 text-text-dim" />}
           </p>
-          <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+          <p className="flex flex-wrap items-center gap-x-2 text-xs text-text-dim mt-0.5">
             {!groupByDay && formatDate(t.date)}
             {isCard && cardNames?.get(t.creditCardId!) && <span>💳 {cardNames.get(t.creditCardId!)}</span>}
             {!isCard && accountNames && (
@@ -95,38 +99,44 @@ export default function TransactionList({
               </span>
             )}
             {cat && (
-              <span style={{ color: cat.color ?? undefined }}>
+              <span style={{ color: catColor }}>
                 {cat.icon} {cat.name}
               </span>
             )}
             {showResponsible && t.responsible && (
-              <span className="inline-flex items-center gap-1 text-muted/90">
+              <span className="inline-flex items-center gap-1 text-text-muted">
                 <User className="size-3" /> {fullName(t.responsible)}
               </span>
             )}
-            {!isCard && !done && <Badge tone="warn">Pendente</Badge>}
+            {!isCard && !done && <Badge tone="default">Pendente</Badge>}
           </p>
         </div>
         <div className="text-right">
           <p
             className={clsx(
-              'text-sm font-semibold',
-              t.type === 'TRANSFER' ? 'text-text' : incoming ? 'text-income' : 'text-expense',
+              'text-sm font-semibold tabular-nums',
+              incoming ? 'text-lime' : 'text-white',
             )}
           >
             {incoming ? '+' : t.type === 'TRANSFER' ? '' : '−'}
             {formatMoney(t.amount)}
           </p>
-          <div className="flex justify-end gap-1">
-            <button onClick={() => setEditing(t)} className="p-1 text-muted hover:text-text" aria-label="Editar">
+          <div className="flex justify-end gap-1 mt-0.5">
+            <button
+              type="button"
+              onClick={() => setEditing(t)}
+              className="p-1 text-text-dim hover:text-white transition"
+              aria-label="Editar"
+            >
               <Pencil className="size-3.5" />
             </button>
             <button
+              type="button"
               onClick={() => {
                 setAllFuture(false)
                 setDeleting(t)
               }}
-              className="p-1 text-muted hover:text-expense"
+              className="p-1 text-text-dim hover:text-white transition"
               aria-label="Excluir"
             >
               <Trash2 className="size-3.5" />
@@ -155,9 +165,15 @@ export default function TransactionList({
             return (
               <section key={day}>
                 <div className="mb-1.5 flex items-center justify-between px-1 text-xs">
-                  <span className="font-medium capitalize text-muted">{dayLabel(day)}</span>
-                  <span className={total < 0 ? 'text-expense' : total > 0 ? 'text-income' : 'text-muted'}>
-                    {formatMoney(total)}
+                  <span className="font-medium capitalize text-text-dim">{dayLabel(day)}</span>
+                  <span
+                    className={clsx(
+                      'tabular-nums font-semibold',
+                      total > 0 ? 'text-lime' : 'text-white',
+                    )}
+                  >
+                    {total > 0 ? '+' : total < 0 ? '−' : ''}
+                    {formatMoney(Math.abs(total))}
                   </span>
                 </div>
                 <Card className="divide-y divide-border">{list.map(renderRow)}</Card>
@@ -179,15 +195,11 @@ export default function TransactionList({
         onConfirm={() => deleting && del.mutate(deleting)}
       >
         {deleting?.recurrenceGroupId && (
-          <label className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-indigo-500"
-              checked={allFuture}
-              onChange={(e) => setAllFuture(e.target.checked)}
-            />
-            Excluir também todas as futuras
-          </label>
+          <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
+            <Checkbox checked={allFuture} onChange={setAllFuture}>
+              Excluir também todas as futuras
+            </Checkbox>
+          </div>
         )}
       </ConfirmDialog>
     </>

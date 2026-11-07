@@ -12,7 +12,7 @@ import type {
   UpdateTransactionInput,
 } from '@/lib/types'
 import { defaultInvoicePeriod, formatMoney, freqLabel, fullName, monthLabel, toISODate, txTypeLabel } from '@/lib/format'
-import { Button, Field, Input, Modal, MoneyInput, Select } from './ui'
+import { Button, Checkbox, DatePicker, Field, Input, Modal, MoneyInput, NumberInput, Select } from './ui'
 import clsx from 'clsx'
 
 interface Props {
@@ -441,15 +441,15 @@ export default function TransactionFormModal({
 
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Editar transação' : 'Nova transação'}>
-      <form className="space-y-4" onSubmit={submit}>
+      <form noValidate className="space-y-4" onSubmit={submit}>
         {!editing && creditCards.length > 0 && (
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1">
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1 border border-border">
             <button
               type="button"
               onClick={() => setSourceMode('ACCOUNT')}
               className={clsx(
-                'rounded-lg py-2 text-xs font-medium transition',
-                sourceMode === 'ACCOUNT' ? 'bg-primary text-white' : 'text-muted hover:text-text',
+                'rounded-lg py-2 text-xs font-medium transition cursor-pointer select-none',
+                sourceMode === 'ACCOUNT' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
               )}
             >
               Conta bancária
@@ -462,8 +462,8 @@ export default function TransactionFormModal({
                 if (!creditCardId && creditCards[0]) setCreditCardId(creditCards[0].id)
               }}
               className={clsx(
-                'rounded-lg py-2 text-xs font-medium transition',
-                sourceMode === 'CARD' ? 'bg-primary text-white' : 'text-muted hover:text-text',
+                'rounded-lg py-2 text-xs font-medium transition cursor-pointer select-none',
+                sourceMode === 'CARD' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
               )}
             >
               Cartão de crédito
@@ -472,7 +472,7 @@ export default function TransactionFormModal({
         )}
 
         {!editing && sourceMode === 'ACCOUNT' && (
-          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1">
+          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1 border border-border">
             {(['EXPENSE', 'INCOME', 'TRANSFER'] as const).map((t) => (
               <button
                 type="button"
@@ -482,14 +482,14 @@ export default function TransactionFormModal({
                   setCategoryId('')
                 }}
                 className={clsx(
-                  'rounded-lg py-2 text-sm font-medium transition',
+                  'rounded-lg py-2 text-xs font-semibold transition cursor-pointer select-none',
                   type === t
                     ? t === 'EXPENSE'
-                      ? 'bg-expense text-white'
+                      ? 'bg-white text-black shadow-sm'
                       : t === 'INCOME'
-                        ? 'bg-income text-black'
-                        : 'bg-primary text-white'
-                    : 'text-muted',
+                        ? 'bg-lime text-black shadow-sm'
+                        : 'bg-violet text-white shadow-sm'
+                    : 'text-text-muted hover:text-white',
                 )}
               >
                 {txTypeLabel[t]}
@@ -499,7 +499,7 @@ export default function TransactionFormModal({
         )}
 
         <Field label="Título">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Ex.: Mercado, Salário, Transferência…" />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
@@ -507,7 +507,7 @@ export default function TransactionFormModal({
             <MoneyInput value={amount} onChange={handleTotalAmountChange} />
           </Field>
           <Field label="Data da compra">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <DatePicker value={date} onChange={(e) => setDate(e.target.value)} required />
           </Field>
         </div>
 
@@ -573,17 +573,17 @@ export default function TransactionFormModal({
           <div className="space-y-3">
             {canSplit && (
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted">
+                <span className="text-xs font-medium text-text-dim">
                   {activeSplit ? `Dividindo entre ${splits.length} contas (máx. 10)` : 'Conta'}
                 </span>
                 <button
                   type="button"
                   onClick={toggleSplitMode}
                   className={clsx(
-                    'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition',
+                    'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer select-none',
                     activeSplit
-                      ? 'bg-primary text-white'
-                      : 'bg-surface-2 text-primary-hover hover:bg-primary/20',
+                      ? 'bg-violet text-white font-semibold'
+                      : 'bg-surface-2 text-violet-hover hover:bg-violet/20',
                   )}
                 >
                   <Split className="size-3.5" />
@@ -595,13 +595,13 @@ export default function TransactionFormModal({
             {activeSplit ? (
               <div className="space-y-2.5 rounded-2xl border border-border bg-surface-2/40 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="inline-flex rounded-xl bg-surface p-0.5 border border-border">
+                  <div className="inline-flex rounded-xl bg-surface-1 p-0.5 border border-border">
                     <button
                       type="button"
                       onClick={() => switchSplitUnit('AMOUNT')}
                       className={clsx(
-                        'rounded-lg px-2.5 py-1 text-xs font-medium transition',
-                        splitUnit === 'AMOUNT' ? 'bg-primary text-white' : 'text-muted hover:text-text',
+                        'rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer',
+                        splitUnit === 'AMOUNT' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
                       )}
                     >
                       Por valor (R$)
@@ -610,8 +610,8 @@ export default function TransactionFormModal({
                       type="button"
                       onClick={() => switchSplitUnit('PERCENT')}
                       className={clsx(
-                        'rounded-lg px-2.5 py-1 text-xs font-medium transition',
-                        splitUnit === 'PERCENT' ? 'bg-primary text-white' : 'text-muted hover:text-text',
+                        'rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer',
+                        splitUnit === 'PERCENT' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
                       )}
                     >
                       Por porcentagem (%)
@@ -621,7 +621,7 @@ export default function TransactionFormModal({
                     <button
                       type="button"
                       onClick={divideEqually}
-                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-medium text-text hover:bg-surface-2"
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface-1 px-2.5 py-1 text-xs font-medium text-white hover:bg-surface-2 transition cursor-pointer"
                     >
                       <Wand2 className="size-3" /> Dividir igualmente
                     </button>
@@ -629,7 +629,7 @@ export default function TransactionFormModal({
                       <button
                         type="button"
                         onClick={addSplitRow}
-                        className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary-hover hover:bg-primary/25"
+                        className="inline-flex items-center gap-1 rounded-lg bg-violet/15 px-2.5 py-1 text-xs font-medium text-violet-hover hover:bg-violet/25 transition cursor-pointer"
                       >
                         <Plus className="size-3" /> Conta
                       </button>
@@ -638,8 +638,8 @@ export default function TransactionFormModal({
                 </div>
 
                 {splitUnit === 'PERCENT' && amount <= 0 && (
-                  <p className="rounded-lg bg-warn/10 px-2.5 py-1.5 text-xs text-warn">
-                    Preencha o campo <b>Valor</b> acima para calcular os valores de cada conta a partir da porcentagem.
+                  <p className="rounded-xl bg-surface-2 border border-border px-3 py-2 text-xs text-text-muted">
+                    Preencha o campo <b className="text-white">Valor</b> acima para calcular os valores de cada conta a partir da porcentagem.
                   </p>
                 )}
 
@@ -667,8 +667,7 @@ export default function TransactionFormModal({
                             <MoneyInput value={row.amount} onChange={(cents) => updateSplitAmount(idx, cents)} />
                           ) : (
                             <div className="relative">
-                              <Input
-                                type="number"
+                              <NumberInput
                                 min={0}
                                 max={100}
                                 step="0.01"
@@ -677,7 +676,7 @@ export default function TransactionFormModal({
                                 onChange={(e) => updateSplitPercentage(idx, e.target.value)}
                                 className="pr-7 text-right"
                               />
-                              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted">
+                              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-text-dim">
                                 %
                               </span>
                             </div>
@@ -686,15 +685,15 @@ export default function TransactionFormModal({
                             type="button"
                             disabled={splits.length <= 2}
                             onClick={() => removeSplitRow(idx)}
-                            className="rounded-lg p-2 text-muted hover:text-expense disabled:opacity-30"
+                            className="rounded-lg p-2 text-text-dim hover:text-white transition disabled:opacity-20 cursor-pointer"
                             aria-label="Remover conta da divisão"
                           >
                             <Trash2 className="size-4" />
                           </button>
                         </div>
                         {splitUnit === 'PERCENT' && amount > 0 && (
-                          <div className="flex justify-end pr-10 text-[11px] text-muted">
-                            Equivale a <b className="ml-1 text-text">{formatMoney(row.amount)}</b>
+                          <div className="flex justify-end pr-10 text-[11px] text-text-dim">
+                            Equivale a <b className="ml-1 text-white tabular-nums">{formatMoney(row.amount)}</b>
                           </div>
                         )}
                       </div>
@@ -705,15 +704,15 @@ export default function TransactionFormModal({
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-xs">
                   {splitUnit === 'PERCENT' ? (
                     <>
-                      <span className="text-muted">
+                      <span className="text-text-dim">
                         Total:{' '}
-                        <b className={clsx(Math.abs(splitsPctSum - 100) <= 0.05 ? 'text-income' : 'text-warn')}>
+                        <b className={clsx('tabular-nums', Math.abs(splitsPctSum - 100) <= 0.05 ? 'text-lime' : 'text-white')}>
                           {splitsPctSum}%
                         </b>{' '}
                         ({formatMoney(splitsSum)})
                       </span>
                       {Math.abs(splitsPctSum - 100) > 0.05 && (
-                        <span className={clsx('font-medium', splitsPctSum < 100 ? 'text-warn' : 'text-expense')}>
+                        <span className="font-medium text-white tabular-nums">
                           {splitsPctSum < 100
                             ? `Faltam ${Number((100 - splitsPctSum).toFixed(2))}% para 100%`
                             : `Passou ${Number((splitsPctSum - 100).toFixed(2))}% de 100%`}
@@ -722,17 +721,14 @@ export default function TransactionFormModal({
                     </>
                   ) : (
                     <>
-                      <span className="text-muted">
-                        Soma das contas: <b className="text-text">{formatMoney(splitsSum)}</b>
+                      <span className="text-text-dim">
+                        Soma das contas: <b className="text-white tabular-nums">{formatMoney(splitsSum)}</b>
                       </span>
                       {amount > 0 && splitsSum !== amount && (
                         <button
                           type="button"
                           onClick={() => setAmount(splitsSum)}
-                          className={clsx(
-                            'font-medium underline',
-                            splitsSum < amount ? 'text-warn' : 'text-expense',
-                          )}
+                          className="font-medium underline text-lime hover:text-white transition cursor-pointer"
                         >
                           {splitsSum < amount
                             ? `Faltam ${formatMoney(amount - splitsSum)} (usar soma)`
@@ -812,37 +808,30 @@ export default function TransactionFormModal({
         )}
 
         {sourceMode === 'ACCOUNT' && !transaction?.creditCardId && (
-          <label className="flex items-center gap-3 rounded-xl bg-surface-2 p-3 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-indigo-500"
+          <div className="rounded-xl bg-surface-2 p-3 border border-border">
+            <Checkbox
               checked={status === 'COMPLETED'}
-              onChange={(e) => setStatus(e.target.checked ? 'COMPLETED' : 'PENDING')}
-            />
-            {type === 'INCOME' ? 'Recebida' : type === 'TRANSFER' ? 'Efetivada' : 'Paga'}
-          </label>
+              onChange={(checked) => setStatus(checked ? 'COMPLETED' : 'PENDING')}
+            >
+              {type === 'INCOME' ? 'Recebida' : type === 'TRANSFER' ? 'Efetivada' : 'Paga'}
+            </Checkbox>
+          </div>
         )}
 
         {!editing && (
-          <div className="space-y-3 rounded-xl border border-border p-3">
-            <label className="flex items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="size-4 accent-indigo-500"
-                checked={recurring}
-                onChange={(e) => setRecurring(e.target.checked)}
-              />
+          <div className="space-y-3 rounded-2xl border border-border p-3.5 bg-surface-1">
+            <Checkbox checked={recurring} onChange={setRecurring}>
               {sourceMode === 'CARD' ? 'Parcelado ou Assinatura recorrente' : 'Transação recorrente'}
-            </label>
+            </Checkbox>
             {recurring && (
               <>
-                <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1">
+                <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1 border border-border">
                   <button
                     type="button"
                     onClick={() => setInfinite(false)}
                     className={clsx(
-                      'rounded-lg py-1.5 text-xs font-medium transition',
-                      !infinite ? 'bg-primary text-white' : 'text-muted',
+                      'rounded-lg py-1.5 text-xs font-medium transition cursor-pointer select-none',
+                      !infinite ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
                     )}
                   >
                     Parcelado (compromete total)
@@ -851,8 +840,8 @@ export default function TransactionFormModal({
                     type="button"
                     onClick={() => setInfinite(true)}
                     className={clsx(
-                      'rounded-lg py-1.5 text-xs font-medium transition',
-                      infinite ? 'bg-primary text-white' : 'text-muted',
+                      'rounded-lg py-1.5 text-xs font-medium transition cursor-pointer select-none',
+                      infinite ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
                     )}
                   >
                     Assinatura (mês a mês)
@@ -871,8 +860,8 @@ export default function TransactionFormModal({
                       </Select>
                     </Field>
                     <Field label="A cada (intervalo)">
-                      <Input
-                        type="number"
+                      <NumberInput
+                        showControls
                         min={1}
                         value={interval}
                         onChange={(e) => setInterval_(Math.max(1, Number(e.target.value)))}
@@ -883,8 +872,8 @@ export default function TransactionFormModal({
                   <>
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="Nº de parcelas">
-                        <Input
-                          type="number"
+                        <NumberInput
+                          showControls
                           min={2}
                           value={installments}
                           onChange={(e) => setInstallments(Math.max(2, Number(e.target.value)))}
@@ -901,9 +890,10 @@ export default function TransactionFormModal({
                       </Field>
                     </div>
                     {amount > 0 && (
-                      <p className="text-xs text-muted">
-                        Resumo: <b>{installments}x</b> de <b>{formatMoney(perInstallmentPreview)}</b> (total{' '}
-                        <b>{formatMoney(totalPreview)}</b>)
+                      <p className="text-xs text-text-dim">
+                        Resumo: <b className="text-white">{installments}x</b> de{' '}
+                        <b className="text-white tabular-nums">{formatMoney(perInstallmentPreview)}</b> (total{' '}
+                        <b className="text-white tabular-nums">{formatMoney(totalPreview)}</b>)
                       </p>
                     )}
                   </>
@@ -914,15 +904,11 @@ export default function TransactionFormModal({
         )}
 
         {editing && transaction?.recurrenceGroupId && (
-          <label className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-indigo-500"
-              checked={allFuture}
-              onChange={(e) => setAllFuture(e.target.checked)}
-            />
-            Aplicar a todas as futuras
-          </label>
+          <div className="rounded-xl border border-border p-3 bg-surface-2">
+            <Checkbox checked={allFuture} onChange={setAllFuture}>
+              Aplicar a todas as futuras
+            </Checkbox>
+          </div>
         )}
 
         <Button type="submit" className="w-full" loading={save.isPending}>
