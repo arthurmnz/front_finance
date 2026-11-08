@@ -38,6 +38,7 @@ export interface CreditCardInvoice {
   totalAmount: number; paidAmount: number; remainingAmount: number; status: 'OPEN' | 'CLOSED' | 'PAID' | 'PARTIALLY_PAID'
   transactions: Transaction[]
   byResponsible: { user: UserSummary; amount: number }[]
+  payments?: Transaction[]
 }
 export interface PayInvoiceInput {
   amount: number; accountId?: string | null; date: string; rollRemainingToNextMonth: boolean; nextMonthRevolvingInterest?: number | null
@@ -58,7 +59,7 @@ export interface Transaction {
   accountId: string; type: TransactionType; destinationAccountId: string | null; categoryId: string | null
   status: TransactionStatus; recurrenceGroupId: string | null; recurrenceFrequency: RecurrenceFrequency | null
   recurrenceInterval: number | null; isInfinite: boolean
-  creditCardId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
+  creditCardId?: string | null; creditCardInvoiceId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
   installmentNumber?: number | null; totalInstallments?: number | null
   createdAt: string; updatedAt: string
 }
@@ -71,7 +72,7 @@ export interface CreateTransactionInput {
   destinationAccountId?: string | null; categoryId?: string | null; status: TransactionStatus
   isRecurring: boolean; recurrenceFrequency?: RecurrenceFrequency | null
   recurrenceInterval: number; recurrenceInstallments: number; isInfinite: boolean
-  creditCardId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
+  creditCardId?: string | null; creditCardInvoiceId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
   installmentAmountMode?: 'INSTALLMENT' | 'TOTAL'
   splits?: AccountSplitInput[] | null
 }

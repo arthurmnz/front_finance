@@ -149,6 +149,7 @@ export default function CreditCardDetail() {
     () => filteredTransactions.reduce((s, t) => s + t.amount, 0),
     [filteredTransactions],
   )
+  const accountNameMap = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
 
   const del = useAction(() => api.delete(`/credit-cards/${id}`), {
     invalidate: ALL_MONEY,
@@ -332,6 +333,25 @@ export default function CreditCardDetail() {
                 </div>
               )}
             </Card>
+
+            {(inv.payments ?? []).length > 0 && (
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-lime">
+                    <CheckCircle2 className="size-3.5" /> Pagamentos efetuados nesta fatura
+                  </h3>
+                  <span className="text-xs font-medium text-text-dim">
+                    Total pago: <b className="text-lime tabular-nums">{formatMoney(inv.paidAmount)}</b>
+                  </span>
+                </div>
+                <TransactionList
+                  items={inv.payments ?? []}
+                  categories={cats}
+                  accountNames={accountNameMap}
+                  showResponsible
+                />
+              </div>
+            )}
 
             {(inv.byResponsible ?? []).length > 0 && (
               <Card className="mb-4 p-4">
