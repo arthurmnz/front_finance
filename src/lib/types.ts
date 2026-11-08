@@ -6,7 +6,7 @@ export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
 export type GroupRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 export type FriendshipStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'BLOCKED'
 
-export interface User { id: string; firstName: string; lastName: string; email: string; createdAt: string; updatedAt: string }
+export interface User { id: string; firstName: string; lastName: string; email: string; role?: 'USER' | 'ADMIN'; isActive?: boolean; createdAt: string; updatedAt: string }
 export interface AuthResponse { accessToken: string; tokenType: string; expiresIn: number; user: User }
 
 export interface Account {
@@ -168,4 +168,40 @@ export interface UserDebtsSummary {
   totalOwedAllMonths: number
   totalReceivableAllMonths: number
   groups: UserDebtGroupSummary[]
+}
+
+export interface AdminMonthlyGrowth {
+  month: string
+  label: string
+  usersCount: number
+  transactionsCount: number
+}
+
+export interface AdminMetrics {
+  totalUsers: number
+  activeUsers: number
+  blockedUsers: number
+  adminUsers: number
+  newUsersLast7Days: number
+  newUsersLast30Days: number
+  totalAccounts: number
+  totalCreditCards: number
+  totalGroups: number
+  totalTransactions: number
+  monthlyGrowth: AdminMonthlyGrowth[]
+}
+
+export interface AdminUserSummary {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  role: 'USER' | 'ADMIN'
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  accountsCount: number
+  creditCardsCount: number
+  groupsCount: number
+  transactionsCount: number
 }

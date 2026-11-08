@@ -20,6 +20,7 @@ import Friends from '@/pages/Friends'
 import Groups from '@/pages/Groups'
 import GroupDetail from '@/pages/GroupDetail'
 import Profile from '@/pages/Profile'
+import Admin from '@/pages/Admin'
 import NotFound from '@/pages/NotFound'
 
 function Private({ children }: { children: ReactNode }) {
@@ -31,6 +32,13 @@ function Public({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="mx-auto max-w-md p-6"><DetailSkeleton /></div>
   return user ? <Navigate to="/" replace /> : <>{children}</>
+}
+function AdminRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="mx-auto max-w-5xl p-4 sm:p-6"><DetailSkeleton /></div>
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== 'ADMIN') return <Navigate to="/" replace />
+  return <>{children}</>
 }
 
 export default function App() {
@@ -56,6 +64,7 @@ export default function App() {
         <Route path="grupos/:id" element={<GroupDetail />} />
         <Route path="grupos/:id/relatorios" element={<GroupDetail />} />
         <Route path="perfil" element={<Profile />} />
+        <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
         <Route path="*" element={<NotFound />} />
       </Route>
       <Route path="*" element={<NotFound />} />

@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   CreditCard,
+  ShieldCheck,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '@/lib/auth'
@@ -37,6 +38,9 @@ export default function Layout() {
     { to: '/amigos', label: 'Amigos', icon: Users, badge: requests },
     { to: '/grupos', label: 'Grupos', icon: UsersRound, badge: invites },
     { to: '/perfil', label: 'Perfil', icon: UserCircle },
+    ...(user?.role === 'ADMIN'
+      ? [{ to: '/admin', label: 'Painel Admin', icon: ShieldCheck }]
+      : []),
   ]
 
   // No mobile: 2 itens | botão de nova transação | 2 itens
