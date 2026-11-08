@@ -3,6 +3,7 @@ import { Button, Field, Modal, MoneyInput, Spinner } from '@/components/ui'
 import { currentPeriod } from '@/components/MonthPicker'
 import ReportFilters from './ReportFilters'
 import KpiSection from './KpiSection'
+import FinancialPlanningSection from './FinancialPlanningSection'
 import CalendarFlowSection from './CalendarFlowSection'
 import CashFlowSection from './CashFlowSection'
 import CategoryEvolutionSection from './CategoryEvolutionSection'
@@ -22,6 +23,7 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
   const [configuringThreshold, setConfiguringThreshold] = useState(false)
   const [draftThreshold, setDraftThreshold] = useState(threshold)
   const [showFilters, setShowFilters] = useState(false)
+  const [windowMonths, setWindowMonths] = useState<6 | 12>(6)
 
   const [filters, setFilters] = useState<ReportFiltersState>({
     period: currentPeriod(),
@@ -37,17 +39,19 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
     loading,
     members,
     accounts,
+    allAccounts,
     creditCards,
     categories,
     projection,
     kpis,
+    financialPlanning,
     cashFlowHistory,
     categoryEvolution,
     futureCommitments,
     spendingHabits,
     memberExpenses,
     groupDebts,
-  } = useGroupReportsData(groupId, filters, threshold)
+  } = useGroupReportsData(groupId, filters, threshold, windowMonths)
 
   const handleOpenThresholdModal = () => {
     setDraftThreshold(threshold)
@@ -83,12 +87,19 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
           {/* Bloco 1: KPIs Consolidados do Grupo */}
           <KpiSection kpis={kpis} />
 
+          {/* Patrimônio Guardado & Custo de Vida Médio */}
+          <FinancialPlanningSection
+            data={financialPlanning}
+            windowMonths={windowMonths}
+            onWindowChange={setWindowMonths}
+          />
+
           {/* Previsibilidade: Calendário Financeiro do Grupo */}
           <CalendarFlowSection
             period={filters.period}
             projection={projection}
             threshold={threshold}
-            accounts={accounts}
+            accounts={allAccounts}
             categories={categories}
             accountIdFilter={filters.accountId}
           />

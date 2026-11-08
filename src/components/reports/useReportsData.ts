@@ -27,6 +27,7 @@ import { normalizeCategoryColor, PALETTE } from '@/lib/palette'
 import type {
   CategoryComparison,
   CumulativeSpendingPoint,
+  FinancialPlanningData,
   FutureMonthCommitment,
   GroupMemberExpense,
   KpiData,
@@ -549,30 +550,224 @@ export function buildGroupMemberExpenses(
   return result.sort((a, b) => b.totalExpense - a.totalExpense)
 }
 
+export function calculateFinancialPlanning(
+  allTxs: Transaction[],
+  cards: CreditCard[],
+  operationalAccounts: Account[],
+  savingsAccounts: Account[],
+  investmentAccounts: Account[],
+  period: ReportPeriod,
+  windowMonths: 6 | 12 = 6,
+): FinancialPlanningData {
+  const operationalAccountIds = new Set(operationalAccounts.map((a) => a.id))
+  const cardClosingMap = new Map(cards.map((c) => [c.id, c.closingDay || 25]))
+
+  // 1. Totais Guardados (Reserva e Investimentos somados separadamente)
+  const totalSavings = savingsAccounts.reduce((sum, a) => sum + (a.balance ?? 0), 0)
+  const totalInvestments = investmentAccounts.reduce((sum, a) => sum + (a.balance ?? 0), 0)
+
+  // 2. Gastos Fixos: Despesas recorrentes contínuas (isInfinite === true)
+  // de contas operacionais e cartões de crédito (ignorando pagamento de fatura)
+  const fixedTxsInSelectedMonth = allTxs.filter((t) => {
+    if (t.type !== 'EXPENSE' || !t.isInfinite || isInvoicePaymentTx(t)) return false
+    if (t.creditCardId) {
+      if (t.invoiceMonth != null && t.invoiceYear != null) {
+        return t.invoiceMonth === period.month && t.invoiceYear === period.year
+      }
+      const p = parseDateParts(t.date)
+      const closingDay = cardClosingMap.get(t.creditCardId) || 25
+      let invM = p.month
+      let invY = p.year
+      if (p.day >= closingDay) {
+        invM += 1
+        if (invM > 12) {
+          invM = 1
+          invY += 1
+        }
+      }
+      return invM === period.month && invY === period.year
+    }
+    if (operationalAccountIds.has(t.accountId)) {
+      const p = parseDateParts(t.date)
+      return p.month === period.month && p.year === period.year
+    }
+    return false
+  })
+
+  let fixedMonthlyCost = fixedTxsInSelectedMonth.reduce((s, t) => s + t.amount, 0)
+
+  // Se não houver despesas fixas instanciadas no mês selecionado, busca os compromissos fixos cadastrados mais recentes
+  if (fixedMonthlyCost === 0) {
+    const recurringMap = new Map<string, number>()
+    allTxs
+      .filter((t) => {
+        if (t.type !== 'EXPENSE' || !t.isInfinite || isInvoicePaymentTx(t)) return false
+        return Boolean(t.creditCardId || operationalAccountIds.has(t.accountId))
+      })
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .forEach((t) => {
+        const key = t.recurrenceGroupId || `${t.title}-${t.amount}`
+        if (!recurringMap.has(key)) {
+          recurringMap.set(key, t.amount)
+        }
+      })
+    fixedMonthlyCost = Array.from(recurringMap.values()).reduce((s, amt) => s + amt, 0)
+  }
+
+  // 3. Gastos Variáveis: Média das despesas não-fixas (isInfinite !== true, avulsas + parceladas)
+  // nos últimos 6 a 12 meses
+  const monthlyVariableTotals: number[] = []
+
+  for (let i = 1; i <= windowMonths; i++) {
+    const d = new Date(period.year, period.month - 1 - i, 1)
+    const m = d.getMonth() + 1
+    const y = d.getFullYear()
+
+    const monthVarSum = allTxs
+      .filter((t) => {
+        if (t.type !== 'EXPENSE' || t.isInfinite || isInvoicePaymentTx(t)) return false
+        if (t.creditCardId) {
+          if (t.invoiceMonth != null && t.invoiceYear != null) {
+            return t.invoiceMonth === m && t.invoiceYear === y
+          }
+          const p = parseDateParts(t.date)
+          const closingDay = cardClosingMap.get(t.creditCardId) || 25
+          let invM = p.month
+          let invY = p.year
+          if (p.day >= closingDay) {
+            invM += 1
+            if (invM > 12) {
+              invM = 1
+              invY += 1
+            }
+          }
+          return invM === m && invY === y
+        }
+        if (operationalAccountIds.has(t.accountId)) {
+          const p = parseDateParts(t.date)
+          return p.month === m && p.year === y
+        }
+        return false
+      })
+      .reduce((s, t) => s + t.amount, 0)
+
+    if (monthVarSum > 0) {
+      monthlyVariableTotals.push(monthVarSum)
+    }
+  }
+
+  let variableMonthlyAverage = 0
+  let monthsAnalyzedCount = monthlyVariableTotals.length
+
+  if (monthlyVariableTotals.length > 0) {
+    const sum = monthlyVariableTotals.reduce((s, val) => s + val, 0)
+    variableMonthlyAverage = Math.round(sum / monthlyVariableTotals.length)
+  } else {
+    // Fallback: se não há histórico nos meses anteriores, analisa variáveis do mês corrente
+    const currentMonthVar = allTxs
+      .filter((t) => {
+        if (t.type !== 'EXPENSE' || t.isInfinite || isInvoicePaymentTx(t)) return false
+        if (t.creditCardId) {
+          if (t.invoiceMonth != null && t.invoiceYear != null) {
+            return t.invoiceMonth === period.month && t.invoiceYear === period.year
+          }
+          const p = parseDateParts(t.date)
+          const closingDay = cardClosingMap.get(t.creditCardId) || 25
+          let invM = p.month
+          let invY = p.year
+          if (p.day >= closingDay) {
+            invM += 1
+            if (invM > 12) {
+              invM = 1
+              invY += 1
+            }
+          }
+          return invM === period.month && invY === period.year
+        }
+        if (operationalAccountIds.has(t.accountId)) {
+          const p = parseDateParts(t.date)
+          return p.month === period.month && p.year === period.year
+        }
+        return false
+      })
+      .reduce((s, t) => s + t.amount, 0)
+
+    if (currentMonthVar > 0) {
+      variableMonthlyAverage = currentMonthVar
+      monthsAnalyzedCount = 1
+    }
+  }
+
+  const averageMonthlyCost = fixedMonthlyCost + variableMonthlyAverage
+  const savingsCoverageMonths =
+    averageMonthlyCost > 0 ? Number((totalSavings / averageMonthlyCost).toFixed(1)) : 0
+
+  return {
+    totalSavings,
+    savingsAccountsCount: savingsAccounts.length,
+    totalInvestments,
+    investmentAccountsCount: investmentAccounts.length,
+    fixedMonthlyCost,
+    variableMonthlyAverage,
+    averageMonthlyCost,
+    savingsCoverageMonths,
+    monthsAnalyzedCount,
+    calculationWindowMonths: windowMonths,
+  }
+}
+
 // ----------------------------------------------------------------------
 // HOOK 1: RELATÓRIO ESTRITAMENTE INDIVIDUAL DO USUÁRIO LOGADO
 // ----------------------------------------------------------------------
 
-export function useIndividualReportsData(filters: ReportFiltersState, _threshold?: number) {
+export function useIndividualReportsData(
+  filters: ReportFiltersState,
+  _threshold?: number,
+  calculationWindow: 6 | 12 = 6,
+) {
   const { user } = useAuth()
   const accountsQuery = useAccounts()
   const creditCardsQuery = useCreditCards()
   const categories = useAllCategories().data ?? []
   const debtsSummary = useUserDebtsSummary(filters.period.month, filters.period.year)
 
-  // Apenas contas e cartões próprios do usuário
-  const accountList = useMemo(
+  // Todas as contas próprias do usuário
+  const allOwnAccounts = useMemo(
     () => (accountsQuery.data ?? []).filter((a) => !user?.id || a.ownerId === user.id),
     [accountsQuery.data, user?.id],
   )
+
+  // Separação em Operacionais (dia a dia), Reserva de emergência e Investimentos
+  const operationalAccounts = useMemo(
+    () => allOwnAccounts.filter((a) => a.type === 'CHECKING' || a.type === 'WALLET'),
+    [allOwnAccounts],
+  )
+  const savingsAccounts = useMemo(
+    () => allOwnAccounts.filter((a) => a.type === 'SAVINGS'),
+    [allOwnAccounts],
+  )
+  const investmentAccounts = useMemo(
+    () => allOwnAccounts.filter((a) => a.type === 'INVESTMENTS'),
+    [allOwnAccounts],
+  )
+
+  const operationalAccountIds = useMemo(
+    () => new Set(operationalAccounts.map((a) => a.id)),
+    [operationalAccounts],
+  )
+  const allOwnAccountIds = useMemo(
+    () => new Set(allOwnAccounts.map((a) => a.id)),
+    [allOwnAccounts],
+  )
+
   const cardList = useMemo(
     () => (creditCardsQuery.data ?? []).filter((c) => !user?.id || c.ownerId === user.id),
     [creditCardsQuery.data, user?.id],
   )
 
-  // 1. Transações das contas próprias
+  // 1. Transações de todas as contas próprias (para rastrear transferências e histórico completo)
   const accountQueries = useQueries({
-    queries: accountList.map((a) => ({
+    queries: allOwnAccounts.map((a) => ({
       queryKey: ['transactions', 'account', a.id, 'all'],
       queryFn: () => api.get<Transaction[]>(`/transactions/account/${a.id}`).then((r) => r.data),
     })),
@@ -632,9 +827,8 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
   }, [accountQueries, cardTxQueries, responsibleQuery, txStamp])
 
   const ownCardIds = useMemo(() => new Set(cardList.map((c) => c.id)), [cardList])
-  const ownAccountIds = useMemo(() => new Set(accountList.map((a) => a.id)), [accountList])
 
-  // Separação estrita de responsabilidade pessoal:
+  // Separação estrita de responsabilidade pessoal com isolamento de Reserva e Investimentos:
   const { personalTxs, thirdPartyOnMyCardTxs, myPurchasesOnOthersCards } = useMemo(() => {
     const personal: Transaction[] = []
     const thirdPartyOnMyCard: Transaction[] = []
@@ -652,9 +846,23 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
       }
 
       // Caso 2: Transação em conta própria do usuário
-      if (ownAccountIds.has(t.accountId) && !t.creditCardId) {
+      if (allOwnAccountIds.has(t.accountId) && !t.creditCardId) {
         if (!t.responsibleId || (user?.id && t.responsibleId === user.id)) {
-          personal.push(t)
+          // Despesas ou receitas só entram nos relatórios se pertencerem a contas operacionais
+          if (t.type === 'EXPENSE' || t.type === 'INCOME') {
+            if (operationalAccountIds.has(t.accountId)) {
+              personal.push(t)
+            }
+          } else if (t.type === 'TRANSFER') {
+            // Transferências entram se envolverem conta operacional (origem ou destino),
+            // permitindo que o calendário desconte da conta de origem no dia agendado
+            if (
+              operationalAccountIds.has(t.accountId) ||
+              (t.destinationAccountId && operationalAccountIds.has(t.destinationAccountId))
+            ) {
+              personal.push(t)
+            }
+          }
         }
         return
       }
@@ -666,8 +874,12 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
       }
     })
 
-    return { personalTxs: personal, thirdPartyOnMyCardTxs: thirdPartyOnMyCard, myPurchasesOnOthersCards: myOnOthersCard }
-  }, [allRawTransactions, ownCardIds, ownAccountIds, user?.id])
+    return {
+      personalTxs: personal,
+      thirdPartyOnMyCardTxs: thirdPartyOnMyCard,
+      myPurchasesOnOthersCards: myOnOthersCard,
+    }
+  }, [allRawTransactions, ownCardIds, allOwnAccountIds, operationalAccountIds, user?.id])
 
   // Aplica filtros globais do usuário
   const filteredPersonalTxs = useMemo(() => {
@@ -719,7 +931,7 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
     })
 
     return buildCalendarProjection(
-      accountList,
+      operationalAccounts,
       filteredPersonalTxs,
       invoiceList,
       filters.period,
@@ -727,7 +939,7 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
       personalTxs,
     )
   }, [
-    accountList,
+    operationalAccounts,
     cardList,
     invoiceQueries,
     filteredPersonalTxs,
@@ -763,6 +975,28 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
     [currentMonthTxs, prevMonthTxs, filters.period, hasCardsIncluded],
   )
 
+  const financialPlanning = useMemo(
+    () =>
+      calculateFinancialPlanning(
+        personalTxs,
+        cardList,
+        operationalAccounts,
+        savingsAccounts,
+        investmentAccounts,
+        filters.period,
+        calculationWindow,
+      ),
+    [
+      personalTxs,
+      cardList,
+      operationalAccounts,
+      savingsAccounts,
+      investmentAccounts,
+      filters.period,
+      calculationWindow,
+    ],
+  )
+
   // Balanço Compartilhado (Bloco 6)
   const sharedGroupBalance: SharedGroupBalance = useMemo(() => {
     const myOnOthers = myPurchasesOnOthersCards
@@ -790,7 +1024,11 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
 
   return {
     loading,
-    accounts: accountList,
+    accounts: operationalAccounts,
+    allAccounts: allOwnAccounts,
+    savingsAccounts,
+    investmentAccounts,
+    financialPlanning,
     creditCards: cardList,
     categories,
     projection,
@@ -807,7 +1045,12 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
 // HOOK 2: RELATÓRIO COMPLETO DE UM GRUPO ESPECÍFICO
 // ----------------------------------------------------------------------
 
-export function useGroupReportsData(groupId: string, filters: ReportFiltersState, _threshold?: number) {
+export function useGroupReportsData(
+  groupId: string,
+  filters: ReportFiltersState,
+  _threshold?: number,
+  calculationWindow: 6 | 12 = 6,
+) {
   const groupQuery = useGroup(groupId)
   const groupAccountsQuery = useGroupAccounts(groupId)
   const groupCardsQuery = useGroupCreditCards(groupId)
@@ -818,7 +1061,7 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
   const members = useMemo(() => group?.members ?? [], [group?.members])
 
   // Normaliza GroupAccount para Account
-  const accountList: Account[] = useMemo(
+  const allGroupAccounts: Account[] = useMemo(
     () =>
       (groupAccountsQuery.data ?? []).map((ga) => ({
         ...ga,
@@ -828,12 +1071,31 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
     [groupAccountsQuery.data],
   )
 
+  // Separação em Operacionais, Reserva de emergência e Investimentos no grupo
+  const operationalAccounts = useMemo(
+    () => allGroupAccounts.filter((a) => a.type === 'CHECKING' || a.type === 'WALLET'),
+    [allGroupAccounts],
+  )
+  const savingsAccounts = useMemo(
+    () => allGroupAccounts.filter((a) => a.type === 'SAVINGS'),
+    [allGroupAccounts],
+  )
+  const investmentAccounts = useMemo(
+    () => allGroupAccounts.filter((a) => a.type === 'INVESTMENTS'),
+    [allGroupAccounts],
+  )
+
+  const operationalGroupAccountIds = useMemo(
+    () => new Set(operationalAccounts.map((a) => a.id)),
+    [operationalAccounts],
+  )
+
   const cardList: CreditCard[] = useMemo(() => groupCardsQuery.data ?? [], [groupCardsQuery.data])
   const categories: Category[] = useMemo(() => groupCategoriesQuery.data ?? [], [groupCategoriesQuery.data])
 
   // 1. Transações de todas as contas do grupo
   const accountQueries = useQueries({
-    queries: accountList.map((a) => ({
+    queries: allGroupAccounts.map((a) => ({
       queryKey: ['transactions', 'account', a.id, 'all'],
       queryFn: () => api.get<Transaction[]>(`/transactions/account/${a.id}`).then((r) => r.data),
     })),
@@ -881,9 +1143,25 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
     return [...map.values()]
   }, [accountQueries, cardTxQueries, txStamp])
 
-  // Aplica filtros no contexto do grupo (inclusive filtro por membro responsável)
-  const filteredGroupTxs = useMemo(() => {
+  // Transações operacionais do grupo (exclui despesas/receitas de contas SAVINGS e INVESTMENTS)
+  const operationalGroupTransactions = useMemo(() => {
     return allGroupTransactions.filter((t) => {
+      if (t.creditCardId) return true
+      if (t.type === 'EXPENSE' || t.type === 'INCOME') {
+        return operationalGroupAccountIds.has(t.accountId)
+      }
+      if (t.type === 'TRANSFER') {
+        const originOp = operationalGroupAccountIds.has(t.accountId)
+        const destOp = t.destinationAccountId && operationalGroupAccountIds.has(t.destinationAccountId)
+        return Boolean(originOp || destOp)
+      }
+      return false
+    })
+  }, [allGroupTransactions, operationalGroupAccountIds])
+
+  // Aplica filtros no contexto do grupo com base nas transações operacionais
+  const filteredGroupTxs = useMemo(() => {
+    return operationalGroupTransactions.filter((t) => {
       if (filters.hideCreditCards && t.creditCardId) return false
       if (filters.creditCardId === 'none' && t.creditCardId) return false
       if (filters.creditCardId && filters.creditCardId !== 'none' && t.creditCardId !== filters.creditCardId) return false
@@ -894,7 +1172,7 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
       if (filters.responsibleId && t.responsibleId !== filters.responsibleId) return false
       return true
     })
-  }, [allGroupTransactions, filters])
+  }, [operationalGroupTransactions, filters])
 
   const { month: selMonth, year: selYear } = filters.period
   const prevDate = new Date(selYear, selMonth - 2, 1)
@@ -915,7 +1193,7 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
     })
   }, [filteredGroupTxs, prevMonth, prevYear])
 
-  // Projeção do Calendário Financeiro do Grupo
+  // Projeção do Calendário Financeiro do Grupo (apenas contas operacionais)
   const projection = useMemo(() => {
     const cardListForProjection = cardList.filter((c) => {
       if (filters.hideCreditCards || filters.creditCardId === 'none') return false
@@ -932,19 +1210,19 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
     })
 
     return buildCalendarProjection(
-      accountList,
+      operationalAccounts,
       filteredGroupTxs,
       invoiceList,
       filters.period,
       filters.accountId,
-      allGroupTransactions,
+      operationalGroupTransactions,
     )
   }, [
-    accountList,
+    operationalAccounts,
     cardList,
     invoiceQueries,
     filteredGroupTxs,
-    allGroupTransactions,
+    operationalGroupTransactions,
     filters.period,
     filters.accountId,
     filters.hideCreditCards,
@@ -968,24 +1246,50 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
     [currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded],
   )
   const futureCommitments = useMemo(
-    () => buildFutureCommitments(allGroupTransactions, cardList, filters.period, filters.hideCreditCards),
-    [allGroupTransactions, cardList, filters.period, filters.hideCreditCards],
+    () => buildFutureCommitments(operationalGroupTransactions, cardList, filters.period, filters.hideCreditCards),
+    [operationalGroupTransactions, cardList, filters.period, filters.hideCreditCards],
   )
   const spendingHabits = useMemo(
     () => buildSpendingHabits(currentMonthTxs, prevMonthTxs, filters.period, hasCardsIncluded),
     [currentMonthTxs, prevMonthTxs, filters.period, hasCardsIncluded],
   )
 
+  const financialPlanning = useMemo(
+    () =>
+      calculateFinancialPlanning(
+        operationalGroupTransactions,
+        cardList,
+        operationalAccounts,
+        savingsAccounts,
+        investmentAccounts,
+        filters.period,
+        calculationWindow,
+      ),
+    [
+      operationalGroupTransactions,
+      cardList,
+      operationalAccounts,
+      savingsAccounts,
+      investmentAccounts,
+      filters.period,
+      calculationWindow,
+    ],
+  )
+
   // Distribuição de Despesas por Membro do Grupo
   const memberExpenses = useMemo(() => {
-    return buildGroupMemberExpenses(allGroupTransactions, members, filters.period, hasCardsIncluded)
-  }, [allGroupTransactions, members, filters.period, hasCardsIncluded])
+    return buildGroupMemberExpenses(operationalGroupTransactions, members, filters.period, hasCardsIncluded)
+  }, [operationalGroupTransactions, members, filters.period, hasCardsIncluded])
 
   return {
     loading,
     group,
     members,
-    accounts: accountList,
+    accounts: operationalAccounts,
+    allAccounts: allGroupAccounts,
+    savingsAccounts,
+    investmentAccounts,
+    financialPlanning,
     creditCards: cardList,
     categories,
     projection,

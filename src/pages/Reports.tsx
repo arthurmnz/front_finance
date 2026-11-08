@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth'
 import { useGroups } from '@/lib/hooks'
 import ReportFilters from '@/components/reports/ReportFilters'
 import KpiSection from '@/components/reports/KpiSection'
+import FinancialPlanningSection from '@/components/reports/FinancialPlanningSection'
 import CalendarFlowSection from '@/components/reports/CalendarFlowSection'
 import CashFlowSection from '@/components/reports/CashFlowSection'
 import CategoryEvolutionSection from '@/components/reports/CategoryEvolutionSection'
@@ -33,6 +34,7 @@ export default function Reports() {
   const [configuringThreshold, setConfiguringThreshold] = useState(false)
   const [draftThreshold, setDraftThreshold] = useState(threshold)
   const [showFilters, setShowFilters] = useState(false)
+  const [windowMonths, setWindowMonths] = useState<6 | 12>(6)
 
   const [filters, setFilters] = useState<ReportFiltersState>({
     period: currentPeriod(),
@@ -46,16 +48,18 @@ export default function Reports() {
   const {
     loading,
     accounts,
+    allAccounts,
     creditCards,
     categories,
     projection,
     kpis,
+    financialPlanning,
     cashFlowHistory,
     categoryEvolution,
     futureCommitments,
     spendingHabits,
     sharedGroupBalance,
-  } = useIndividualReportsData(filters, threshold)
+  } = useIndividualReportsData(filters, threshold, windowMonths)
 
   const handleScopeChange = (newScope: 'individual' | 'group') => {
     const params = new URLSearchParams(searchParams)
@@ -205,12 +209,19 @@ export default function Reports() {
               {/* Bloco 1: KPIs & Visão Executiva Individual */}
               <KpiSection kpis={kpis} />
 
+              {/* Patrimônio Guardado & Custo de Vida Médio */}
+              <FinancialPlanningSection
+                data={financialPlanning}
+                windowMonths={windowMonths}
+                onWindowChange={setWindowMonths}
+              />
+
               {/* Previsibilidade: Calendário Financeiro Interativo Individual */}
               <CalendarFlowSection
                 period={filters.period}
                 projection={projection}
                 threshold={threshold}
-                accounts={accounts}
+                accounts={allAccounts}
                 categories={categories}
                 accountIdFilter={filters.accountId}
               />

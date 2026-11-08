@@ -27,6 +27,19 @@ export interface KpiData {
   minBalanceAmount: number
 }
 
+export interface FinancialPlanningData {
+  totalSavings: number
+  savingsAccountsCount: number
+  totalInvestments: number
+  investmentAccountsCount: number
+  fixedMonthlyCost: number
+  variableMonthlyAverage: number
+  averageMonthlyCost: number
+  savingsCoverageMonths: number
+  monthsAnalyzedCount: number
+  calculationWindowMonths: 6 | 12
+}
+
 export interface MonthlyCashFlow {
   label: string
   month: number
