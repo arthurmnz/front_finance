@@ -169,14 +169,22 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 gap-4 border-b border-border/60 pb-4">
           <div>
             <p className="text-xs text-text-muted">Saldo total</p>
-            <p className="mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight text-white tabular-nums">
+            <p
+              className={clsx(
+                'mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
+                summary.currentBalance < 0 ? 'text-expense' : 'text-white',
+              )}
+            >
               {balance.data ? formatMoney(summary.currentBalance) : '—'}
             </p>
           </div>
           <div className="border-l border-border/60 pl-4">
             <p className="text-xs text-text-muted">Saldo projetado</p>
             <p
-              className={`mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums ${summary.projectedBalance < 0 ? 'text-white' : 'text-lime'}`}
+              className={clsx(
+                'mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
+                summary.projectedBalance < 0 ? 'text-expense' : 'text-lime',
+              )}
             >
               {balance.data ? formatMoney(summary.projectedBalance) : '—'}
             </p>
@@ -204,17 +212,17 @@ export default function Dashboard() {
 
           <div className="space-y-2">
             <div className="flex items-center gap-2.5">
-              <ArrowDownCircle className="size-6 shrink-0 text-white" />
+              <ArrowDownCircle className="size-6 shrink-0 text-expense" />
               <div className="min-w-0">
                 <p className="text-xs text-text-muted">Despesas</p>
-                <p className="truncate font-semibold text-white tabular-nums">
+                <p className="truncate font-semibold text-expense tabular-nums">
                   −{formatMoney(summary.realizedExpense)}
                 </p>
               </div>
             </div>
             <div className="rounded-xl bg-surface-2 px-3 py-2">
               <p className="text-[11px] text-text-dim">Despesas projetadas</p>
-              <p className="text-xs font-semibold text-white tabular-nums">
+              <p className="text-xs font-semibold text-expense tabular-nums">
                 −{formatMoney(summary.projectedExpense)}
               </p>
             </div>
@@ -288,7 +296,12 @@ export default function Dashboard() {
                     className={`flex flex-1 items-center justify-between hover:text-lime transition ${a.includeInTotal === false ? 'opacity-40' : ''}`}
                   >
                     <span className="text-sm text-white">{a.name}</span>
-                    <span className="text-sm font-semibold tabular-nums text-white">
+                    <span
+                      className={clsx(
+                        'text-sm font-semibold tabular-nums',
+                        a.balance < 0 ? 'text-expense' : 'text-white',
+                      )}
+                    >
                       {formatMoney(a.balance)}
                     </span>
                   </Link>
@@ -397,7 +410,12 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right">
                     <p className="text-[11px] text-text-dim">Fatura atual</p>
-                    <p className="font-semibold text-white tabular-nums">
+                    <p
+                      className={clsx(
+                        'font-semibold tabular-nums',
+                        c.currentInvoiceAmount > 0 ? 'text-expense' : 'text-white',
+                      )}
+                    >
                       −{formatMoney(c.currentInvoiceAmount)}
                     </p>
                   </div>
@@ -425,7 +443,7 @@ export default function Dashboard() {
           {debtsSummary.data && (
             <div className="flex items-center gap-2">
               {debtsSummary.data.totalOwedCurrentMonth > 0 && (
-                <Badge tone="neutral">
+                <Badge tone="expense">
                   A pagar: {formatMoney(debtsSummary.data.totalOwedCurrentMonth)}
                 </Badge>
               )}
@@ -447,7 +465,12 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3 pb-2 pt-1 border-b border-border/60">
               <div className="rounded-xl bg-surface-2 p-3">
                 <span className="text-[11px] text-text-muted">Total a pagar (mês)</span>
-                <p className="mt-0.5 text-lg font-bold text-white tabular-nums">
+                <p
+                  className={clsx(
+                    'mt-0.5 text-lg font-bold tabular-nums',
+                    debtsSummary.data.totalOwedCurrentMonth > 0 ? 'text-expense' : 'text-white',
+                  )}
+                >
                   {formatMoney(debtsSummary.data.totalOwedCurrentMonth)}
                 </p>
               </div>
@@ -470,13 +493,13 @@ export default function Dashboard() {
                     <div>
                       <p className="font-medium text-white">{g.groupName}</p>
                       <p className="text-xs text-text-dim">
-                        Total acumulado: {g.owedTotal > 0 ? `Deve ${formatMoney(g.owedTotal)}` : 'Em dia'}
+                        Total acumulado: {g.owedTotal > 0 ? <span className="text-expense">Deve {formatMoney(g.owedTotal)}</span> : 'Em dia'}
                         {g.receivableTotal > 0 ? ` · Tem a receber ${formatMoney(g.receivableTotal)}` : ''}
                       </p>
                     </div>
                     <div className="text-right">
                       {g.owedCurrentMonth > 0 && (
-                        <p className="text-xs font-semibold text-rose-400 tabular-nums">
+                        <p className="text-xs font-semibold text-expense tabular-nums">
                           −{formatMoney(g.owedCurrentMonth)} neste mês
                         </p>
                       )}
@@ -515,7 +538,7 @@ export default function Dashboard() {
                   className={
                     t.type === 'INCOME'
                       ? 'font-semibold text-lime tabular-nums'
-                      : 'font-semibold text-white tabular-nums'
+                      : 'font-semibold text-expense tabular-nums'
                   }
                 >
                   {t.type === 'INCOME' ? '+' : '−'}

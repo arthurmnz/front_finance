@@ -38,7 +38,7 @@ const levelOf = (balance: number, threshold: number): Level =>
 const levelCell: Record<Level, string> = {
   positive: 'bg-lime-subtle border-lime/25 text-lime hover:border-lime/60',
   warning: 'bg-violet-subtle border-violet/30 text-white hover:border-violet/60',
-  negative: 'bg-surface-2 border-white/20 text-white hover:border-white/50',
+  negative: 'bg-expense-subtle border-expense/40 text-expense hover:border-expense/70',
 }
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -67,7 +67,7 @@ export default function CalendarFlowSection({
             <span>Previsibilidade Diária — Calendário Financeiro</span>
             <InfoTooltip
               title="Calendário Financeiro"
-              content="Projeção diária do saldo bancário considerando receitas, despesas agendadas e faturas de cartão ao longo do mês. Dias destacados em amarelo estão abaixo do limite configurado e em vermelho indicam saldo negativo."
+              content="Projeção diária do saldo bancário considerando receitas, despesas agendadas e faturas de cartão ao longo do mês. Dias destacados em violeta estão abaixo do limite configurado e em vermelho indicam saldo negativo."
               align="start"
             />
           </h2>
@@ -87,7 +87,12 @@ export default function CalendarFlowSection({
               align="start"
             />
           </p>
-          <p className="text-sm font-semibold sm:text-base text-white tabular-nums">
+          <p
+            className={clsx(
+              'text-sm font-semibold sm:text-base tabular-nums',
+              projection.opening < 0 ? 'text-expense' : 'text-white',
+            )}
+          >
             {formatMoney(projection.opening)}
           </p>
         </Card>
@@ -102,11 +107,20 @@ export default function CalendarFlowSection({
           <p
             className={clsx(
               'flex items-center gap-1 text-sm font-semibold sm:text-base tabular-nums',
-              projection.closing >= projection.opening ? 'text-lime' : 'text-white',
+              projection.closing < 0
+                ? 'text-expense'
+                : projection.closing >= projection.opening
+                  ? 'text-lime'
+                  : 'text-white',
             )}
           >
             {projection.closing < projection.opening ? (
-              <TrendingDown className="size-4 shrink-0 text-white" />
+              <TrendingDown
+                className={clsx(
+                  'size-4 shrink-0',
+                  projection.closing < 0 ? 'text-expense' : 'text-text-muted',
+                )}
+              />
             ) : (
               <TrendingUp className="size-4 shrink-0 text-lime" />
             )}
@@ -124,7 +138,7 @@ export default function CalendarFlowSection({
           <p
             className={clsx(
               'text-sm font-semibold sm:text-base tabular-nums',
-              projection.min.balance < 0 ? 'text-rose-400' : 'text-white',
+              projection.min.balance < 0 ? 'text-expense' : 'text-white',
             )}
           >
             {formatMoney(projection.min.balance)}
@@ -135,12 +149,12 @@ export default function CalendarFlowSection({
 
       {/* Alerta de Caixa Negativo */}
       {projection.firstNegative && (
-        <div className="flex items-start gap-2.5 rounded-2xl border border-white/15 bg-surface-2 p-3.5 text-xs text-white">
-          <AlertCircle className="mt-0.5 size-4 shrink-0 text-lime" />
-          <span>
+        <div className="flex items-start gap-2.5 rounded-2xl border border-expense/30 bg-expense-subtle p-3.5 text-xs text-expense">
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-expense" />
+          <span className="text-white">
             Atenção: o saldo projetado em conta fica negativo a partir do <b>dia {projection.firstNegative.day}</b> (
-            {formatMoney(projection.firstNegative.balance)}). Planeje reforço de caixa ou postergue pagamentos antes
-            desta data.
+            <span className="text-expense font-semibold">{formatMoney(projection.firstNegative.balance)}</span>). Planeje
+            reforço de caixa ou postergue pagamentos antes desta data.
           </span>
         </div>
       )}
@@ -170,26 +184,47 @@ export default function CalendarFlowSection({
                 d.date === today && 'outline outline-1 outline-lime',
               )}
             >
-              <span
-                className={clsx(
-                  'text-xs font-medium',
-                  d.date === today ? 'text-lime font-bold' : 'text-text-muted',
+              <div className="flex items-center justify-between w-full px-0.5">
+                <span
+                  className={clsx(
+                    'text-xs font-medium',
+                    d.date === today
+                      ? 'text-lime font-bold'
+                      : d.balance < 0
+                        ? 'text-expense font-semibold'
+                        : 'text-text-muted',
+                  )}
+                >
+                  {d.day}
+                </span>
+                {d.invoices.length > 0 && (
+                  <span
+                    title={`Vencimento de fatura: ${d.invoices
+                      .map((i) => `${i.cardName} (${formatMoney(i.remainingAmount)})`)
+                      .join(', ')}`}
+                    className="flex items-center"
+                  >
+                    <CardIcon className="size-3 text-violet shrink-0" />
+                  </span>
                 )}
-              >
-                {d.day}
-              </span>
+              </div>
               {d.delta !== 0 && (
                 <span
                   className={clsx(
                     'text-[10px] leading-none tabular-nums font-medium',
-                    d.delta > 0 ? 'text-lime' : 'text-white',
+                    d.delta > 0 ? 'text-lime' : 'text-expense',
                   )}
                 >
                   {d.delta > 0 ? '+' : '−'}
                   {formatCompact(Math.abs(d.delta))}
                 </span>
               )}
-              <span className="text-[11px] font-semibold leading-none sm:text-xs tabular-nums text-white">
+              <span
+                className={clsx(
+                  'text-[11px] font-semibold leading-none sm:text-xs tabular-nums',
+                  d.balance < 0 ? 'text-expense' : 'text-white',
+                )}
+              >
                 {formatCompact(d.balance)}
               </span>
             </button>
@@ -205,7 +240,10 @@ export default function CalendarFlowSection({
             <i className="size-2 rounded-full bg-violet shrink-0" /> Atenção (abaixo de {formatMoney(threshold)})
           </span>
           <span className="flex items-center gap-1.5">
-            <i className="size-2 rounded-full bg-white shrink-0" /> Negativo
+            <i className="size-2 rounded-full bg-expense shrink-0" /> Negativo
+          </span>
+          <span className="flex items-center gap-1.5">
+            <CardIcon className="size-3 text-violet shrink-0" /> Vencimento de fatura
           </span>
         </div>
         <p className="mt-1 px-1 text-[11px] text-text-dim">
@@ -219,7 +257,10 @@ export default function CalendarFlowSection({
           <div className="flex items-center justify-between px-1">
             <h3 className="font-semibold text-white">Movimentações do Dia {sel.day}</h3>
             <span className="text-xs text-text-muted">
-              Saldo projetado no encerramento: <b className="text-white tabular-nums">{formatMoney(sel.balance)}</b>
+              Saldo projetado no encerramento:{' '}
+              <b className={clsx('tabular-nums', sel.balance < 0 ? 'text-expense' : 'text-white')}>
+                {formatMoney(sel.balance)}
+              </b>
             </span>
           </div>
 
@@ -240,7 +281,7 @@ export default function CalendarFlowSection({
                     <p className="text-xs text-text-dim">Débito previsto na conta vinculada</p>
                   </div>
                   <Badge tone="primary">Fatura</Badge>
-                  <p className="text-sm font-semibold text-white tabular-nums">−{formatMoney(inv.remainingAmount)}</p>
+                  <p className="text-sm font-semibold text-expense tabular-nums">−{formatMoney(inv.remainingAmount)}</p>
                 </Link>
               ))}
             </Card>

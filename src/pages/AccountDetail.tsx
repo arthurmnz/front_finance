@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import clsx from 'clsx'
 import { api } from '@/lib/api'
 import { useAccessibleAccounts, useAction, useAccountTransactions, useAllCategories } from '@/lib/hooks'
 import { accountTypeLabel, formatMoney } from '@/lib/format'
@@ -69,7 +70,12 @@ export default function AccountDetail() {
       />
       <Card className="mb-4 p-4">
         <p className="text-xs text-text-dim">Saldo atual</p>
-        <p className="text-3xl font-bold tracking-tight text-white tabular-nums">
+        <p
+          className={clsx(
+            'text-3xl font-bold tracking-tight tabular-nums',
+            account && account.balance < 0 ? 'text-expense' : 'text-white',
+          )}
+        >
           {account ? formatMoney(account.balance) : '—'}
         </p>
         <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
@@ -79,7 +85,7 @@ export default function AccountDetail() {
           </div>
           <div>
             <p className="text-xs text-text-dim">Saídas no mês</p>
-            <p className="font-semibold text-white tabular-nums">−{formatMoney(expense)}</p>
+            <p className="font-semibold text-expense tabular-nums">−{formatMoney(expense)}</p>
           </div>
         </div>
       </Card>

@@ -255,12 +255,12 @@ export default function CreditCardDetail() {
             </div>
             <div className="text-right">
               <p className="text-xs text-text-dim">Limite comprometido</p>
-              <p className="text-lg font-semibold text-white tabular-nums">{formatMoney(card.usedLimit)}</p>
+              <p className="text-lg font-semibold text-expense tabular-nums">{formatMoney(card.usedLimit)}</p>
             </div>
           </div>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-2">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-white' : pct >= 70 ? 'bg-violet' : 'bg-lime'}`}
+              className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-expense' : pct >= 70 ? 'bg-violet' : 'bg-lime'}`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -298,7 +298,7 @@ export default function CreditCardDetail() {
                     <p className="text-xs text-text-dim">Total da fatura</p>
                     {st && <Badge tone={st.tone}>{st.label}</Badge>}
                   </div>
-                  <p className="text-3xl font-bold text-white tracking-tight tabular-nums mt-0.5">
+                  <p className="text-3xl font-bold text-expense tracking-tight tabular-nums mt-0.5">
                     {formatMoney(inv.totalAmount)}
                   </p>
                   <p className="mt-1 text-xs text-text-dim">
@@ -307,7 +307,7 @@ export default function CreditCardDetail() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-text-dim">Restante a pagar</p>
-                  <p className={`text-xl font-bold tabular-nums ${inv.remainingAmount > 0 ? 'text-white' : 'text-lime'}`}>
+                  <p className={clsx('text-xl font-bold tabular-nums', inv.remainingAmount > 0 ? 'text-expense' : 'text-lime')}>
                     {formatMoney(inv.remainingAmount)}
                   </p>
                   {inv.paidAmount > 0 && (
@@ -320,15 +320,15 @@ export default function CreditCardDetail() {
                 <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-xs">
                   <div>
                     <p className="text-text-dim">Compras do mês</p>
-                    <p className="font-semibold text-white tabular-nums">{formatMoney(inv.purchasesAmount)}</p>
+                    <p className="font-semibold text-expense tabular-nums">{formatMoney(inv.purchasesAmount)}</p>
                   </div>
                   <div>
                     <p className="text-text-dim">Saldo anterior rolado</p>
-                    <p className="font-semibold text-white tabular-nums">{formatMoney(inv.carriedOverAmount)}</p>
+                    <p className="font-semibold text-expense tabular-nums">{formatMoney(inv.carriedOverAmount)}</p>
                   </div>
                   <div>
                     <p className="text-text-dim">Juros do rotativo</p>
-                    <p className="font-semibold text-white tabular-nums">{formatMoney(inv.revolvingInterestAmount)}</p>
+                    <p className="font-semibold text-expense tabular-nums">{formatMoney(inv.revolvingInterestAmount)}</p>
                   </div>
                 </div>
               )}

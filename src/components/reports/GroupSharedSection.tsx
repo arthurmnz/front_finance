@@ -100,9 +100,9 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
                     align="center"
                   />
                 </span>
-                <HandCoins className="size-3.5 text-rose-400" />
+                <HandCoins className="size-3.5 text-expense" />
               </div>
-              <p className="text-lg font-bold text-rose-400 tracking-tight">
+              <p className="text-lg font-bold text-expense tracking-tight">
                 {formatMoney(data.totalOwedByMe)}
               </p>
               <p className="text-[11px] text-text-dim mt-1">
@@ -152,7 +152,7 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
                         <span>
                           No mês:{' '}
                           {g.owedCurrentMonth > 0 ? (
-                            <span className="text-rose-400 font-medium">
+                            <span className="text-expense font-medium">
                               Devo {formatMoney(g.owedCurrentMonth)}
                             </span>
                           ) : g.receivableCurrentMonth > 0 ? (

@@ -45,13 +45,13 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
               {isNetPositive ? (
                 <ArrowUpRight className="size-4 text-lime" />
               ) : (
-                <ArrowDownRight className="size-4 text-rose-400" />
+                <ArrowDownRight className="size-4 text-expense" />
               )}
             </div>
             <p
               className={clsx(
                 'text-2xl font-bold tabular-nums tracking-tight',
-                isNetPositive ? 'text-lime' : 'text-white',
+                isNetPositive ? 'text-lime' : 'text-expense',
               )}
             >
               {isNetPositive ? '+' : ''}
@@ -60,7 +60,7 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
           </div>
           <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between text-[11px] text-text-dim">
             <span className="text-lime">Receitas: {formatMoney(kpis.income)}</span>
-            <span className="text-white">Despesas: {formatMoney(kpis.expense)}</span>
+            <span className="text-expense">Despesas: {formatMoney(kpis.expense)}</span>
           </div>
         </Card>
 
@@ -82,13 +82,13 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
               <p
                 className={clsx(
                   'text-2xl font-bold tabular-nums tracking-tight',
-                  isSavingsPositive ? 'text-lime' : 'text-white',
+                  isSavingsPositive ? 'text-lime' : kpis.savingsRate < 0 ? 'text-expense' : 'text-white',
                 )}
               >
                 {kpis.savingsRate}%
               </p>
-              <Badge tone={isSavingsPositive ? 'income' : 'neutral'}>
-                {isSavingsPositive ? 'Poupando' : 'Sem sobra'}
+              <Badge tone={isSavingsPositive ? 'income' : kpis.savingsRate < 0 ? 'expense' : 'neutral'}>
+                {isSavingsPositive ? 'Poupando' : kpis.savingsRate < 0 ? 'Déficit' : 'Sem sobra'}
               </Badge>
             </div>
           </div>
@@ -111,16 +111,16 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
                   align="start"
                 />
               </span>
-              <TrendingDown className="size-4 text-white" />
+              <TrendingDown className="size-4 text-expense" />
             </div>
-            <p className="text-2xl font-bold text-white tabular-nums tracking-tight">
+            <p className="text-2xl font-bold text-expense tabular-nums tracking-tight">
               {formatMoney(kpis.dailyAverage)}
               <span className="text-xs font-normal text-text-dim ml-1">/dia</span>
             </p>
           </div>
           <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between text-[11px] text-text-dim">
             <span>Previsão mês:</span>
-            <span className="font-semibold text-white tabular-nums">{formatMoney(kpis.projectedMonthEnd)}</span>
+            <span className="font-semibold text-expense tabular-nums">{formatMoney(kpis.projectedMonthEnd)}</span>
           </div>
         </Card>
 
@@ -136,12 +136,12 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
                   align="end"
                 />
               </span>
-              <Calendar className="size-4 text-lime" />
+              <Calendar className={clsx('size-4', kpis.minBalanceAmount < 0 ? 'text-expense' : 'text-lime')} />
             </div>
             <p
               className={clsx(
                 'text-2xl font-bold tabular-nums tracking-tight',
-                kpis.minBalanceAmount < 0 ? 'text-rose-400' : 'text-white',
+                kpis.minBalanceAmount < 0 ? 'text-expense' : 'text-white',
               )}
             >
               {formatMoney(kpis.minBalanceAmount)}
@@ -149,7 +149,7 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
           </div>
           <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between text-[11px] text-text-dim">
             <span>Ponto crítico:</span>
-            <Badge tone={kpis.minBalanceAmount < 0 ? 'primary' : 'neutral'}>Dia {kpis.minBalanceDay}</Badge>
+            <Badge tone={kpis.minBalanceAmount < 0 ? 'expense' : 'neutral'}>Dia {kpis.minBalanceDay}</Badge>
           </div>
         </Card>
       </div>

@@ -68,9 +68,10 @@ export const parseDateParts = (dateStr: string) => {
 export function buildCalendarProjection(
   accounts: Account[],
   transactions: Transaction[],
-  invoices: { card: CreditCard; invoice: CreditCardInvoice }[],
+  invoices: { card: CreditCard; invoice: Partial<CreditCardInvoice> }[],
   period: ReportPeriod,
   accountIdFilter?: string,
+  allTransactions?: Transaction[],
 ) {
   const accs = accounts.filter((a) => !accountIdFilter || a.id === accountIdFilter)
   const ids = new Set(accs.map((a) => a.id))
@@ -105,13 +106,79 @@ export function buildCalendarProjection(
   })
 
   const invoicesByDay = new Map<string, { cardId: string; cardName: string; remainingAmount: number }[]>()
+  const txSource = allTransactions || transactions
+
   invoices.forEach(({ card, invoice }) => {
-    if (!ids.has(card.accountId)) return
-    if ((invoice.remainingAmount ?? 0) <= 0 || !invoice.dueDate) return
-    const dueIso = invoice.dueDate.slice(0, 10)
+    // Se o usuário filtrou por uma conta bancária específica, só projeta faturas associadas a ela
+    if (accountIdFilter && card.accountId && card.accountId !== accountIdFilter) return
+
+    // 1. Apuração do montante a ser debitado na fatura
+    let remaining = 0
+    if (invoice?.remainingAmount != null && invoice.remainingAmount > 0) {
+      remaining = invoice.remainingAmount
+    } else if (invoice?.totalAmount != null) {
+      remaining = Math.max(0, invoice.totalAmount - (invoice.paidAmount ?? 0))
+    } else if (
+      card.currentInvoiceAmount != null &&
+      period.month === card.currentInvoiceMonth &&
+      period.year === card.currentInvoiceYear
+    ) {
+      remaining = Math.max(0, card.currentInvoiceAmount)
+    } else {
+      // Fallback analítico: somatório de compras do cartão que vencem nesta fatura
+      const cardExpenses = txSource
+        .filter((t) => {
+          if (t.creditCardId !== card.id || t.type !== 'EXPENSE') return false
+          if (t.invoiceMonth != null && t.invoiceYear != null) {
+            return t.invoiceMonth === period.month && t.invoiceYear === period.year
+          }
+          const p = parseDateParts(t.date)
+          const closing = card.closingDay || 25
+          let m = p.month
+          let y = p.year
+          if (p.day >= closing) {
+            m += 1
+            if (m > 12) {
+              m = 1
+              y += 1
+            }
+          }
+          return m === period.month && y === period.year
+        })
+        .reduce((s, t) => s + t.amount, 0)
+
+      const alreadyPaid = txSource
+        .filter((t) => {
+          if (t.type !== 'EXPENSE' || !isInvoicePaymentTx(t)) return false
+          if (t.creditCardInvoiceId && invoice?.creditCardId && t.creditCardInvoiceId === invoice.creditCardId) return true
+          return t.title.toLowerCase().includes(card.name.toLowerCase())
+        })
+        .reduce((s, t) => s + t.amount, 0)
+
+      remaining = Math.max(0, cardExpenses - alreadyPaid)
+    }
+
+    if (remaining <= 0) return
+
+    // 2. Apuração da data de vencimento no mês corrente
+    let dueIso: string
+    if (invoice?.dueDate) {
+      const rawIso = invoice.dueDate.slice(0, 10)
+      const p = parseDateParts(rawIso)
+      if (p.year === period.year && p.month === period.month) {
+        dueIso = rawIso
+      } else {
+        const safeDay = Math.min(Math.max(1, card.dueDay || p.day || 10), daysInMonth)
+        dueIso = toISODate(new Date(period.year, period.month - 1, safeDay))
+      }
+    } else {
+      const safeDay = Math.min(Math.max(1, card.dueDay || 10), daysInMonth)
+      dueIso = toISODate(new Date(period.year, period.month - 1, safeDay))
+    }
+
     invoicesByDay.set(dueIso, [
       ...(invoicesByDay.get(dueIso) ?? []),
-      { cardId: card.id, cardName: card.name, remainingAmount: invoice.remainingAmount },
+      { cardId: card.id, cardName: card.name, remainingAmount: remaining },
     ])
   })
 
@@ -125,22 +192,31 @@ export function buildCalendarProjection(
     return { day: i + 1, date, txs, invoices: dayInvoices, delta, balance: running }
   })
 
-  const min = days.reduce((m, d) => (d.balance < m.balance ? d : m), days[0] || { balance: 0, day: 1, date: '', txs: [], invoices: [], delta: 0 })
+  const min = days.reduce(
+    (m, d) => (d.balance < m.balance ? d : m),
+    days[0] || { balance: 0, day: 1, date: '', txs: [], invoices: [], delta: 0 },
+  )
   const firstNegative = days.find((d) => d.balance < 0)
 
   return { days, opening, closing: running, min, firstNegative }
 }
 
+export const isInvoicePaymentTx = (t: Transaction) =>
+  Boolean(t.creditCardInvoiceId || t.title.startsWith('Pagamento fatura'))
+
 export function buildKpis(
   currentMonthTxs: Transaction[],
   projection: { days: { day: number; balance: number }[]; closing: number; min: { day: number; balance: number } },
   period: ReportPeriod,
+  hasCardsIncluded: boolean = true,
 ): KpiData {
   const income = currentMonthTxs
     .filter((t) => t.type === 'INCOME')
     .reduce((s, t) => s + t.amount, 0)
 
-  const expenseTxs = currentMonthTxs.filter((t) => t.type === 'EXPENSE')
+  const expenseTxs = currentMonthTxs.filter(
+    (t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)),
+  )
   const expense = expenseTxs.reduce((s, t) => s + t.amount, 0)
   const net = income - expense
 
@@ -176,6 +252,7 @@ export function buildKpis(
 export function buildCashFlowHistory(
   allTxs: Transaction[],
   period: ReportPeriod,
+  hasCardsIncluded: boolean = true,
 ): MonthlyCashFlow[] {
   const list: MonthlyCashFlow[] = []
   for (let i = 5; i >= 0; i--) {
@@ -189,7 +266,9 @@ export function buildCashFlowHistory(
     })
 
     const inc = txs.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
-    const exp = txs.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
+    const exp = txs
+      .filter((t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)))
+      .reduce((s, t) => s + t.amount, 0)
 
     list.push({
       label: `${monthLabel(m, y).slice(0, 3)}/${String(y).slice(-2)}`,
@@ -207,11 +286,12 @@ export function buildCategoryEvolution(
   currentMonthTxs: Transaction[],
   prevMonthTxs: Transaction[],
   categories: Category[],
+  hasCardsIncluded: boolean = true,
 ): CategoryComparison[] {
   const currentCatMap = new Map<string, number>()
   let totalCurrentExpense = 0
   currentMonthTxs
-    .filter((t) => t.type === 'EXPENSE')
+    .filter((t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)))
     .forEach((t) => {
       const key = t.categoryId || 'none'
       currentCatMap.set(key, (currentCatMap.get(key) ?? 0) + t.amount)
@@ -220,7 +300,7 @@ export function buildCategoryEvolution(
 
   const prevCatMap = new Map<string, number>()
   prevMonthTxs
-    .filter((t) => t.type === 'EXPENSE')
+    .filter((t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)))
     .forEach((t) => {
       const key = t.categoryId || 'none'
       prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + t.amount)
@@ -338,6 +418,7 @@ export function buildSpendingHabits(
   currentMonthTxs: Transaction[],
   prevMonthTxs: Transaction[],
   period: ReportPeriod,
+  hasCardsIncluded: boolean = true,
 ): { cumulativePoints: CumulativeSpendingPoint[]; byDayOfWeek: SpendingByDayOfWeek[] } {
   const daysInCurrentMonth = new Date(period.year, period.month, 0).getDate()
   const daysInPrevMonth = new Date(period.year, period.month - 1, 0).getDate()
@@ -345,7 +426,7 @@ export function buildSpendingHabits(
 
   const currentDaily = new Array(daysInCurrentMonth + 1).fill(0)
   currentMonthTxs
-    .filter((t) => t.type === 'EXPENSE')
+    .filter((t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)))
     .forEach((t) => {
       const p = parseDateParts(t.date)
       if (p.day <= daysInCurrentMonth) {
@@ -355,7 +436,7 @@ export function buildSpendingHabits(
 
   const prevDaily = new Array(daysInPrevMonth + 1).fill(0)
   prevMonthTxs
-    .filter((t) => t.type === 'EXPENSE')
+    .filter((t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)))
     .forEach((t) => {
       const p = parseDateParts(t.date)
       if (p.day <= daysInPrevMonth) {
@@ -390,7 +471,7 @@ export function buildSpendingHabits(
   const weekdayTotals = [0, 0, 0, 0, 0, 0, 0]
 
   currentMonthTxs
-    .filter((t) => t.type === 'EXPENSE')
+    .filter((t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)))
     .forEach((t) => {
       const p = parseDateParts(t.date)
       const d = new Date(p.year, p.month - 1, p.day)
@@ -411,10 +492,16 @@ export function buildGroupMemberExpenses(
   groupTxs: Transaction[],
   members: GroupMember[],
   period: ReportPeriod,
+  hasCardsIncluded: boolean = true,
 ): GroupMemberExpense[] {
   const monthTxs = groupTxs.filter((t) => {
     const p = parseDateParts(t.date)
-    return p.year === period.year && p.month === period.month && t.type === 'EXPENSE'
+    return (
+      p.year === period.year &&
+      p.month === period.month &&
+      t.type === 'EXPENSE' &&
+      (!hasCardsIncluded || !isInvoicePaymentTx(t))
+    )
   })
 
   const totalExpense = monthTxs.reduce((s, t) => s + t.amount, 0)
@@ -528,6 +615,13 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
     responsibleQuery.some((q) => q.isLoading) ||
     invoiceQueries.some((q) => q.isLoading)
 
+  const invoiceStamp = invoiceQueries.map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`).join(',')
+  const txStamp = accountQueries
+    .concat(cardTxQueries)
+    .concat(responsibleQuery)
+    .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
+    .join(',')
+
   // Unifica e deduplica transações brutas
   const allRawTransactions = useMemo(() => {
     const map = new Map<string, Transaction>()
@@ -535,7 +629,7 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
     cardTxQueries.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
     responsibleQuery.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
     return [...map.values()]
-  }, [accountQueries, cardTxQueries, responsibleQuery])
+  }, [accountQueries, cardTxQueries, responsibleQuery, txStamp])
 
   const ownCardIds = useMemo(() => new Set(cardList.map((c) => c.id)), [cardList])
   const ownAccountIds = useMemo(() => new Set(accountList.map((a) => a.id)), [accountList])
@@ -610,18 +704,64 @@ export function useIndividualReportsData(filters: ReportFiltersState, _threshold
 
   // Projeção do Calendário Financeiro Individual
   const projection = useMemo(() => {
-    const invoiceList = cardList.map((c, idx) => ({
-      card: c,
-      invoice: invoiceQueries[idx]?.data || ({} as CreditCardInvoice),
-    }))
-    return buildCalendarProjection(accountList, filteredPersonalTxs, invoiceList, filters.period, filters.accountId)
-  }, [accountList, cardList, invoiceQueries, filteredPersonalTxs, filters.period, filters.accountId])
+    const cardListForProjection = cardList.filter((c) => {
+      if (filters.hideCreditCards || filters.creditCardId === 'none') return false
+      if (filters.creditCardId && c.id !== filters.creditCardId) return false
+      return true
+    })
 
-  const kpis = useMemo(() => buildKpis(currentMonthTxs, projection, filters.period), [currentMonthTxs, projection, filters.period])
-  const cashFlowHistory = useMemo(() => buildCashFlowHistory(filteredPersonalTxs, filters.period), [filteredPersonalTxs, filters.period])
-  const categoryEvolution = useMemo(() => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, categories), [currentMonthTxs, prevMonthTxs, categories])
-  const futureCommitments = useMemo(() => buildFutureCommitments(personalTxs, cardList, filters.period, filters.hideCreditCards), [personalTxs, cardList, filters.period, filters.hideCreditCards])
-  const spendingHabits = useMemo(() => buildSpendingHabits(currentMonthTxs, prevMonthTxs, filters.period), [currentMonthTxs, prevMonthTxs, filters.period])
+    const invoiceList = cardListForProjection.map((c) => {
+      const idx = cardList.findIndex((item) => item.id === c.id)
+      return {
+        card: c,
+        invoice: (idx >= 0 ? invoiceQueries[idx]?.data : undefined) || ({} as CreditCardInvoice),
+      }
+    })
+
+    return buildCalendarProjection(
+      accountList,
+      filteredPersonalTxs,
+      invoiceList,
+      filters.period,
+      filters.accountId,
+      personalTxs,
+    )
+  }, [
+    accountList,
+    cardList,
+    invoiceQueries,
+    filteredPersonalTxs,
+    personalTxs,
+    filters.period,
+    filters.accountId,
+    filters.hideCreditCards,
+    filters.creditCardId,
+    invoiceStamp,
+    txStamp,
+  ])
+
+  const hasCardsIncluded = !filters.hideCreditCards && filters.creditCardId !== 'none'
+
+  const kpis = useMemo(
+    () => buildKpis(currentMonthTxs, projection, filters.period, hasCardsIncluded),
+    [currentMonthTxs, projection, filters.period, hasCardsIncluded],
+  )
+  const cashFlowHistory = useMemo(
+    () => buildCashFlowHistory(filteredPersonalTxs, filters.period, hasCardsIncluded),
+    [filteredPersonalTxs, filters.period, hasCardsIncluded],
+  )
+  const categoryEvolution = useMemo(
+    () => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded),
+    [currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded],
+  )
+  const futureCommitments = useMemo(
+    () => buildFutureCommitments(personalTxs, cardList, filters.period, filters.hideCreditCards),
+    [personalTxs, cardList, filters.period, filters.hideCreditCards],
+  )
+  const spendingHabits = useMemo(
+    () => buildSpendingHabits(currentMonthTxs, prevMonthTxs, filters.period, hasCardsIncluded),
+    [currentMonthTxs, prevMonthTxs, filters.period, hasCardsIncluded],
+  )
 
   // Balanço Compartilhado (Bloco 6)
   const sharedGroupBalance: SharedGroupBalance = useMemo(() => {
@@ -727,13 +867,19 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
     cardTxQueries.some((q) => q.isLoading) ||
     invoiceQueries.some((q) => q.isLoading)
 
+  const invoiceStamp = invoiceQueries.map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`).join(',')
+  const txStamp = accountQueries
+    .concat(cardTxQueries)
+    .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
+    .join(',')
+
   // Unifica e deduplica todas as transações do grupo
   const allGroupTransactions = useMemo(() => {
     const map = new Map<string, Transaction>()
     accountQueries.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
     cardTxQueries.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
     return [...map.values()]
-  }, [accountQueries, cardTxQueries])
+  }, [accountQueries, cardTxQueries, txStamp])
 
   // Aplica filtros no contexto do grupo (inclusive filtro por membro responsável)
   const filteredGroupTxs = useMemo(() => {
@@ -771,23 +917,69 @@ export function useGroupReportsData(groupId: string, filters: ReportFiltersState
 
   // Projeção do Calendário Financeiro do Grupo
   const projection = useMemo(() => {
-    const invoiceList = cardList.map((c, idx) => ({
-      card: c,
-      invoice: invoiceQueries[idx]?.data || ({} as CreditCardInvoice),
-    }))
-    return buildCalendarProjection(accountList, filteredGroupTxs, invoiceList, filters.period, filters.accountId)
-  }, [accountList, cardList, invoiceQueries, filteredGroupTxs, filters.period, filters.accountId])
+    const cardListForProjection = cardList.filter((c) => {
+      if (filters.hideCreditCards || filters.creditCardId === 'none') return false
+      if (filters.creditCardId && c.id !== filters.creditCardId) return false
+      return true
+    })
 
-  const kpis = useMemo(() => buildKpis(currentMonthTxs, projection, filters.period), [currentMonthTxs, projection, filters.period])
-  const cashFlowHistory = useMemo(() => buildCashFlowHistory(filteredGroupTxs, filters.period), [filteredGroupTxs, filters.period])
-  const categoryEvolution = useMemo(() => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, categories), [currentMonthTxs, prevMonthTxs, categories])
-  const futureCommitments = useMemo(() => buildFutureCommitments(allGroupTransactions, cardList, filters.period, filters.hideCreditCards), [allGroupTransactions, cardList, filters.period, filters.hideCreditCards])
-  const spendingHabits = useMemo(() => buildSpendingHabits(currentMonthTxs, prevMonthTxs, filters.period), [currentMonthTxs, prevMonthTxs, filters.period])
+    const invoiceList = cardListForProjection.map((c) => {
+      const idx = cardList.findIndex((item) => item.id === c.id)
+      return {
+        card: c,
+        invoice: (idx >= 0 ? invoiceQueries[idx]?.data : undefined) || ({} as CreditCardInvoice),
+      }
+    })
+
+    return buildCalendarProjection(
+      accountList,
+      filteredGroupTxs,
+      invoiceList,
+      filters.period,
+      filters.accountId,
+      allGroupTransactions,
+    )
+  }, [
+    accountList,
+    cardList,
+    invoiceQueries,
+    filteredGroupTxs,
+    allGroupTransactions,
+    filters.period,
+    filters.accountId,
+    filters.hideCreditCards,
+    filters.creditCardId,
+    invoiceStamp,
+    txStamp,
+  ])
+
+  const hasCardsIncluded = !filters.hideCreditCards && filters.creditCardId !== 'none'
+
+  const kpis = useMemo(
+    () => buildKpis(currentMonthTxs, projection, filters.period, hasCardsIncluded),
+    [currentMonthTxs, projection, filters.period, hasCardsIncluded],
+  )
+  const cashFlowHistory = useMemo(
+    () => buildCashFlowHistory(filteredGroupTxs, filters.period, hasCardsIncluded),
+    [filteredGroupTxs, filters.period, hasCardsIncluded],
+  )
+  const categoryEvolution = useMemo(
+    () => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded),
+    [currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded],
+  )
+  const futureCommitments = useMemo(
+    () => buildFutureCommitments(allGroupTransactions, cardList, filters.period, filters.hideCreditCards),
+    [allGroupTransactions, cardList, filters.period, filters.hideCreditCards],
+  )
+  const spendingHabits = useMemo(
+    () => buildSpendingHabits(currentMonthTxs, prevMonthTxs, filters.period, hasCardsIncluded),
+    [currentMonthTxs, prevMonthTxs, filters.period, hasCardsIncluded],
+  )
 
   // Distribuição de Despesas por Membro do Grupo
   const memberExpenses = useMemo(() => {
-    return buildGroupMemberExpenses(allGroupTransactions, members, filters.period)
-  }, [allGroupTransactions, members, filters.period])
+    return buildGroupMemberExpenses(allGroupTransactions, members, filters.period, hasCardsIncluded)
+  }, [allGroupTransactions, members, filters.period, hasCardsIncluded])
 
   return {
     loading,

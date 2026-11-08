@@ -267,11 +267,11 @@ export default function Transactions() {
         </div>
         <div className="p-3">
           <p className="text-xs text-text-dim">Despesas</p>
-          <p className="text-sm font-semibold text-white tabular-nums">−{formatMoney(expense)}</p>
+          <p className="text-sm font-semibold text-expense tabular-nums">−{formatMoney(expense)}</p>
         </div>
         <div className="p-3">
           <p className="text-xs text-text-dim">Resultado</p>
-          <p className={clsx('text-sm font-semibold tabular-nums', net > 0 ? 'text-lime' : 'text-white')}>
+          <p className={clsx('text-sm font-semibold tabular-nums', net > 0 ? 'text-lime' : net < 0 ? 'text-expense' : 'text-white')}>
             {net > 0 ? '+' : net < 0 ? '−' : ''}
             {formatMoney(Math.abs(net))}
           </p>

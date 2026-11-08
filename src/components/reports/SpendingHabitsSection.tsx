@@ -80,8 +80,8 @@ export default function SpendingHabitsSection({
               <AreaChart data={lineData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="curMonthGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#C6FF33" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#C6FF33" stopOpacity={0.0} />
+                    <stop offset="5%" stopColor="#FF4D6A" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#FF4D6A" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke="#20202d" strokeDasharray="3 3" vertical={false} />
@@ -112,7 +112,7 @@ export default function SpendingHabitsSection({
                 <Area
                   type="monotone"
                   dataKey="Mês Atual"
-                  stroke="#C6FF33"
+                  stroke="#FF4D6A"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#curMonthGrad)"

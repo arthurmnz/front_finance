@@ -520,7 +520,7 @@ export default function TransactionFormModal({
                   'rounded-lg py-2 text-xs font-semibold transition cursor-pointer select-none',
                   type === t
                     ? t === 'EXPENSE'
-                      ? 'bg-white text-black shadow-sm'
+                      ? 'bg-expense text-white shadow-sm font-bold'
                       : t === 'INCOME'
                         ? 'bg-lime text-black shadow-sm'
                         : 'bg-violet text-white shadow-sm'

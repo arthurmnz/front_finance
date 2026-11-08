@@ -73,9 +73,9 @@ export default function GroupDebtsReportSection({
                     align="start"
                   />
                 </span>
-                <HandCoins className="size-3.5 text-rose-400" />
+                <HandCoins className="size-3.5 text-expense" />
               </div>
-              <p className="text-xl font-bold text-rose-400 tracking-tight">
+              <p className="text-xl font-bold text-expense tracking-tight">
                 {formatMoney(debts?.totalOwedByMe ?? 0)}
               </p>
               <p className="text-[11px] text-text-dim mt-1">Saldo devedor total acumulado</p>
@@ -124,7 +124,7 @@ export default function GroupDebtsReportSection({
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="font-bold text-rose-400 text-sm">
+                      <span className="font-bold text-expense text-sm">
                         {formatMoney(pair.netAmount)}
                       </span>
                     </div>

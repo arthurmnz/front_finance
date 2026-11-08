@@ -91,7 +91,7 @@ export default function GroupMemberExpensesSection({ memberExpenses }: GroupMemb
             </div>
             <div className="text-center mt-1">
               <p className="text-xs text-text-dim">Total de Despesas</p>
-              <p className="text-lg font-bold text-white tracking-tight">
+              <p className="text-lg font-bold text-expense tracking-tight">
                 {formatMoney(totalGroupExpense)}
               </p>
             </div>
@@ -135,7 +135,7 @@ export default function GroupMemberExpensesSection({ memberExpenses }: GroupMemb
                     </div>
 
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-white tracking-tight">
+                      <p className="text-sm font-bold text-expense tracking-tight">
                         {formatMoney(m.totalExpense)}
                       </p>
                       <span className="text-xs font-medium text-lime">

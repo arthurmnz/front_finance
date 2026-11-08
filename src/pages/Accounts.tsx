@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Landmark, Link2, Pencil, PiggyBank, Plus, Trash2, TrendingUp, Unlink, Wallet } from 'lucide-react'
+import clsx from 'clsx'
 import { api } from '@/lib/api'
 import { useAccounts, useAction, useGroups } from '@/lib/hooks'
 import type { Account } from '@/lib/types'
@@ -71,7 +72,14 @@ export default function Accounts() {
                       <p className="truncate font-semibold text-white">{a.name}</p>
                       <p className="text-xs text-text-dim">{accountTypeLabel[a.type]}</p>
                     </div>
-                    <p className="text-lg font-bold text-white tabular-nums">{formatMoney(a.balance)}</p>
+                    <p
+                      className={clsx(
+                        'text-lg font-bold tabular-nums',
+                        a.balance < 0 ? 'text-expense' : 'text-white',
+                      )}
+                    >
+                      {formatMoney(a.balance)}
+                    </p>
                   </Link>
                   <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                     {a.groupId && <Badge tone="primary">{groupName(a.groupId)}</Badge>}

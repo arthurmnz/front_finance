@@ -506,14 +506,22 @@ export default function GroupDetail() {
                 <div className="grid grid-cols-2 gap-4 border-b border-border/60 pb-4">
                   <div>
                     <p className="text-xs text-text-dim">Saldo total do grupo</p>
-                    <p className="mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight text-white tabular-nums">
+                    <p
+                      className={clsx(
+                        'mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
+                        groupSummary.currentBalance < 0 ? 'text-expense' : 'text-white',
+                      )}
+                    >
                       {!accounts.isLoading ? formatMoney(groupSummary.currentBalance) : '—'}
                     </p>
                   </div>
                   <div className="border-l border-border/60 pl-4">
                     <p className="text-xs text-text-dim">Saldo projetado</p>
                     <p
-                      className={`mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums ${groupSummary.projectedBalance < 0 ? 'text-white' : 'text-lime'}`}
+                      className={clsx(
+                        'mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
+                        groupSummary.projectedBalance < 0 ? 'text-expense' : 'text-lime',
+                      )}
                     >
                       {!accounts.isLoading ? formatMoney(groupSummary.projectedBalance) : '—'}
                     </p>
@@ -541,17 +549,17 @@ export default function GroupDetail() {
 
                   <div className="space-y-2">
                     <div className="flex items-center gap-2.5">
-                      <ArrowDownCircle className="size-6 shrink-0 text-white" />
+                      <ArrowDownCircle className="size-6 shrink-0 text-expense" />
                       <div className="min-w-0">
                         <p className="text-xs text-text-dim">Despesas</p>
-                        <p className="truncate font-semibold text-white tabular-nums">
+                        <p className="truncate font-semibold text-expense tabular-nums">
                           −{formatMoney(groupSummary.realizedExpense)}
                         </p>
                       </div>
                     </div>
                     <div className="rounded-xl bg-surface-2 px-3 py-2">
                       <p className="text-[11px] text-text-dim">Despesas projetadas</p>
-                      <p className="text-xs font-semibold text-white tabular-nums">
+                      <p className="text-xs font-semibold text-expense tabular-nums">
                         −{formatMoney(groupSummary.projectedExpense)}
                       </p>
                     </div>
@@ -609,7 +617,12 @@ export default function GroupDetail() {
                               <span className="block truncate text-sm text-white">{a.name}</span>
                               <span className="block truncate text-xs text-text-dim">{fullName(a.owner)}</span>
                             </div>
-                            <span className="text-sm font-semibold text-white tabular-nums">
+                            <span
+                              className={clsx(
+                                'text-sm font-semibold tabular-nums',
+                                a.balance < 0 ? 'text-expense' : 'text-white',
+                              )}
+                            >
                               {formatMoney(a.balance)}
                             </span>
                           </Link>
@@ -705,7 +718,14 @@ export default function GroupDetail() {
                           </div>
                           <div className="text-right">
                             <p className="text-[11px] text-text-dim">Fatura atual</p>
-                            <p className="font-semibold text-white tabular-nums">−{formatMoney(c.currentInvoiceAmount)}</p>
+                            <p
+                              className={clsx(
+                                'font-semibold tabular-nums',
+                                c.currentInvoiceAmount > 0 ? 'text-expense' : 'text-white',
+                              )}
+                            >
+                              −{formatMoney(c.currentInvoiceAmount)}
+                            </p>
                           </div>
                         </Link>
                       </li>
@@ -746,7 +766,7 @@ export default function GroupDetail() {
                           className={
                             t.type === 'INCOME'
                               ? 'font-semibold text-lime tabular-nums'
-                              : 'font-semibold text-white tabular-nums'
+                              : 'font-semibold text-expense tabular-nums'
                           }
                         >
                           {t.type === 'INCOME' ? '+' : '−'}
@@ -902,11 +922,11 @@ export default function GroupDetail() {
                 </div>
                 <div className="p-3">
                   <p className="text-xs text-text-dim">Despesas</p>
-                  <p className="text-sm font-semibold text-white tabular-nums">−{formatMoney(txExpense)}</p>
+                  <p className="text-sm font-semibold text-expense tabular-nums">−{formatMoney(txExpense)}</p>
                 </div>
                 <div className="p-3">
                   <p className="text-xs text-text-dim">Resultado</p>
-                  <p className={clsx('text-sm font-semibold tabular-nums', txNet > 0 ? 'text-lime' : 'text-white')}>
+                  <p className={clsx('text-sm font-semibold tabular-nums', txNet > 0 ? 'text-lime' : txNet < 0 ? 'text-expense' : 'text-white')}>
                     {txNet > 0 ? '+' : txNet < 0 ? '−' : ''}
                     {formatMoney(Math.abs(txNet))}
                   </p>
@@ -949,7 +969,7 @@ export default function GroupDetail() {
               <div className="grid grid-cols-2 gap-3">
                 <Card className="p-4 bg-surface-1">
                   <p className="text-xs text-text-dim">Você deve no total (todos os meses)</p>
-                  <p className="mt-1 text-2xl font-bold text-rose-400 tabular-nums">
+                  <p className="mt-1 text-2xl font-bold text-expense tabular-nums">
                     {formatMoney(groupDebts?.totalOwedByMe ?? 0)}
                   </p>
                 </Card>
@@ -1008,7 +1028,7 @@ export default function GroupDetail() {
                                         {isDebtor ? (
                                           <>
                                             Você deve{' '}
-                                            <span className="font-bold text-rose-400 tabular-nums">
+                                            <span className="font-bold text-expense tabular-nums">
                                               {formatMoney(b.netAmount)}
                                             </span>{' '}
                                             para {fullName(b.creditor)}

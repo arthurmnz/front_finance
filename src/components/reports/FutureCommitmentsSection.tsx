@@ -36,7 +36,7 @@ export default function FutureCommitmentsSection({ commitments }: FutureCommitme
         </div>
         <div className="text-right">
           <span className="text-xs text-text-dim">Total já comprometido nos 6 meses: </span>
-          <span className="text-sm font-bold text-white tabular-nums">{formatMoney(totalFuture)}</span>
+          <span className="text-sm font-bold text-expense tabular-nums">{formatMoney(totalFuture)}</span>
         </div>
       </div>
 

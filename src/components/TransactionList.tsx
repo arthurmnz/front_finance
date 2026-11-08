@@ -115,7 +115,7 @@ export default function TransactionList({
           <p
             className={clsx(
               'text-sm font-semibold tabular-nums',
-              incoming ? 'text-lime' : 'text-white',
+              incoming ? 'text-lime' : 'text-expense',
             )}
           >
             {incoming ? '+' : t.type === 'TRANSFER' ? '' : '−'}
@@ -169,7 +169,7 @@ export default function TransactionList({
                   <span
                     className={clsx(
                       'tabular-nums font-semibold',
-                      total > 0 ? 'text-lime' : 'text-white',
+                      total > 0 ? 'text-lime' : total < 0 ? 'text-expense' : 'text-text-muted',
                     )}
                   >
                     {total > 0 ? '+' : total < 0 ? '−' : ''}

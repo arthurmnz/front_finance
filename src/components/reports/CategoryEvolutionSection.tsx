@@ -114,7 +114,7 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
                       ) : c.momVariationPct !== null ? (
                         <span
                           className={`inline-flex items-center gap-0.5 font-medium ${
-                            c.momVariationPct > 0 ? 'text-rose-400' : 'text-lime'
+                            c.momVariationPct > 0 ? 'text-expense' : 'text-lime'
                           }`}
                         >
                           {c.momVariationPct > 0 ? (

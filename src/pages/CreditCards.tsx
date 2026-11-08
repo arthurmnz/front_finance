@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CreditCard as CardIcon, Link2, Pencil, Plus, Trash2, Unlink } from 'lucide-react'
+import clsx from 'clsx'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { useAccounts, useAction, useCreditCards, useGroups } from '@/lib/hooks'
@@ -95,18 +96,35 @@ export default function CreditCards() {
                       </div>
                       <div className="text-right">
                         <p className="text-[11px] text-text-dim">Fatura atual</p>
-                        <p className="text-base font-bold text-white tabular-nums">−{formatMoney(c.currentInvoiceAmount)}</p>
+                        <p
+                          className={clsx(
+                            'text-base font-bold tabular-nums',
+                            c.currentInvoiceAmount > 0 ? 'text-expense' : 'text-white',
+                          )}
+                        >
+                          −{formatMoney(c.currentInvoiceAmount)}
+                        </p>
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs">
-                        <span className="text-text-dim">Usado: <b className="text-white tabular-nums">{formatMoney(c.usedLimit)}</b></span>
+                        <span className="text-text-dim">
+                          Usado:{' '}
+                          <b
+                            className={clsx(
+                              'tabular-nums',
+                              c.usedLimit > 0 ? 'text-expense' : 'text-white',
+                            )}
+                          >
+                            {formatMoney(c.usedLimit)}
+                          </b>
+                        </span>
                         <span className="font-medium text-lime tabular-nums">Disponível: {formatMoney(c.availableLimit)}</span>
                       </div>
                       <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
                         <div
-                          className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-white' : pct >= 70 ? 'bg-violet' : 'bg-lime'}`}
+                          className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-expense' : pct >= 70 ? 'bg-violet' : 'bg-lime'}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>

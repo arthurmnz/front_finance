@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 
-export type BadgeTone = 'default' | 'income' | 'primary' | 'lime' | 'neutral'
+export type BadgeTone = 'default' | 'income' | 'primary' | 'lime' | 'neutral' | 'expense' | 'danger'
 
 export interface BadgeProps {
   children: ReactNode
@@ -17,6 +17,7 @@ export function Badge({ children, tone = 'default', className }: BadgeProps) {
         tone === 'default' && 'bg-surface-2 text-text-muted border border-border',
         tone === 'neutral' && 'bg-white/10 text-white/90 border border-white/15',
         tone === 'income' && 'bg-lime-subtle text-lime border border-lime/25 font-semibold',
+        (tone === 'expense' || tone === 'danger') && 'bg-expense-subtle text-expense border border-expense/30 font-semibold',
         tone === 'primary' && 'bg-violet-subtle text-violet-hover border border-violet/30 font-medium',
         tone === 'lime' && 'bg-lime text-black font-bold shadow-sm shadow-lime/20',
         className,
