@@ -1,6 +1,6 @@
 import { SlidersHorizontal, X, Settings2 } from 'lucide-react'
 import clsx from 'clsx'
-import type { Account, Category, CreditCard } from '@/lib/types'
+import type { Account, Category, CreditCard, GroupMember } from '@/lib/types'
 import { formatMoney } from '@/lib/format'
 import { Button, Card, Field, Select } from '@/components/ui'
 import { MonthPicker } from '@/components/MonthPicker'
@@ -16,6 +16,7 @@ interface ReportFiltersProps {
   onConfigureThreshold: () => void
   showFilters: boolean
   onToggleShowFilters: () => void
+  members?: GroupMember[]
 }
 
 const chip = (active: boolean) =>
@@ -36,6 +37,7 @@ export default function ReportFilters({
   onConfigureThreshold,
   showFilters,
   onToggleShowFilters,
+  members,
 }: ReportFiltersProps) {
   const set = <K extends keyof ReportFiltersState>(k: K, v: ReportFiltersState[K]) => {
     onChange({ ...filters, [k]: v })
@@ -47,6 +49,7 @@ export default function ReportFilters({
     filters.hideCreditCards,
     filters.categoryId,
     filters.status,
+    filters.responsibleId,
   ].filter(Boolean).length
 
   const handleClear = () => {
@@ -57,6 +60,7 @@ export default function ReportFilters({
       hideCreditCards: false,
       categoryId: '',
       status: '',
+      responsibleId: '',
     })
   }
 
@@ -136,7 +140,23 @@ export default function ReportFilters({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className={clsx('grid gap-3', members && members.length > 0 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3')}>
+            {members && members.length > 0 && (
+              <Field label="Membro / Responsável">
+                <Select
+                  value={filters.responsibleId || ''}
+                  onChange={(e) => set('responsibleId', e.target.value)}
+                >
+                  <option value="">Todos os membros</option>
+                  {members.map((m) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.firstName} {m.user.lastName}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
             <Field label="Conta">
               <Select value={filters.accountId} onChange={(e) => set('accountId', e.target.value)}>
                 <option value="">Todas as contas</option>

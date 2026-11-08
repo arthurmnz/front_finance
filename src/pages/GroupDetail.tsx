@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
 import {
   ArrowDownCircle,
@@ -61,8 +61,9 @@ import CategoryManager from '@/components/CategoryManager'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
 import SettleDebtModal from '@/components/SettleDebtModal'
+import GroupReportsView from '@/components/reports/GroupReportsView'
 
-type Tab = 'overview' | 'transactions' | 'settlements' | 'members' | 'accounts' | 'cards' | 'categories' | 'requests' | 'settings'
+type Tab = 'overview' | 'transactions' | 'reports' | 'settlements' | 'members' | 'accounts' | 'cards' | 'categories' | 'requests' | 'settings'
 
 interface TxFilters {
   search: string
@@ -99,8 +100,10 @@ export default function GroupDetail() {
   const { id } = useParams()
   const nav = useNavigate()
   const [searchParams] = useSearchParams()
+  const location = useLocation()
   const { user } = useAuth()
-  const initialTab = (searchParams.get('tab') as Tab) || 'overview'
+  const isReportsPath = location.pathname.endsWith('/relatorios')
+  const initialTab = isReportsPath ? 'reports' : ((searchParams.get('tab') as Tab) || 'overview')
   const [tab, setTab] = useState<Tab>(initialTab)
   const [period, setPeriod] = useState(currentPeriod())
   const [ignored, setIgnored] = useState<string[]>([])
@@ -450,6 +453,7 @@ export default function GroupDetail() {
               tabs={[
                 { key: 'overview', label: 'Resumo' },
                 { key: 'transactions', label: 'Transações' },
+                { key: 'reports', label: 'Relatórios' },
                 { key: 'settlements', label: 'Acertos' },
                 { key: 'members', label: 'Membros' },
                 { key: 'accounts', label: 'Contas' },
@@ -905,6 +909,12 @@ export default function GroupDetail() {
                   accountId={txFilters.accountId || undefined}
                 />
               )}
+            </div>
+          )}
+
+          {tab === 'reports' && id && (
+            <div className="space-y-4">
+              <GroupReportsView groupId={id} />
             </div>
           )}
 

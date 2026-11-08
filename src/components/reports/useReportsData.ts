@@ -1,18 +1,38 @@
 import { useMemo, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { useAccessibleAccounts, useAllCategories, useCreditCards, useUserDebtsSummary } from '@/lib/hooks'
+import {
+  useAccounts,
+  useAllCategories,
+  useCreditCards,
+  useGroup,
+  useGroupAccounts,
+  useGroupCategories,
+  useGroupCreditCards,
+  useGroupDebts,
+  useUserDebtsSummary,
+} from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
-import type { CreditCardInvoice, Transaction } from '@/lib/types'
+import type {
+  Account,
+  Category,
+  CreditCard,
+  CreditCardInvoice,
+  GroupDebtsResponse,
+  GroupMember,
+  Transaction,
+} from '@/lib/types'
 import { monthLabel, toISODate } from '@/lib/format'
 import { normalizeCategoryColor, PALETTE } from '@/lib/palette'
 import type {
   CategoryComparison,
   CumulativeSpendingPoint,
   FutureMonthCommitment,
+  GroupMemberExpense,
   KpiData,
   MonthlyCashFlow,
   ReportFiltersState,
+  ReportPeriod,
   SharedGroupBalance,
   SpendingByDayOfWeek,
 } from './types'
@@ -32,7 +52,7 @@ export function useWarningThreshold(userId?: string) {
   return [value, save] as const
 }
 
-const parseDateParts = (dateStr: string) => {
+export const parseDateParts = (dateStr: string) => {
   const parts = dateStr.slice(0, 10).split('-')
   return {
     year: Number(parts[0]),
@@ -41,17 +61,429 @@ const parseDateParts = (dateStr: string) => {
   }
 }
 
-export function useReportsData(filters: ReportFiltersState, _threshold?: number) {
+// ----------------------------------------------------------------------
+// FUNÇÕES AUXILIARES DE CÁLCULO ANALÍTICO
+// ----------------------------------------------------------------------
+
+export function buildCalendarProjection(
+  accounts: Account[],
+  transactions: Transaction[],
+  invoices: { card: CreditCard; invoice: CreditCardInvoice }[],
+  period: ReportPeriod,
+  accountIdFilter?: string,
+) {
+  const accs = accounts.filter((a) => !accountIdFilter || a.id === accountIdFilter)
+  const ids = new Set(accs.map((a) => a.id))
+
+  const effect = (t: Transaction) => {
+    if (t.creditCardId) return 0
+    let v = 0
+    if (t.type === 'INCOME' && ids.has(t.accountId)) v += t.amount
+    if (t.type === 'EXPENSE' && ids.has(t.accountId)) v -= t.amount
+    if (t.type === 'TRANSFER') {
+      if (ids.has(t.accountId)) v -= t.amount
+      if (t.destinationAccountId && ids.has(t.destinationAccountId)) v += t.amount
+    }
+    return v
+  }
+
+  const firstIso = toISODate(new Date(period.year, period.month - 1, 1))
+  const daysInMonth = new Date(period.year, period.month, 0).getDate()
+  const relevant = transactions.filter((t) => effect(t) !== 0)
+
+  let running =
+    accs.reduce((s, a) => s + (a.startBalance ?? 0), 0) +
+    relevant.filter((t) => t.date.slice(0, 10) < firstIso).reduce((s, t) => s + effect(t), 0)
+  const opening = running
+
+  const byDay = new Map<string, Transaction[]>()
+  relevant.forEach((t) => {
+    const k = t.date.slice(0, 10)
+    if (k >= firstIso) {
+      byDay.set(k, [...(byDay.get(k) ?? []), t])
+    }
+  })
+
+  const invoicesByDay = new Map<string, { cardId: string; cardName: string; remainingAmount: number }[]>()
+  invoices.forEach(({ card, invoice }) => {
+    if (!ids.has(card.accountId)) return
+    if ((invoice.remainingAmount ?? 0) <= 0 || !invoice.dueDate) return
+    const dueIso = invoice.dueDate.slice(0, 10)
+    invoicesByDay.set(dueIso, [
+      ...(invoicesByDay.get(dueIso) ?? []),
+      { cardId: card.id, cardName: card.name, remainingAmount: invoice.remainingAmount },
+    ])
+  })
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => {
+    const date = toISODate(new Date(period.year, period.month - 1, i + 1))
+    const txs = byDay.get(date) ?? []
+    const dayInvoices = invoicesByDay.get(date) ?? []
+    const invoiceDelta = dayInvoices.reduce((s, inv) => s - inv.remainingAmount, 0)
+    const delta = txs.reduce((s, t) => s + effect(t), 0) + invoiceDelta
+    running += delta
+    return { day: i + 1, date, txs, invoices: dayInvoices, delta, balance: running }
+  })
+
+  const min = days.reduce((m, d) => (d.balance < m.balance ? d : m), days[0] || { balance: 0, day: 1, date: '', txs: [], invoices: [], delta: 0 })
+  const firstNegative = days.find((d) => d.balance < 0)
+
+  return { days, opening, closing: running, min, firstNegative }
+}
+
+export function buildKpis(
+  currentMonthTxs: Transaction[],
+  projection: { days: { day: number; balance: number }[]; closing: number; min: { day: number; balance: number } },
+  period: ReportPeriod,
+): KpiData {
+  const income = currentMonthTxs
+    .filter((t) => t.type === 'INCOME')
+    .reduce((s, t) => s + t.amount, 0)
+
+  const expenseTxs = currentMonthTxs.filter((t) => t.type === 'EXPENSE')
+  const expense = expenseTxs.reduce((s, t) => s + t.amount, 0)
+  const net = income - expense
+
+  const cardExpense = expenseTxs
+    .filter((t) => !!t.creditCardId)
+    .reduce((s, t) => s + t.amount, 0)
+  const accountExpense = expense - cardExpense
+  const cardSharePct = expense > 0 ? Math.round((cardExpense / expense) * 100) : 0
+
+  const savingsRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0
+
+  const today = new Date()
+  const daysInMonth = new Date(period.year, period.month, 0).getDate()
+  const isCurrentMonth = today.getFullYear() === period.year && today.getMonth() + 1 === period.month
+  const daysPassed = isCurrentMonth ? Math.max(1, today.getDate()) : daysInMonth
+  const dailyAverage = Math.round(expense / daysPassed)
+
+  return {
+    income,
+    expense,
+    net,
+    savingsRate,
+    dailyAverage,
+    projectedMonthEnd: projection.closing,
+    cardExpense,
+    accountExpense,
+    cardSharePct,
+    minBalanceDay: projection.min.day,
+    minBalanceAmount: projection.min.balance,
+  }
+}
+
+export function buildCashFlowHistory(
+  allTxs: Transaction[],
+  period: ReportPeriod,
+): MonthlyCashFlow[] {
+  const list: MonthlyCashFlow[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(period.year, period.month - 1 - i, 1)
+    const m = d.getMonth() + 1
+    const y = d.getFullYear()
+
+    const txs = allTxs.filter((t) => {
+      const p = parseDateParts(t.date)
+      return p.year === y && p.month === m
+    })
+
+    const inc = txs.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
+    const exp = txs.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
+
+    list.push({
+      label: `${monthLabel(m, y).slice(0, 3)}/${String(y).slice(-2)}`,
+      month: m,
+      year: y,
+      income: inc,
+      expense: exp,
+      net: inc - exp,
+    })
+  }
+  return list
+}
+
+export function buildCategoryEvolution(
+  currentMonthTxs: Transaction[],
+  prevMonthTxs: Transaction[],
+  categories: Category[],
+): CategoryComparison[] {
+  const currentCatMap = new Map<string, number>()
+  let totalCurrentExpense = 0
+  currentMonthTxs
+    .filter((t) => t.type === 'EXPENSE')
+    .forEach((t) => {
+      const key = t.categoryId || 'none'
+      currentCatMap.set(key, (currentCatMap.get(key) ?? 0) + t.amount)
+      totalCurrentExpense += t.amount
+    })
+
+  const prevCatMap = new Map<string, number>()
+  prevMonthTxs
+    .filter((t) => t.type === 'EXPENSE')
+    .forEach((t) => {
+      const key = t.categoryId || 'none'
+      prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + t.amount)
+    })
+
+  const catInfoMap = new Map(categories.map((c) => [c.id, c]))
+  const allCatKeys = new Set([...currentCatMap.keys(), ...prevCatMap.keys()])
+  const comparisons: CategoryComparison[] = []
+
+  let colorIdx = 0
+  allCatKeys.forEach((key) => {
+    const currentAmt = currentCatMap.get(key) ?? 0
+    const prevAmt = prevCatMap.get(key) ?? 0
+    if (currentAmt === 0 && prevAmt === 0) return
+
+    let name = 'Sem categoria'
+    let color: string = PALETTE[colorIdx % PALETTE.length]
+
+    if (key !== 'none') {
+      const cat = catInfoMap.get(key)
+      if (cat) {
+        name = cat.name
+        color = normalizeCategoryColor(cat.color)
+      }
+    } else {
+      color = '#8E8EA0'
+    }
+
+    colorIdx++
+    const pctOfTotal = totalCurrentExpense > 0 ? Math.round((currentAmt / totalCurrentExpense) * 100) : 0
+    const isNew = prevAmt === 0 && currentAmt > 0
+    const momVariation = prevAmt > 0 ? Math.round(((currentAmt - prevAmt) / prevAmt) * 100) : null
+
+    comparisons.push({
+      id: key !== 'none' ? key : undefined,
+      name,
+      color,
+      currentAmount: currentAmt,
+      previousAmount: prevAmt,
+      percentageOfTotal: pctOfTotal,
+      momVariationPct: momVariation,
+      isNew,
+    })
+  })
+
+  return comparisons.sort((a, b) => b.currentAmount - a.currentAmount)
+}
+
+export function buildFutureCommitments(
+  allTxs: Transaction[],
+  cards: CreditCard[],
+  period: ReportPeriod,
+  hideCreditCards: boolean,
+): FutureMonthCommitment[] {
+  const cardClosingMap = new Map(cards.map((c) => [c.id, c.closingDay]))
+  const list: FutureMonthCommitment[] = []
+
+  for (let i = 1; i <= 6; i++) {
+    const d = new Date(period.year, period.month - 1 + i, 1)
+    const m = d.getMonth() + 1
+    const y = d.getFullYear()
+
+    let cardCommitted = 0
+    if (!hideCreditCards) {
+      allTxs
+        .filter((t) => !!t.creditCardId && t.type === 'EXPENSE')
+        .forEach((t) => {
+          if (t.invoiceMonth != null && t.invoiceYear != null) {
+            if (t.invoiceMonth === m && t.invoiceYear === y) {
+              cardCommitted += t.amount
+            }
+          } else {
+            const p = parseDateParts(t.date)
+            const closingDay = (t.creditCardId && cardClosingMap.get(t.creditCardId)) || 25
+            let invM = p.month
+            let invY = p.year
+            if (p.day >= closingDay) {
+              invM += 1
+              if (invM > 12) {
+                invM = 1
+                invY += 1
+              }
+            }
+            if (invM === m && invY === y) {
+              cardCommitted += t.amount
+            }
+          }
+        })
+    }
+
+    const accountPending = allTxs
+      .filter((t) => {
+        if (t.creditCardId || t.status !== 'PENDING' || t.type !== 'EXPENSE') return false
+        const p = parseDateParts(t.date)
+        return p.year === y && p.month === m
+      })
+      .reduce((s, t) => s + t.amount, 0)
+
+    const total = Math.max(0, cardCommitted) + accountPending
+
+    list.push({
+      label: `${monthLabel(m, y).slice(0, 3)}/${String(y).slice(-2)}`,
+      month: m,
+      year: y,
+      cardCommitted: Math.max(0, cardCommitted),
+      accountPending,
+      totalCommitted: total,
+    })
+  }
+
+  return list
+}
+
+export function buildSpendingHabits(
+  currentMonthTxs: Transaction[],
+  prevMonthTxs: Transaction[],
+  period: ReportPeriod,
+): { cumulativePoints: CumulativeSpendingPoint[]; byDayOfWeek: SpendingByDayOfWeek[] } {
+  const daysInCurrentMonth = new Date(period.year, period.month, 0).getDate()
+  const daysInPrevMonth = new Date(period.year, period.month - 1, 0).getDate()
+  const maxDays = Math.max(daysInCurrentMonth, daysInPrevMonth)
+
+  const currentDaily = new Array(daysInCurrentMonth + 1).fill(0)
+  currentMonthTxs
+    .filter((t) => t.type === 'EXPENSE')
+    .forEach((t) => {
+      const p = parseDateParts(t.date)
+      if (p.day <= daysInCurrentMonth) {
+        currentDaily[p.day] += t.amount
+      }
+    })
+
+  const prevDaily = new Array(daysInPrevMonth + 1).fill(0)
+  prevMonthTxs
+    .filter((t) => t.type === 'EXPENSE')
+    .forEach((t) => {
+      const p = parseDateParts(t.date)
+      if (p.day <= daysInPrevMonth) {
+        prevDaily[p.day] += t.amount
+      }
+    })
+
+  const today = new Date()
+  const isCurrentMonth = today.getFullYear() === period.year && today.getMonth() + 1 === period.month
+  const todayDay = isCurrentMonth ? today.getDate() : 31
+
+  const cumulativePoints: CumulativeSpendingPoint[] = []
+  let currentAcc = 0
+  let prevAcc = 0
+
+  for (let day = 1; day <= maxDays; day++) {
+    if (day <= daysInCurrentMonth && day <= todayDay) {
+      currentAcc += currentDaily[day]
+    }
+    if (day <= daysInPrevMonth) {
+      prevAcc += prevDaily[day]
+    }
+
+    cumulativePoints.push({
+      day,
+      currentMonthAmount: day <= todayDay ? currentAcc : currentAcc,
+      previousMonthAmount: prevAcc,
+    })
+  }
+
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+  const weekdayTotals = [0, 0, 0, 0, 0, 0, 0]
+
+  currentMonthTxs
+    .filter((t) => t.type === 'EXPENSE')
+    .forEach((t) => {
+      const p = parseDateParts(t.date)
+      const d = new Date(p.year, p.month - 1, p.day)
+      const dayIdx = d.getDay()
+      weekdayTotals[dayIdx] += t.amount
+    })
+
+  const byDayOfWeek: SpendingByDayOfWeek[] = weekDays.map((name, idx) => ({
+    dayName: name,
+    dayIndex: idx,
+    amount: weekdayTotals[idx],
+  }))
+
+  return { cumulativePoints, byDayOfWeek }
+}
+
+export function buildGroupMemberExpenses(
+  groupTxs: Transaction[],
+  members: GroupMember[],
+  period: ReportPeriod,
+): GroupMemberExpense[] {
+  const monthTxs = groupTxs.filter((t) => {
+    const p = parseDateParts(t.date)
+    return p.year === period.year && p.month === period.month && t.type === 'EXPENSE'
+  })
+
+  const totalExpense = monthTxs.reduce((s, t) => s + t.amount, 0)
+  const memberMap = new Map<string, { totalExpense: number; txCount: number }>()
+
+  monthTxs.forEach((t) => {
+    const respId = t.responsibleId || t.responsible?.id || 'unknown'
+    const cur = memberMap.get(respId) ?? { totalExpense: 0, txCount: 0 }
+    cur.totalExpense += t.amount
+    cur.txCount += 1
+    memberMap.set(respId, cur)
+  })
+
+  const result: GroupMemberExpense[] = members.map((m) => {
+    const stats = memberMap.get(m.user.id) ?? { totalExpense: 0, txCount: 0 }
+    const pct = totalExpense > 0 ? Math.round((stats.totalExpense / totalExpense) * 100) : 0
+    return {
+      memberId: m.user.id,
+      name: `${m.user.firstName} ${m.user.lastName}`.trim(),
+      email: m.user.email,
+      avatarUrl: (m.user as { avatarUrl?: string }).avatarUrl,
+      role: m.role,
+      totalExpense: stats.totalExpense,
+      percentage: pct,
+      txCount: stats.txCount,
+    }
+  })
+
+  // Transações de possíveis membros anteriores que gastaram no grupo
+  memberMap.forEach((stats, memberId) => {
+    if (memberId !== 'unknown' && !members.some((m) => m.user.id === memberId)) {
+      const pct = totalExpense > 0 ? Math.round((stats.totalExpense / totalExpense) * 100) : 0
+      result.push({
+        memberId,
+        name: 'Membro anterior',
+        email: '',
+        role: 'MEMBER',
+        totalExpense: stats.totalExpense,
+        percentage: pct,
+        txCount: stats.txCount,
+      })
+    }
+  })
+
+  return result.sort((a, b) => b.totalExpense - a.totalExpense)
+}
+
+// ----------------------------------------------------------------------
+// HOOK 1: RELATÓRIO ESTRITAMENTE INDIVIDUAL DO USUÁRIO LOGADO
+// ----------------------------------------------------------------------
+
+export function useIndividualReportsData(filters: ReportFiltersState, _threshold?: number) {
   const { user } = useAuth()
-  const accounts = useAccessibleAccounts()
-  const creditCards = useCreditCards()
+  const accountsQuery = useAccounts()
+  const creditCardsQuery = useCreditCards()
   const categories = useAllCategories().data ?? []
   const debtsSummary = useUserDebtsSummary(filters.period.month, filters.period.year)
 
-  const accountList = accounts.data ?? []
-  const cardList = creditCards.data ?? []
+  // Apenas contas e cartões próprios do usuário
+  const accountList = useMemo(
+    () => (accountsQuery.data ?? []).filter((a) => !user?.id || a.ownerId === user.id),
+    [accountsQuery.data, user?.id],
+  )
+  const cardList = useMemo(
+    () => (creditCardsQuery.data ?? []).filter((c) => !user?.id || c.ownerId === user.id),
+    [creditCardsQuery.data, user?.id],
+  )
 
-  // 1. Carrega todas as transações das contas acessíveis
+  // 1. Transações das contas próprias
   const accountQueries = useQueries({
     queries: accountList.map((a) => ({
       queryKey: ['transactions', 'account', a.id, 'all'],
@@ -59,7 +491,7 @@ export function useReportsData(filters: ReportFiltersState, _threshold?: number)
     })),
   })
 
-  // 2. Carrega todas as transações dos cartões acessíveis
+  // 2. Transações dos cartões próprios
   const cardTxQueries = useQueries({
     queries: cardList.map((c) => ({
       queryKey: ['transactions', 'card', c.id, 'all'],
@@ -67,7 +499,7 @@ export function useReportsData(filters: ReportFiltersState, _threshold?: number)
     })),
   })
 
-  // 3. Carrega todas as transações sob responsabilidade do usuário
+  // 3. Transações sob responsabilidade do usuário (inclui compras feitas em cartões compartilhados de terceiros)
   const responsibleQuery = useQueries({
     queries: [
       {
@@ -77,7 +509,7 @@ export function useReportsData(filters: ReportFiltersState, _threshold?: number)
     ],
   })
 
-  // 4. Carrega faturas do mês selecionado para projeção do calendário
+  // 4. Faturas dos cartões próprios do mês selecionado
   const invoiceQueries = useQueries({
     queries: cardList.map((c) => ({
       queryKey: ['credit-cards', c.id, 'invoice', filters.period.month, filters.period.year],
@@ -89,470 +521,110 @@ export function useReportsData(filters: ReportFiltersState, _threshold?: number)
   })
 
   const loading =
-    accounts.isLoading ||
-    creditCards.isLoading ||
+    accountsQuery.isLoading ||
+    creditCardsQuery.isLoading ||
     accountQueries.some((q) => q.isLoading) ||
     cardTxQueries.some((q) => q.isLoading) ||
     responsibleQuery.some((q) => q.isLoading) ||
     invoiceQueries.some((q) => q.isLoading)
 
-  // 5. Unifica e deduplica todas as transações
-  const allTransactions = useMemo(() => {
+  // Unifica e deduplica transações brutas
+  const allRawTransactions = useMemo(() => {
     const map = new Map<string, Transaction>()
     accountQueries.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
     cardTxQueries.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
-    responsibleQuery[0]?.data?.forEach((t) => map.set(t.id, t))
+    responsibleQuery.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
     return [...map.values()]
   }, [accountQueries, cardTxQueries, responsibleQuery])
 
-  // Mapeamentos de apoio
-  const cardOwnerMap = useMemo(() => new Map(cardList.map((c) => [c.id, c.ownerId])), [cardList])
+  const ownCardIds = useMemo(() => new Set(cardList.map((c) => c.id)), [cardList])
+  const ownAccountIds = useMemo(() => new Set(accountList.map((a) => a.id)), [accountList])
 
-  // Transações pessoais vs. transações de terceiros no cartão do titular
+  // Separação estrita de responsabilidade pessoal:
   const { personalTxs, thirdPartyOnMyCardTxs, myPurchasesOnOthersCards } = useMemo(() => {
     const personal: Transaction[] = []
     const thirdPartyOnMyCard: Transaction[] = []
     const myOnOthersCard: Transaction[] = []
 
-    allTransactions.forEach((t) => {
-      const cardOwnerId = t.creditCardId ? cardOwnerMap.get(t.creditCardId) : null
-
-      if (t.creditCardId && user?.id) {
-        // Se a compra foi feita no cartão de outro membro pelo usuário logado
-        if (cardOwnerId && cardOwnerId !== user.id && t.responsibleId === user.id) {
-          myOnOthersCard.push(t)
-          personal.push(t) // é gasto do usuário logado
-          return
-        }
-
-        // Se a compra foi feita no cartão do usuário logado por OUTRO membro
-        if (cardOwnerId === user.id && t.responsibleId && t.responsibleId !== user.id) {
+    allRawTransactions.forEach((t) => {
+      // Caso 1: Transação em cartão próprio do usuário
+      if (t.creditCardId && ownCardIds.has(t.creditCardId)) {
+        if (!t.responsibleId || (user?.id && t.responsibleId === user.id)) {
+          personal.push(t)
+        } else {
           thirdPartyOnMyCard.push(t)
-          return // NÃO entra nos gastos pessoais do titular nos relatórios
         }
+        return
       }
 
-      // Caso padrão: pertence ao titular ou é transação própria de conta/cartão
-      personal.push(t)
+      // Caso 2: Transação em conta própria do usuário
+      if (ownAccountIds.has(t.accountId) && !t.creditCardId) {
+        if (!t.responsibleId || (user?.id && t.responsibleId === user.id)) {
+          personal.push(t)
+        }
+        return
+      }
+
+      // Caso 3: Compras feitas pelo usuário em cartões de terceiros (via responsible/me)
+      if (t.creditCardId && !ownCardIds.has(t.creditCardId) && user?.id && t.responsibleId === user.id) {
+        personal.push(t)
+        myOnOthersCard.push(t)
+      }
     })
 
-    return {
-      personalTxs: personal,
-      thirdPartyOnMyCardTxs: thirdPartyOnMyCard,
-      myPurchasesOnOthersCards: myOnOthersCard,
-    }
-  }, [allTransactions, cardOwnerMap, user?.id])
+    return { personalTxs: personal, thirdPartyOnMyCardTxs: thirdPartyOnMyCard, myPurchasesOnOthersCards: myOnOthersCard }
+  }, [allRawTransactions, ownCardIds, ownAccountIds, user?.id])
 
-  // 6. Transações pessoais após aplicação dos filtros globais
+  // Aplica filtros globais do usuário
   const filteredPersonalTxs = useMemo(() => {
     return personalTxs.filter((t) => {
-      if (filters.accountId) {
-        const matchesAccount = t.accountId === filters.accountId || t.destinationAccountId === filters.accountId
-        if (!matchesAccount) return false
-      }
-
-      if (filters.hideCreditCards || filters.creditCardId === 'none') {
-        if (t.creditCardId) return false
-      } else if (filters.creditCardId) {
-        if (t.creditCardId !== filters.creditCardId) return false
-      }
-
-      if (filters.categoryId) {
-        if (filters.categoryId === 'none') {
-          if (t.categoryId) return false
-        } else if (t.categoryId !== filters.categoryId) {
-          return false
-        }
-      }
-
-      if (filters.status) {
-        if (t.status !== filters.status) return false
-      }
-
+      if (filters.hideCreditCards && t.creditCardId) return false
+      if (filters.creditCardId === 'none' && t.creditCardId) return false
+      if (filters.creditCardId && filters.creditCardId !== 'none' && t.creditCardId !== filters.creditCardId) return false
+      if (filters.accountId && t.accountId !== filters.accountId && t.destinationAccountId !== filters.accountId) return false
+      if (filters.categoryId === 'none' && t.categoryId) return false
+      if (filters.categoryId && filters.categoryId !== 'none' && t.categoryId !== filters.categoryId) return false
+      if (filters.status && t.status !== filters.status) return false
       return true
     })
   }, [personalTxs, filters])
 
-  // Helpers de períodos
-  const selMonth = filters.period.month
-  const selYear = filters.period.year
-  const prevMonth = selMonth === 1 ? 12 : selMonth - 1
-  const prevYear = selMonth === 1 ? selYear - 1 : selYear
+  const { month: selMonth, year: selYear } = filters.period
+  const prevDate = new Date(selYear, selMonth - 2, 1)
+  const prevMonth = prevDate.getMonth() + 1
+  const prevYear = prevDate.getFullYear()
 
-  const currentMonthTxs = useMemo(
-    () =>
-      filteredPersonalTxs.filter((t) => {
-        const p = parseDateParts(t.date)
-        return p.year === selYear && p.month === selMonth
-      }),
-    [filteredPersonalTxs, selMonth, selYear],
-  )
-
-  const prevMonthTxs = useMemo(
-    () =>
-      filteredPersonalTxs.filter((t) => {
-        const p = parseDateParts(t.date)
-        return p.year === prevYear && p.month === prevMonth
-      }),
-    [filteredPersonalTxs, prevMonth, prevYear],
-  )
-
-  // -------------------------------------------------------------
-  // PROJEÇÃO DO CALENDÁRIO (100% fiel ao Calendar.tsx original)
-  // -------------------------------------------------------------
-  const projection = useMemo(() => {
-    const accs = accountList.filter((a) => !filters.accountId || a.id === filters.accountId)
-    const accIds = new Set(accs.map((a) => a.id))
-
-    const effect = (t: Transaction) => {
-      if (t.creditCardId) return 0
-      let v = 0
-      if (t.type === 'INCOME' && accIds.has(t.accountId)) v += t.amount
-      if (t.type === 'EXPENSE' && accIds.has(t.accountId)) v -= t.amount
-      if (t.type === 'TRANSFER') {
-        if (accIds.has(t.accountId)) v -= t.amount
-        if (t.destinationAccountId && accIds.has(t.destinationAccountId)) v += t.amount
-      }
-      return v
-    }
-
-    const first = toISODate(new Date(selYear, selMonth - 1, 1))
-    const daysInMonth = new Date(selYear, selMonth, 0).getDate()
-    const relevant = filteredPersonalTxs.filter((t) => effect(t) !== 0)
-
-    let running =
-      accs.reduce((s, a) => s + a.startBalance, 0) +
-      relevant.filter((t) => t.date.slice(0, 10) < first).reduce((s, t) => s + effect(t), 0)
-    const opening = running
-
-    const byDay = new Map<string, Transaction[]>()
-    relevant.forEach((t) => {
-      const k = t.date.slice(0, 10)
-      if (k >= first) byDay.set(k, [...(byDay.get(k) ?? []), t])
+  const currentMonthTxs = useMemo(() => {
+    return filteredPersonalTxs.filter((t) => {
+      const p = parseDateParts(t.date)
+      return p.year === selYear && p.month === selMonth
     })
-
-    const invoicesByDay = new Map<string, { cardId: string; cardName: string; remainingAmount: number }[]>()
-    if (!filters.hideCreditCards && filters.creditCardId !== 'none') {
-      invoiceQueries.forEach((iq, idx) => {
-        const inv = iq.data
-        const card = cardList[idx]
-        if (!inv || !card) return
-        if (filters.creditCardId && card.id !== filters.creditCardId) return
-        if (!accIds.has(card.accountId)) return
-        if ((inv.remainingAmount ?? 0) <= 0 || !inv.dueDate) return
-        const dueIso = inv.dueDate.slice(0, 10)
-        invoicesByDay.set(dueIso, [
-          ...(invoicesByDay.get(dueIso) ?? []),
-          { cardId: card.id, cardName: card.name, remainingAmount: inv.remainingAmount },
-        ])
-      })
-    }
-
-    const days = Array.from({ length: daysInMonth }, (_, i) => {
-      const date = toISODate(new Date(selYear, selMonth - 1, i + 1))
-      const txs = byDay.get(date) ?? []
-      const invoices = invoicesByDay.get(date) ?? []
-      const invoiceDelta = invoices.reduce((s, inv) => s - inv.remainingAmount, 0)
-      const delta = txs.reduce((s, t) => s + effect(t), 0) + invoiceDelta
-      running += delta
-      return { day: i + 1, date, txs, invoices, delta, balance: running }
-    })
-
-    const min = days.reduce((m, d) => (d.balance < m.balance ? d : m), days[0] ?? { day: 1, balance: 0, delta: 0, date: first, txs: [], invoices: [] })
-    const firstNegative = days.find((d) => d.balance < 0)
-
-    return { days, opening, closing: running, min, firstNegative }
-  }, [accountList, cardList, filteredPersonalTxs, invoiceQueries, filters, selMonth, selYear])
-
-  // -------------------------------------------------------------
-  // BLOCO 1: KPIs
-  // -------------------------------------------------------------
-  const kpis: KpiData = useMemo(() => {
-    let income = 0
-    let expense = 0
-    let cardExpense = 0
-    let accountExpense = 0
-
-    currentMonthTxs.forEach((t) => {
-      if (t.type === 'INCOME') income += t.amount
-      else if (t.type === 'EXPENSE') {
-        expense += t.amount
-        if (t.creditCardId) cardExpense += t.amount
-        else accountExpense += t.amount
-      }
-    })
-
-    const net = income - expense
-    const savingsRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0
-
-    const now = new Date()
-    const isCurrentMonth = now.getFullYear() === selYear && now.getMonth() + 1 === selMonth
-    const daysInMonth = new Date(selYear, selMonth, 0).getDate()
-    const daysElapsed = isCurrentMonth ? Math.max(1, now.getDate()) : daysInMonth
-    const dailyAverage = Math.round(expense / daysElapsed)
-
-    const pendingExpenses = currentMonthTxs
-      .filter((t) => t.type === 'EXPENSE' && t.status === 'PENDING')
-      .reduce((s, t) => s + t.amount, 0)
-    const realizedExpenses = currentMonthTxs
-      .filter((t) => t.type === 'EXPENSE' && t.status === 'COMPLETED')
-      .reduce((s, t) => s + t.amount, 0)
-    const projectedMonthEnd = realizedExpenses + pendingExpenses
-
-    const cardSharePct = expense > 0 ? Math.round((cardExpense / expense) * 100) : 0
-
-    return {
-      income,
-      expense,
-      net,
-      savingsRate,
-      dailyAverage,
-      projectedMonthEnd,
-      cardExpense,
-      accountExpense,
-      cardSharePct,
-      minBalanceDay: projection.min.day,
-      minBalanceAmount: projection.min.balance,
-    }
-  }, [currentMonthTxs, selMonth, selYear, projection.min])
-
-  // -------------------------------------------------------------
-  // BLOCO 2: Fluxo de Caixa Histórico (Últimos 6 meses até o selecionado)
-  // -------------------------------------------------------------
-  const cashFlowHistory: MonthlyCashFlow[] = useMemo(() => {
-    const list: MonthlyCashFlow[] = []
-
-    for (let i = 5; i >= 0; i--) {
-      let m = selMonth - i
-      let y = selYear
-      while (m <= 0) {
-        m += 12
-        y -= 1
-      }
-
-      const txs = filteredPersonalTxs.filter((t) => {
-        const p = parseDateParts(t.date)
-        return p.year === y && p.month === m
-      })
-
-      const inc = txs.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
-      const exp = txs.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
-
-      list.push({
-        label: `${monthLabel(m, y).slice(0, 3)}/${String(y).slice(-2)}`,
-        month: m,
-        year: y,
-        income: inc,
-        expense: exp,
-        net: inc - exp,
-      })
-    }
-
-    return list
   }, [filteredPersonalTxs, selMonth, selYear])
 
-  // -------------------------------------------------------------
-  // BLOCO 3: Evolução por Categoria e MoM
-  // -------------------------------------------------------------
-  const categoryEvolution: CategoryComparison[] = useMemo(() => {
-    const currentCatMap = new Map<string, number>()
-    const prevCatMap = new Map<string, number>()
-
-    currentMonthTxs
-      .filter((t) => t.type === 'EXPENSE')
-      .forEach((t) => {
-        const key = t.categoryId || 'none'
-        currentCatMap.set(key, (currentCatMap.get(key) ?? 0) + t.amount)
-      })
-
-    prevMonthTxs
-      .filter((t) => t.type === 'EXPENSE')
-      .forEach((t) => {
-        const key = t.categoryId || 'none'
-        prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + t.amount)
-      })
-
-    const catInfoMap = new Map(categories.map((c) => [c.id, c]))
-    const totalCurrentExpense = [...currentCatMap.values()].reduce((s, v) => s + v, 0)
-
-    const allCatKeys = new Set([...currentCatMap.keys(), ...prevCatMap.keys()])
-    const comparisons: CategoryComparison[] = []
-
-    let colorIdx = 0
-    allCatKeys.forEach((key) => {
-      const currentAmt = currentCatMap.get(key) ?? 0
-      const prevAmt = prevCatMap.get(key) ?? 0
-
-      if (currentAmt === 0 && prevAmt === 0) return
-
-      let name = 'Sem categoria'
-      let color: string = PALETTE[colorIdx % PALETTE.length]
-
-      if (key !== 'none') {
-        const cat = catInfoMap.get(key)
-        if (cat) {
-          name = cat.name
-          color = normalizeCategoryColor(cat.color)
-        }
-      } else {
-        color = '#8E8EA0'
-      }
-
-      colorIdx++
-
-      const pctOfTotal = totalCurrentExpense > 0 ? Math.round((currentAmt / totalCurrentExpense) * 100) : 0
-      const isNew = prevAmt === 0 && currentAmt > 0
-      const momVariation = prevAmt > 0 ? Math.round(((currentAmt - prevAmt) / prevAmt) * 100) : null
-
-      comparisons.push({
-        id: key !== 'none' ? key : undefined,
-        name,
-        color,
-        currentAmount: currentAmt,
-        previousAmount: prevAmt,
-        percentageOfTotal: pctOfTotal,
-        momVariationPct: momVariation,
-        isNew,
-      })
+  const prevMonthTxs = useMemo(() => {
+    return filteredPersonalTxs.filter((t) => {
+      const p = parseDateParts(t.date)
+      return p.year === prevYear && p.month === prevMonth
     })
+  }, [filteredPersonalTxs, prevMonth, prevYear])
 
-    return comparisons.sort((a, b) => b.currentAmount - a.currentAmount)
-  }, [currentMonthTxs, prevMonthTxs, categories])
-
-  // -------------------------------------------------------------
-  // BLOCO 4: Projeção de Compromissos Futuros (M+1 a M+6)
-  // -------------------------------------------------------------
-  const futureCommitments: FutureMonthCommitment[] = useMemo(() => {
-    const list: FutureMonthCommitment[] = []
-
-    for (let i = 1; i <= 6; i++) {
-      let m = selMonth + i
-      let y = selYear
-      while (m > 12) {
-        m -= 12
-        y += 1
-      }
-
-      // 1. Parcelas de cartão previstas para o mês futuro
-      const cardCommitted = personalTxs
-        .filter((t) => {
-          if (!t.creditCardId) return false
-          if (filters.creditCardId && t.creditCardId !== filters.creditCardId) return false
-          if (filters.hideCreditCards || filters.creditCardId === 'none') return false
-
-          if (t.invoiceMonth && t.invoiceYear) {
-            return t.invoiceMonth === m && t.invoiceYear === y
-          }
-          const p = parseDateParts(t.date)
-          return p.month === m && p.year === y
-        })
-        .reduce((s, t) => s + (t.type === 'INCOME' ? -t.amount : t.amount), 0)
-
-      // 2. Despesas agendadas em conta para o mês futuro
-      const accountPending = personalTxs
-        .filter((t) => {
-          if (t.creditCardId) return false
-          if (t.type !== 'EXPENSE') return false
-          if (filters.accountId && t.accountId !== filters.accountId) return false
-          const p = parseDateParts(t.date)
-          return p.month === m && p.year === y
-        })
-        .reduce((s, t) => s + t.amount, 0)
-
-      const total = Math.max(0, cardCommitted) + accountPending
-
-      list.push({
-        label: `${monthLabel(m, y).slice(0, 3)}/${String(y).slice(-2)}`,
-        month: m,
-        year: y,
-        cardCommitted: Math.max(0, cardCommitted),
-        accountPending,
-        totalCommitted: total,
-      })
-    }
-
-    return list
-  }, [personalTxs, selMonth, selYear, filters])
-
-  // -------------------------------------------------------------
-  // BLOCO 5: Hábitos de Consumo (Curva de Ritmo e Dias da Semana)
-  // -------------------------------------------------------------
-  const spendingHabits = useMemo(() => {
-    // A) Curva de Ritmo Acumulado (dia 1 ao último dia)
-    const daysInCurrentMonth = new Date(selYear, selMonth, 0).getDate()
-    const daysInPrevMonth = new Date(prevYear, prevMonth, 0).getDate()
-    const maxDays = Math.max(daysInCurrentMonth, daysInPrevMonth)
-
-    const currentDailyMap = new Map<number, number>()
-    const prevDailyMap = new Map<number, number>()
-
-    currentMonthTxs
-      .filter((t) => t.type === 'EXPENSE')
-      .forEach((t) => {
-        const d = parseDateParts(t.date).day
-        currentDailyMap.set(d, (currentDailyMap.get(d) ?? 0) + t.amount)
-      })
-
-    prevMonthTxs
-      .filter((t) => t.type === 'EXPENSE')
-      .forEach((t) => {
-        const d = parseDateParts(t.date).day
-        prevDailyMap.set(d, (prevDailyMap.get(d) ?? 0) + t.amount)
-      })
-
-    const cumulativePoints: CumulativeSpendingPoint[] = []
-    let currentAcc = 0
-    let prevAcc = 0
-
-    const now = new Date()
-    const isCurrentMonth = now.getFullYear() === selYear && now.getMonth() + 1 === selMonth
-    const todayDay = isCurrentMonth ? now.getDate() : 31
-
-    for (let day = 1; day <= maxDays; day++) {
-      if (day <= daysInCurrentMonth && day <= todayDay) {
-        currentAcc += currentDailyMap.get(day) ?? 0
-      }
-      if (day <= daysInPrevMonth) {
-        prevAcc += prevDailyMap.get(day) ?? 0
-      }
-
-      cumulativePoints.push({
-        day,
-        currentMonthAmount: day <= todayDay ? currentAcc : currentAcc,
-        previousMonthAmount: prevAcc,
-      })
-    }
-
-    // B) Gastos por Dia da Semana (Dom a Sáb)
-    const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-    const weekdayTotals = [0, 0, 0, 0, 0, 0, 0]
-
-    currentMonthTxs
-      .filter((t) => t.type === 'EXPENSE')
-      .forEach((t) => {
-        const p = parseDateParts(t.date)
-        const d = new Date(p.year, p.month - 1, p.day)
-        const dayIdx = d.getDay()
-        weekdayTotals[dayIdx] += t.amount
-      })
-
-    const byDayOfWeek: SpendingByDayOfWeek[] = weekDays.map((name, idx) => ({
-      dayName: name,
-      dayIndex: idx,
-      amount: weekdayTotals[idx],
+  // Projeção do Calendário Financeiro Individual
+  const projection = useMemo(() => {
+    const invoiceList = cardList.map((c, idx) => ({
+      card: c,
+      invoice: invoiceQueries[idx]?.data || ({} as CreditCardInvoice),
     }))
+    return buildCalendarProjection(accountList, filteredPersonalTxs, invoiceList, filters.period, filters.accountId)
+  }, [accountList, cardList, invoiceQueries, filteredPersonalTxs, filters.period, filters.accountId])
 
-    return {
-      cumulativePoints,
-      byDayOfWeek,
-    }
-  }, [currentMonthTxs, prevMonthTxs, selMonth, selYear, prevMonth, prevYear])
+  const kpis = useMemo(() => buildKpis(currentMonthTxs, projection, filters.period), [currentMonthTxs, projection, filters.period])
+  const cashFlowHistory = useMemo(() => buildCashFlowHistory(filteredPersonalTxs, filters.period), [filteredPersonalTxs, filters.period])
+  const categoryEvolution = useMemo(() => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, categories), [currentMonthTxs, prevMonthTxs, categories])
+  const futureCommitments = useMemo(() => buildFutureCommitments(personalTxs, cardList, filters.period, filters.hideCreditCards), [personalTxs, cardList, filters.period, filters.hideCreditCards])
+  const spendingHabits = useMemo(() => buildSpendingHabits(currentMonthTxs, prevMonthTxs, filters.period), [currentMonthTxs, prevMonthTxs, filters.period])
 
-  // -------------------------------------------------------------
-  // BLOCO 6: Balanço de Grupos e Cartões Compartilhados
-  // -------------------------------------------------------------
+  // Balanço Compartilhado (Bloco 6)
   const sharedGroupBalance: SharedGroupBalance = useMemo(() => {
-    // Gastos que fiz em cartões de terceiros no período atual
     const myOnOthers = myPurchasesOnOthersCards
       .filter((t) => {
         const p = parseDateParts(t.date)
@@ -560,7 +632,6 @@ export function useReportsData(filters: ReportFiltersState, _threshold?: number)
       })
       .reduce((s, t) => s + t.amount, 0)
 
-    // Gastos que outros fizeram no meu cartão no período atual
     const othersOnMine = thirdPartyOnMyCardTxs
       .filter((t) => {
         const p = parseDateParts(t.date)
@@ -568,14 +639,12 @@ export function useReportsData(filters: ReportFiltersState, _threshold?: number)
       })
       .reduce((s, t) => s + t.amount, 0)
 
-    const groups = debtsSummary.data?.groups ?? []
-
     return {
       spentByMeOnSharedCards: myOnOthers,
       spentByOthersOnMyCards: othersOnMine,
       totalOwedByMe: debtsSummary.data?.totalOwedCurrentMonth ?? 0,
       totalReceivableByMe: debtsSummary.data?.totalReceivableCurrentMonth ?? 0,
-      groups,
+      groups: debtsSummary.data?.groups ?? [],
     }
   }, [myPurchasesOnOthersCards, thirdPartyOnMyCardTxs, debtsSummary.data, selMonth, selYear])
 
@@ -593,3 +662,150 @@ export function useReportsData(filters: ReportFiltersState, _threshold?: number)
     sharedGroupBalance,
   }
 }
+
+// ----------------------------------------------------------------------
+// HOOK 2: RELATÓRIO COMPLETO DE UM GRUPO ESPECÍFICO
+// ----------------------------------------------------------------------
+
+export function useGroupReportsData(groupId: string, filters: ReportFiltersState, _threshold?: number) {
+  const groupQuery = useGroup(groupId)
+  const groupAccountsQuery = useGroupAccounts(groupId)
+  const groupCardsQuery = useGroupCreditCards(groupId)
+  const groupCategoriesQuery = useGroupCategories(groupId)
+  const groupDebtsQuery = useGroupDebts(groupId)
+
+  const group = groupQuery.data
+  const members = useMemo(() => group?.members ?? [], [group?.members])
+
+  // Normaliza GroupAccount para Account
+  const accountList: Account[] = useMemo(
+    () =>
+      (groupAccountsQuery.data ?? []).map((ga) => ({
+        ...ga,
+        ownerId: ga.owner.id,
+        owner: ga.owner,
+      })),
+    [groupAccountsQuery.data],
+  )
+
+  const cardList: CreditCard[] = useMemo(() => groupCardsQuery.data ?? [], [groupCardsQuery.data])
+  const categories: Category[] = useMemo(() => groupCategoriesQuery.data ?? [], [groupCategoriesQuery.data])
+
+  // 1. Transações de todas as contas do grupo
+  const accountQueries = useQueries({
+    queries: accountList.map((a) => ({
+      queryKey: ['transactions', 'account', a.id, 'all'],
+      queryFn: () => api.get<Transaction[]>(`/transactions/account/${a.id}`).then((r) => r.data),
+    })),
+  })
+
+  // 2. Transações de todos os cartões do grupo
+  const cardTxQueries = useQueries({
+    queries: cardList.map((c) => ({
+      queryKey: ['transactions', 'card', c.id, 'all'],
+      queryFn: () => api.get<Transaction[]>(`/transactions/card/${c.id}`).then((r) => r.data),
+    })),
+  })
+
+  // 3. Faturas dos cartões do grupo para o mês selecionado
+  const invoiceQueries = useQueries({
+    queries: cardList.map((c) => ({
+      queryKey: ['credit-cards', c.id, 'invoice', filters.period.month, filters.period.year],
+      queryFn: () =>
+        api
+          .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, { params: filters.period })
+          .then((r) => r.data),
+    })),
+  })
+
+  const loading =
+    groupQuery.isLoading ||
+    groupAccountsQuery.isLoading ||
+    groupCardsQuery.isLoading ||
+    groupCategoriesQuery.isLoading ||
+    accountQueries.some((q) => q.isLoading) ||
+    cardTxQueries.some((q) => q.isLoading) ||
+    invoiceQueries.some((q) => q.isLoading)
+
+  // Unifica e deduplica todas as transações do grupo
+  const allGroupTransactions = useMemo(() => {
+    const map = new Map<string, Transaction>()
+    accountQueries.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
+    cardTxQueries.forEach((q) => q.data?.forEach((t) => map.set(t.id, t)))
+    return [...map.values()]
+  }, [accountQueries, cardTxQueries])
+
+  // Aplica filtros no contexto do grupo (inclusive filtro por membro responsável)
+  const filteredGroupTxs = useMemo(() => {
+    return allGroupTransactions.filter((t) => {
+      if (filters.hideCreditCards && t.creditCardId) return false
+      if (filters.creditCardId === 'none' && t.creditCardId) return false
+      if (filters.creditCardId && filters.creditCardId !== 'none' && t.creditCardId !== filters.creditCardId) return false
+      if (filters.accountId && t.accountId !== filters.accountId && t.destinationAccountId !== filters.accountId) return false
+      if (filters.categoryId === 'none' && t.categoryId) return false
+      if (filters.categoryId && filters.categoryId !== 'none' && t.categoryId !== filters.categoryId) return false
+      if (filters.status && t.status !== filters.status) return false
+      if (filters.responsibleId && t.responsibleId !== filters.responsibleId) return false
+      return true
+    })
+  }, [allGroupTransactions, filters])
+
+  const { month: selMonth, year: selYear } = filters.period
+  const prevDate = new Date(selYear, selMonth - 2, 1)
+  const prevMonth = prevDate.getMonth() + 1
+  const prevYear = prevDate.getFullYear()
+
+  const currentMonthTxs = useMemo(() => {
+    return filteredGroupTxs.filter((t) => {
+      const p = parseDateParts(t.date)
+      return p.year === selYear && p.month === selMonth
+    })
+  }, [filteredGroupTxs, selMonth, selYear])
+
+  const prevMonthTxs = useMemo(() => {
+    return filteredGroupTxs.filter((t) => {
+      const p = parseDateParts(t.date)
+      return p.year === prevYear && p.month === prevMonth
+    })
+  }, [filteredGroupTxs, prevMonth, prevYear])
+
+  // Projeção do Calendário Financeiro do Grupo
+  const projection = useMemo(() => {
+    const invoiceList = cardList.map((c, idx) => ({
+      card: c,
+      invoice: invoiceQueries[idx]?.data || ({} as CreditCardInvoice),
+    }))
+    return buildCalendarProjection(accountList, filteredGroupTxs, invoiceList, filters.period, filters.accountId)
+  }, [accountList, cardList, invoiceQueries, filteredGroupTxs, filters.period, filters.accountId])
+
+  const kpis = useMemo(() => buildKpis(currentMonthTxs, projection, filters.period), [currentMonthTxs, projection, filters.period])
+  const cashFlowHistory = useMemo(() => buildCashFlowHistory(filteredGroupTxs, filters.period), [filteredGroupTxs, filters.period])
+  const categoryEvolution = useMemo(() => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, categories), [currentMonthTxs, prevMonthTxs, categories])
+  const futureCommitments = useMemo(() => buildFutureCommitments(allGroupTransactions, cardList, filters.period, filters.hideCreditCards), [allGroupTransactions, cardList, filters.period, filters.hideCreditCards])
+  const spendingHabits = useMemo(() => buildSpendingHabits(currentMonthTxs, prevMonthTxs, filters.period), [currentMonthTxs, prevMonthTxs, filters.period])
+
+  // Distribuição de Despesas por Membro do Grupo
+  const memberExpenses = useMemo(() => {
+    return buildGroupMemberExpenses(allGroupTransactions, members, filters.period)
+  }, [allGroupTransactions, members, filters.period])
+
+  return {
+    loading,
+    group,
+    members,
+    accounts: accountList,
+    creditCards: cardList,
+    categories,
+    projection,
+    kpis,
+    cashFlowHistory,
+    categoryEvolution,
+    futureCommitments,
+    spendingHabits,
+    memberExpenses,
+    groupDebts: groupDebtsQuery.data as GroupDebtsResponse | undefined,
+  }
+}
+
+// Alias para manter compatibilidade com chamadas existentes
+export const useReportsData = useIndividualReportsData

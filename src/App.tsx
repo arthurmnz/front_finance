@@ -54,6 +54,7 @@ export default function App() {
         <Route path="amigos" element={<Friends />} />
         <Route path="grupos" element={<Groups />} />
         <Route path="grupos/:id" element={<GroupDetail />} />
+        <Route path="grupos/:id/relatorios" element={<GroupDetail />} />
         <Route path="perfil" element={<Profile />} />
         <Route path="*" element={<NotFound />} />
       </Route>

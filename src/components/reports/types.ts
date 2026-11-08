@@ -9,6 +9,7 @@ export interface ReportFiltersState {
   creditCardId: string
   hideCreditCards: boolean
   categoryId: string
+  responsibleId?: string
   status: '' | 'COMPLETED' | 'PENDING'
 }
 
@@ -81,3 +82,15 @@ export interface SharedGroupBalance {
     receivableTotal: number
   }[]
 }
+
+export interface GroupMemberExpense {
+  memberId: string
+  name: string
+  email: string
+  avatarUrl?: string
+  role: string
+  totalExpense: number
+  percentage: number
+  txCount: number
+}
+
