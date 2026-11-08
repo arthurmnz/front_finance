@@ -845,26 +845,39 @@ export function useIndividualReportsData(
         return
       }
 
-      // Caso 2: Transação em conta própria do usuário
-      if (allOwnAccountIds.has(t.accountId) && !t.creditCardId) {
-        if (!t.responsibleId || (user?.id && t.responsibleId === user.id)) {
-          // Despesas ou receitas só entram nos relatórios se pertencerem a contas operacionais
-          if (t.type === 'EXPENSE' || t.type === 'INCOME') {
-            if (operationalAccountIds.has(t.accountId)) {
-              personal.push(t)
-            }
-          } else if (t.type === 'TRANSFER') {
-            // Transferências entram se envolverem conta operacional (origem ou destino),
-            // permitindo que o calendário desconte da conta de origem no dia agendado
-            if (
-              operationalAccountIds.has(t.accountId) ||
-              (t.destinationAccountId && operationalAccountIds.has(t.destinationAccountId))
-            ) {
-              personal.push(t)
+      // Caso 2: Transação em conta bancária (não cartão)
+      if (!t.creditCardId) {
+        // 2a. Transferência recebida em conta operacional própria (ex: acerto de dívida ou transferência de terceiros)
+        if (
+          t.type === 'TRANSFER' &&
+          t.destinationAccountId &&
+          operationalAccountIds.has(t.destinationAccountId)
+        ) {
+          personal.push(t)
+          return
+        }
+
+        // 2b. Transação originada em conta própria do usuário
+        if (allOwnAccountIds.has(t.accountId)) {
+          if (!t.responsibleId || (user?.id && t.responsibleId === user.id)) {
+            // Despesas ou receitas só entram nos relatórios se pertencerem a contas operacionais
+            if (t.type === 'EXPENSE' || t.type === 'INCOME') {
+              if (operationalAccountIds.has(t.accountId)) {
+                personal.push(t)
+              }
+            } else if (t.type === 'TRANSFER') {
+              // Transferências enviadas entram se envolverem conta operacional (origem ou destino),
+              // permitindo que o calendário desconte da conta de origem no dia agendado
+              if (
+                operationalAccountIds.has(t.accountId) ||
+                (t.destinationAccountId && operationalAccountIds.has(t.destinationAccountId))
+              ) {
+                personal.push(t)
+              }
             }
           }
+          return
         }
-        return
       }
 
       // Caso 3: Compras feitas pelo usuário em cartões de terceiros (via responsible/me)

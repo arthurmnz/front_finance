@@ -54,7 +54,17 @@ export default function TransactionList({
 
   const renderRow = (t: Transaction) => {
     const cat = t.categoryId ? catMap.get(t.categoryId) : undefined
-    const incoming = t.type === 'INCOME' || (t.type === 'TRANSFER' && !!accountId && t.destinationAccountId === accountId)
+    const isIncomingTransfer =
+      t.type === 'TRANSFER' &&
+      (Boolean(accountId && t.destinationAccountId === accountId) ||
+        Boolean(
+          !accountId &&
+            accountNames &&
+            t.destinationAccountId &&
+            accountNames.has(t.destinationAccountId) &&
+            !accountNames.has(t.accountId),
+        ))
+    const incoming = t.type === 'INCOME' || isIncomingTransfer
     const done = t.status === 'COMPLETED'
     const isCard = !!t.creditCardId
     const catColor = cat ? normalizeCategoryColor(cat.color) : undefined
