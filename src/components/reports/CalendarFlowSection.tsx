@@ -4,7 +4,7 @@ import { AlertCircle, CreditCard as CardIcon, TrendingDown, TrendingUp, Calendar
 import clsx from 'clsx'
 import type { Account, Category, Transaction } from '@/lib/types'
 import { formatCompact, formatMoney, toISODate } from '@/lib/format'
-import { Badge, Card, Empty } from '@/components/ui'
+import { Badge, Card, Empty, InfoTooltip } from '@/components/ui'
 import TransactionList from '@/components/TransactionList'
 
 interface DayProjection {
@@ -64,7 +64,12 @@ export default function CalendarFlowSection({
         <div>
           <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
             <CalendarIcon className="size-4 text-violet" />
-            Previsibilidade Diária — Calendário Financeiro
+            <span>Previsibilidade Diária — Calendário Financeiro</span>
+            <InfoTooltip
+              title="Calendário Financeiro"
+              content="Projeção diária do saldo bancário considerando receitas, despesas agendadas e faturas de cartão ao longo do mês. Dias destacados em amarelo estão abaixo do limite configurado e em vermelho indicam saldo negativo."
+              align="start"
+            />
           </h2>
           <p className="text-xs text-text-dim">
             Saldo projetado dia a dia na sua conta, integrando transações agendadas e vencimentos de fatura
@@ -75,13 +80,25 @@ export default function CalendarFlowSection({
       {/* Cards de Resumo da Previsão */}
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-3.5 bg-surface-1 border-border">
-          <p className="text-xs text-text-dim">Início do mês</p>
+          <p className="text-xs text-text-dim flex items-center gap-1">
+            Início do mês
+            <InfoTooltip
+              content="Saldo consolidado em contas no primeiro dia do mês antes das movimentações."
+              align="start"
+            />
+          </p>
           <p className="text-sm font-semibold sm:text-base text-white tabular-nums">
             {formatMoney(projection.opening)}
           </p>
         </Card>
         <Card className="p-3.5 bg-surface-1 border-border">
-          <p className="text-xs text-text-dim">Fim do mês</p>
+          <p className="text-xs text-text-dim flex items-center gap-1">
+            Fim do mês
+            <InfoTooltip
+              content="Saldo projetado em conta bancária para o último dia do mês, após todas as entradas e saídas previstas."
+              align="center"
+            />
+          </p>
           <p
             className={clsx(
               'flex items-center gap-1 text-sm font-semibold sm:text-base tabular-nums',
@@ -97,7 +114,13 @@ export default function CalendarFlowSection({
           </p>
         </Card>
         <Card className="p-3.5 bg-surface-1 border-border">
-          <p className="text-xs text-text-dim">Menor saldo previsto</p>
+          <p className="text-xs text-text-dim flex items-center gap-1">
+            Menor saldo previsto
+            <InfoTooltip
+              content="O dia de menor liquidez bancária ao longo do mês, permitindo antecipar necessidades de cobertura de caixa."
+              align="end"
+            />
+          </p>
           <p
             className={clsx(
               'text-sm font-semibold sm:text-base tabular-nums',

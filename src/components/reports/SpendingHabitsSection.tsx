@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import { Activity, CalendarDays } from 'lucide-react'
 import { formatMoney } from '@/lib/format'
-import { Card } from '@/components/ui'
+import { Card, InfoTooltip } from '@/components/ui'
 import type { CumulativeSpendingPoint, SpendingByDayOfWeek } from './types'
 
 interface SpendingHabitsSectionProps {
@@ -46,7 +46,12 @@ export default function SpendingHabitsSection({
       <div>
         <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
           <Activity className="size-4 text-lime" />
-          Hábitos e Padrões de Consumo
+          <span>Hábitos e Padrões de Consumo</span>
+          <InfoTooltip
+            title="Padrões de Consumo"
+            content="Análise comparativa do ritmo de gastos diários acumulados versus o mês anterior e dias da semana com maior intensidade de saídas."
+            align="start"
+          />
         </h2>
         <p className="text-xs text-text-dim">
           Ritmo acumulado de gastos em relação ao mês anterior e distribuição de despesas por dia da semana
@@ -58,7 +63,14 @@ export default function SpendingHabitsSection({
         <Card className="p-4 bg-surface-1 border-border">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-semibold text-white">Ritmo Acumulado de Despesas</h3>
+              <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                <span>Ritmo Acumulado de Despesas</span>
+                <InfoTooltip
+                  title="Ritmo Acumulado"
+                  content="Curva dia a dia das despesas acumuladas no mês comparada com a trajetória do mês anterior no mesmo dia."
+                  align="start"
+                />
+              </h3>
               <p className="text-xs text-text-dim">Evolução dia a dia vs. mês anterior</p>
             </div>
           </div>
@@ -124,7 +136,12 @@ export default function SpendingHabitsSection({
             <div>
               <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
                 <CalendarDays className="size-3.5 text-text-muted" />
-                Gastos por Dia da Semana
+                <span>Gastos por Dia da Semana</span>
+                <InfoTooltip
+                  title="Gastos por Dia da Semana"
+                  content="Soma de todos os gastos agrupados por dia da semana no período, identificando picos e sazonalidades de consumo."
+                  align="end"
+                />
               </h3>
               <p className="text-xs text-text-dim">
                 {peakDay && peakDay.amount > 0 ? (

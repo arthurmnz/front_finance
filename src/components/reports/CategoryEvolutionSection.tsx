@@ -1,7 +1,7 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { PieChart as PieIcon, ArrowDown, ArrowUp, Sparkles } from 'lucide-react'
 import { formatMoney } from '@/lib/format'
-import { Badge, Card, Empty } from '@/components/ui'
+import { Badge, Card, Empty, InfoTooltip } from '@/components/ui'
 import type { CategoryComparison } from './types'
 
 interface CategoryEvolutionSectionProps {
@@ -24,7 +24,12 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
       <div>
         <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
           <PieIcon className="size-4 text-violet" />
-          Evolução por Categoria & Comparativo Mensal (MoM)
+          <span>Evolução por Categoria & Comparativo Mensal (MoM)</span>
+          <InfoTooltip
+            title="Evolução por Categoria"
+            content="Distribuição proporcional dos gastos do mês por categoria e taxa de variação percentual (MoM) comparada às despesas do mês anterior."
+            align="start"
+          />
         </h2>
         <p className="text-xs text-text-dim">
           Distribuição dos gastos no mês e variação percentual em relação ao mês anterior
@@ -74,7 +79,13 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
             <span>Categoria</span>
             <div className="flex items-center gap-6">
               <span>Atual (% Total)</span>
-              <span>Variação MoM</span>
+              <span className="flex items-center gap-1">
+                Variação MoM
+                <InfoTooltip
+                  content="Month-over-Month: variação percentual de gastos nesta categoria em relação ao mês anterior."
+                  align="end"
+                />
+              </span>
             </div>
           </div>
 

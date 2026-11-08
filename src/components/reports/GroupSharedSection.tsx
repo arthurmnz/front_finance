@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { CheckCircle2, ChevronRight, CreditCard, HandCoins, Users } from 'lucide-react'
 import { formatMoney } from '@/lib/format'
-import { Card } from '@/components/ui'
+import { Card, InfoTooltip } from '@/components/ui'
 import type { SharedGroupBalance } from './types'
 
 interface GroupSharedSectionProps {
@@ -27,7 +27,12 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
       <div>
         <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
           <Users className="size-4 text-lime" />
-          Balanço Compartilhado & Acertos de Grupos
+          <span>Balanço Compartilhado & Acertos de Grupos</span>
+          <InfoTooltip
+            title="Balanço Compartilhado"
+            content="Consolidação de transações cruzadas em cartões de terceiros e saldos pendentes a pagar ou a receber em todos os seus grupos."
+            align="start"
+          />
         </h2>
         <p className="text-xs text-text-dim">
           Gastos cruzados em cartões compartilhados e acertos pendentes entre membros nos grupos
@@ -50,7 +55,13 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="p-4 bg-surface-1 border-border">
               <div className="flex items-center justify-between text-text-dim mb-1">
-                <span className="text-xs font-medium">Gastei em Cartões de Outros</span>
+                <span className="text-xs font-medium flex items-center gap-1.5">
+                  Gastei em Cartões de Outros
+                  <InfoTooltip
+                    content="Valor total de compras feitas por você utilizando cartões pertencentes a outros membros nos grupos."
+                    align="start"
+                  />
+                </span>
                 <CreditCard className="size-3.5 text-lime" />
               </div>
               <p className="text-lg font-bold text-white tracking-tight">
@@ -63,7 +74,13 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
 
             <Card className="p-4 bg-surface-1 border-border">
               <div className="flex items-center justify-between text-text-dim mb-1">
-                <span className="text-xs font-medium">Outros Gastaram no Meu Cartão</span>
+                <span className="text-xs font-medium flex items-center gap-1.5">
+                  Outros Gastaram no Meu Cartão
+                  <InfoTooltip
+                    content="Valor total de compras feitas por outros membros utilizando os seus cartões de crédito vinculados aos grupos."
+                    align="center"
+                  />
+                </span>
                 <CreditCard className="size-3.5 text-purple-400" />
               </div>
               <p className="text-lg font-bold text-white tracking-tight">
@@ -76,7 +93,13 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
 
             <Card className="p-4 bg-surface-1 border-border">
               <div className="flex items-center justify-between text-text-dim mb-1">
-                <span className="text-xs font-medium">Devo no Mês (Grupos)</span>
+                <span className="text-xs font-medium flex items-center gap-1.5">
+                  Devo no Mês (Grupos)
+                  <InfoTooltip
+                    content="Total que você precisa reembolsar a outros membros em todos os seus grupos para este mês."
+                    align="center"
+                  />
+                </span>
                 <HandCoins className="size-3.5 text-rose-400" />
               </div>
               <p className="text-lg font-bold text-rose-400 tracking-tight">
@@ -89,7 +112,13 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
 
             <Card className="p-4 bg-surface-1 border-border">
               <div className="flex items-center justify-between text-text-dim mb-1">
-                <span className="text-xs font-medium">Tenho a Receber (Grupos)</span>
+                <span className="text-xs font-medium flex items-center gap-1.5">
+                  Tenho a Receber (Grupos)
+                  <InfoTooltip
+                    content="Total que outros membros têm pendente para reembolsar a você em todos os seus grupos para este mês."
+                    align="end"
+                  />
+                </span>
                 <HandCoins className="size-3.5 text-lime" />
               </div>
               <p className="text-lg font-bold text-lime tracking-tight">

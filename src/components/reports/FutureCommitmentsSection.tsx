@@ -1,7 +1,7 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CalendarClock, CreditCard, Wallet } from 'lucide-react'
 import { formatMoney } from '@/lib/format'
-import { Card } from '@/components/ui'
+import { Card, InfoTooltip } from '@/components/ui'
 import type { FutureMonthCommitment } from './types'
 
 interface FutureCommitmentsSectionProps {
@@ -23,7 +23,12 @@ export default function FutureCommitmentsSection({ commitments }: FutureCommitme
         <div>
           <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
             <CalendarClock className="size-4 text-lime" />
-            Projeção de Compromissos Futuros (Próximos 6 Meses)
+            <span>Projeção de Compromissos Futuros (Próximos 6 Meses)</span>
+            <InfoTooltip
+              title="Compromissos Futuros (6 Meses)"
+              content="Previsão de saídas futuras já contratadas, somando parcelas vincendas de cartões de crédito e despesas recorrentes programadas em conta para os próximos 6 meses."
+              align="start"
+            />
           </h2>
           <p className="text-xs text-text-dim">
             Parcelas de cartão já contratadas e despesas fixas agendadas em conta

@@ -63,9 +63,17 @@ export function useAllCategories() {
     return [...map.values()]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine.data, groupStamp])
+  const groupsCategories = useMemo(() => {
+    return (groups.data ?? []).map((group, idx) => ({
+      group,
+      categories: groupQueries[idx]?.data ?? [],
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups.data, groupStamp])
   return {
     data,
     myCategories: mine.data ?? [],
+    groupsCategories,
     isLoading: mine.isLoading || groups.isLoading || groupQueries.some((q) => q.isLoading),
   }
 }

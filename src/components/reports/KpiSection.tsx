@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, Calendar, CreditCard, PiggyBank, TrendingDown } from 'lucide-react'
 import clsx from 'clsx'
 import { formatMoney } from '@/lib/format'
-import { Badge, Card } from '@/components/ui'
+import { Badge, Card, InfoTooltip } from '@/components/ui'
 import type { KpiData } from './types'
 
 interface KpiSectionProps {
@@ -16,7 +16,14 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
     <div className="space-y-4 mb-8">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-white tracking-tight">Saúde Financeira do Mês</h2>
+          <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-1.5">
+            Saúde Financeira do Mês
+            <InfoTooltip
+              title="Saúde Financeira"
+              content="Visão consolidada dos principais indicadores do período selecionado, medindo capacidade de economia, liquidez diária e projeções."
+              align="start"
+            />
+          </h2>
           <p className="text-xs text-text-dim">Indicadores essenciais de desempenho e previsibilidade</p>
         </div>
       </div>
@@ -27,7 +34,14 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
         <Card className="p-4 bg-surface-1 border-border flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-xs text-text-dim mb-1">
-              <span>Resultado do Mês</span>
+              <span className="flex items-center gap-1.5">
+                Resultado do Mês
+                <InfoTooltip
+                  title="Resultado do Mês"
+                  content="Diferença entre todas as receitas e despesas registradas no período (Receitas − Despesas). Valores positivos indicam superávit mensal."
+                  align="start"
+                />
+              </span>
               {isNetPositive ? (
                 <ArrowUpRight className="size-4 text-lime" />
               ) : (
@@ -54,7 +68,14 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
         <Card className="p-4 bg-surface-1 border-border flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-xs text-text-dim mb-1">
-              <span>Taxa de Poupança</span>
+              <span className="flex items-center gap-1.5">
+                Taxa de Poupança
+                <InfoTooltip
+                  title="Taxa de Poupança"
+                  content="Percentual das receitas líquidas que foram preservadas como sobra após todas as despesas: ((Receitas − Despesas) ÷ Receitas) × 100."
+                  align="start"
+                />
+              </span>
               <PiggyBank className="size-4 text-violet" />
             </div>
             <div className="flex items-baseline gap-2">
@@ -82,7 +103,14 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
         <Card className="p-4 bg-surface-1 border-border flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-xs text-text-dim mb-1">
-              <span>Média de Gasto Diário</span>
+              <span className="flex items-center gap-1.5">
+                Média de Gasto Diário
+                <InfoTooltip
+                  title="Média de Gasto Diário"
+                  content="Valor médio gasto por dia até a presente data, junto com a projeção estimada de gasto até o último dia do mês baseada nesse ritmo."
+                  align="start"
+                />
+              </span>
               <TrendingDown className="size-4 text-white" />
             </div>
             <p className="text-2xl font-bold text-white tabular-nums tracking-tight">
@@ -100,7 +128,14 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
         <Card className="p-4 bg-surface-1 border-border flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-xs text-text-dim mb-1">
-              <span>Menor Caixa no Mês</span>
+              <span className="flex items-center gap-1.5">
+                Menor Caixa no Mês
+                <InfoTooltip
+                  title="Menor Caixa no Mês"
+                  content="Menor saldo acumulado projetado em conta bancária durante o mês no fluxo diário, indicando o ponto de maior pressão de liquidez."
+                  align="end"
+                />
+              </span>
               <Calendar className="size-4 text-lime" />
             </div>
             <p
@@ -124,7 +159,14 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-2">
             <CreditCard className="size-4 text-violet" />
-            <span className="text-xs font-medium text-white">Composição das Despesas: Cartão vs. Contas</span>
+            <span className="text-xs font-medium text-white flex items-center gap-1.5">
+              Composição das Despesas: Cartão vs. Contas
+              <InfoTooltip
+                title="Composição das Despesas"
+                content="Proporção entre os gastos realizados via cartões de crédito (faturas futuras) e os pagamentos imediatos debitados de contas bancárias/à vista."
+                align="start"
+              />
+            </span>
           </div>
           <div className="flex items-center gap-4 text-xs tabular-nums">
             <span className="flex items-center gap-1.5 text-violet">

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Plus, Split, Trash2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
-import { ALL_MONEY, useAccessibleAccounts, useAction, useCreditCards, useGroupCategories, useMyCategories } from '@/lib/hooks'
+import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCards } from '@/lib/hooks'
 import type {
   CreateTransactionInput,
   RecurrenceFrequency,
@@ -35,7 +35,7 @@ export default function TransactionFormModal({
   const editing = !!transaction
   const accounts = useAccessibleAccounts().data ?? []
   const creditCards = useCreditCards().data ?? []
-  const myCategories = useMyCategories().data ?? []
+  const { data: allCategories = [], myCategories = [], groupsCategories = [] } = useAllCategories()
 
   const [sourceMode, setSourceMode] = useState<'ACCOUNT' | 'CARD'>('ACCOUNT')
   const [type, setType] = useState<TransactionType>('EXPENSE')
@@ -90,7 +90,6 @@ export default function TransactionFormModal({
     }
     return selectedAccount?.groupId ?? undefined
   }, [sourceMode, transaction, selectedCard, selectedAccount, activeSplit, splits, accounts])
-  const groupCategories = useGroupCategories(effectiveGroupId).data ?? []
 
   useEffect(() => {
     if (!open) return
@@ -154,14 +153,53 @@ export default function TransactionFormModal({
     setInvoiceYear(def.year)
   }, [open, editing, sourceMode, selectedCard, date, invoiceManual])
 
-  const filteredGroupCategories = useMemo(
-    () => groupCategories.filter((c) => type === 'TRANSFER' || c.type === 'BOTH' || c.type === type),
-    [groupCategories, type],
-  )
+  const filterCat = (c: { type: string }) => type === 'TRANSFER' || c.type === 'BOTH' || c.type === type
+
+  const sortedGroupsCategories = useMemo(() => {
+    if (!effectiveGroupId) return groupsCategories
+    return [...groupsCategories].sort((a, b) => {
+      if (a.group.id === effectiveGroupId) return -1
+      if (b.group.id === effectiveGroupId) return 1
+      return 0
+    })
+  }, [groupsCategories, effectiveGroupId])
+
   const filteredMyCategories = useMemo(
-    () => myCategories.filter((c) => type === 'TRANSFER' || c.type === 'BOTH' || c.type === type),
+    () => myCategories.filter(filterCat),
     [myCategories, type],
   )
+
+  const renderedCategoryIds = useMemo(() => {
+    const ids = new Set<string>()
+    filteredMyCategories.forEach((c) => ids.add(c.id))
+    sortedGroupsCategories.forEach(({ categories: gCats }) => {
+      gCats.filter(filterCat).forEach((c) => ids.add(c.id))
+    })
+    return ids
+  }, [filteredMyCategories, sortedGroupsCategories, type])
+
+  const missingCategory = useMemo(() => {
+    if (!categoryId || renderedCategoryIds.has(categoryId)) return null
+    return (
+      allCategories.find((c) => c.id === categoryId) ??
+      ({ id: categoryId, name: 'Categoria selecionada', icon: null } as {
+        id: string
+        name: string
+        icon?: string | null
+      })
+    )
+  }, [categoryId, renderedCategoryIds, allCategories])
+
+  const handleTypeChange = (newType: TransactionType) => {
+    if (newType === type) return
+    setType(newType)
+    if (categoryId) {
+      const selectedCat = allCategories.find((c) => c.id === categoryId)
+      if (newType !== 'TRANSFER' && selectedCat && selectedCat.type !== 'BOTH' && selectedCat.type !== newType) {
+        setCategoryId('')
+      }
+    }
+  }
 
   const invoiceOptions = useMemo(() => {
     const base = new Date()
@@ -423,7 +461,7 @@ export default function TransactionFormModal({
         type,
         status,
         destinationAccountId: type === 'TRANSFER' ? destId : null,
-        categoryId: type !== 'TRANSFER' && categoryId ? categoryId : null,
+        categoryId: categoryId || null,
         isRecurring: recurring,
         recurrenceFrequency: recurring ? freq : null,
         recurrenceInterval: interval,
@@ -458,7 +496,7 @@ export default function TransactionFormModal({
               type="button"
               onClick={() => {
                 setSourceMode('CARD')
-                setType('EXPENSE')
+                handleTypeChange('EXPENSE')
                 if (!creditCardId && creditCards[0]) setCreditCardId(creditCards[0].id)
               }}
               className={clsx(
@@ -477,10 +515,7 @@ export default function TransactionFormModal({
               <button
                 type="button"
                 key={t}
-                onClick={() => {
-                  setType(t)
-                  setCategoryId('')
-                }}
+                onClick={() => handleTypeChange(t)}
                 className={clsx(
                   'rounded-lg py-2 text-xs font-semibold transition cursor-pointer select-none',
                   type === t
@@ -770,42 +805,41 @@ export default function TransactionFormModal({
           </Field>
         )}
 
-        {type !== 'TRANSFER' && (
-          <Field label="Categoria">
-            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              <option value="">Sem categoria</option>
-              {effectiveGroupId && filteredGroupCategories.length > 0 ? (
-                <>
-                  <optgroup label="Categorias do grupo">
-                    {filteredGroupCategories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.icon ? `${c.icon} ` : ''}
-                        {c.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                  {filteredMyCategories.length > 0 && (
-                    <optgroup label="Minhas categorias">
-                      {filteredMyCategories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.icon ? `${c.icon} ` : ''}
-                          {c.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </>
-              ) : (
-                filteredMyCategories.map((c) => (
+        <Field label="Categoria">
+          <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">Sem categoria</option>
+            {missingCategory && (
+              <option value={missingCategory.id}>
+                {missingCategory.icon ? `${missingCategory.icon} ` : ''}
+                {missingCategory.name}
+              </option>
+            )}
+            {filteredMyCategories.length > 0 && (
+              <optgroup label="Minhas categorias">
+                {filteredMyCategories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.icon ? `${c.icon} ` : ''}
                     {c.name}
                   </option>
-                ))
-              )}
-            </Select>
-          </Field>
-        )}
+                ))}
+              </optgroup>
+            )}
+            {sortedGroupsCategories.map(({ group, categories: gCats }) => {
+              const filtered = gCats.filter(filterCat)
+              if (filtered.length === 0) return null
+              return (
+                <optgroup key={group.id} label={`Categorias: ${group.name}`}>
+                  {filtered.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.icon ? `${c.icon} ` : ''}
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )
+            })}
+          </Select>
+        </Field>
 
         {sourceMode === 'ACCOUNT' && !transaction?.creditCardId && (
           <div className="rounded-xl bg-surface-2 p-3 border border-border">

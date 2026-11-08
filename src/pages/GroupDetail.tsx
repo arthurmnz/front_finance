@@ -27,6 +27,7 @@ import clsx from 'clsx'
 import { api } from '@/lib/api'
 import {
   useAction,
+  useAllCategories,
   useGroup,
   useGroupAccountRequests,
   useGroupAccounts,
@@ -37,7 +38,7 @@ import {
   useGroupUsedCategories,
 } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
-import type { CreditCardInvoice, GroupMember, GroupRole, Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
+import type { Category, CreditCardInvoice, GroupMember, GroupRole, Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
 import { accountTypeLabel, formatDate, formatMoney, fullName, initials, monthLabel, roleLabel, txTypeLabel } from '@/lib/format'
 import { normalizeCategoryColor } from '@/lib/palette'
 import {
@@ -142,6 +143,31 @@ export default function GroupDetail() {
   const groupCategories = categories.data ?? []
   const usedCategoriesQuery = useGroupUsedCategories(needsEcosystemData ? id : undefined)
   const usedCategories = usedCategoriesQuery.data ?? []
+  const allCategoriesQuery = useAllCategories()
+  const allCategories = allCategoriesQuery.data ?? []
+
+  const displayCategories = useMemo(() => {
+    const map = new Map<string, Category>()
+    allCategories.forEach((c) => map.set(c.id, c))
+    groupCategories.forEach((c) => map.set(c.id, c))
+    usedCategories.forEach((uc) => {
+      if (!map.has(uc.id)) {
+        map.set(uc.id, {
+          id: uc.id,
+          name: uc.name,
+          color: uc.color,
+          icon: uc.icon,
+          description: null,
+          userId: uc.ownerId,
+          groupId: uc.isPersonal ? null : (id ?? null),
+          type: 'EXPENSE',
+          createdAt: '',
+          updatedAt: '',
+        })
+      }
+    })
+    return [...map.values()]
+  }, [allCategories, groupCategories, usedCategories, id])
   const groupDebtsQuery = useGroupDebts(tab === 'settlements' || tab === 'overview' ? id : undefined)
   const groupDebts = groupDebtsQuery.data
   const requests = useGroupAccountRequests(id, isAdmin)
@@ -268,7 +294,7 @@ export default function GroupDetail() {
     allGroupTransactions
       .filter((t) => t.type === 'EXPENSE')
       .forEach((t) => {
-        const cat = usedCategories.find((c) => c.id === t.categoryId) ?? groupCategories.find((c) => c.id === t.categoryId)
+        const cat = displayCategories.find((c) => c.id === t.categoryId)
         const name = cat?.name ?? 'Sem categoria'
         const isPersonal = cat ? ('isPersonal' in cat ? cat.isPersonal : Boolean(cat.userId)) : false
         const ownerId = cat ? ('ownerId' in cat ? cat.ownerId : cat.userId) : null
@@ -289,7 +315,7 @@ export default function GroupDetail() {
       })
 
     return [...catMap.values()].sort((a, b) => b.value - a.value)
-  }, [allGroupTransactions, usedCategories, groupCategories, user?.id])
+  }, [allGroupTransactions, displayCategories, user?.id])
 
   const upcoming = useMemo(
     () =>
@@ -836,11 +862,11 @@ export default function GroupDetail() {
                     </Field>
                     <Field label="Categoria">
                       <Select value={txFilters.categoryId} onChange={(e) => setTxF('categoryId', e.target.value)}>
-                        <option value="">Todas as categorias do grupo</option>
+                        <option value="">Todas as categorias</option>
                         <option value="none">Sem categoria</option>
-                        {groupCategories.map((c) => (
+                        {displayCategories.map((c) => (
                           <option key={c.id} value={c.id}>
-                            {c.name}
+                            {c.icon ? `${c.icon} ` : ''}{c.name}
                           </option>
                         ))}
                       </Select>
@@ -902,7 +928,7 @@ export default function GroupDetail() {
               ) : (
                 <TransactionList
                   items={filteredTransactions}
-                  categories={groupCategories}
+                  categories={displayCategories}
                   groupByDay
                   accountNames={accountNames}
                   cardNames={cardNames}

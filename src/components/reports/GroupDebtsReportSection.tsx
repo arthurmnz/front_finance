@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, CheckCircle2, ChevronRight, HandCoins, Scale } from 'lucide-react'
 import { formatMoney } from '@/lib/format'
-import { Card } from '@/components/ui'
+import { Card, InfoTooltip } from '@/components/ui'
 import type { GroupDebtsResponse } from '@/lib/types'
 import type { ReportPeriod } from './types'
 
@@ -29,7 +29,12 @@ export default function GroupDebtsReportSection({
         <div>
           <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
             <Scale className="size-4 text-lime" />
-            Balanço de Acertos entre Membros
+            <span>Balanço de Acertos entre Membros</span>
+            <InfoTooltip
+              title="Acertos do Grupo"
+              content="Cálculo compensatório de dívidas e créditos entre os membros do grupo decorrentes de compras individuais realizadas em recursos de terceiros."
+              align="start"
+            />
           </h2>
           <p className="text-xs text-text-dim">
             Compensação de despesas e saldos líquidos a acertar entre os membros do grupo
@@ -61,7 +66,13 @@ export default function GroupDebtsReportSection({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Card className="p-4 bg-surface-1 border-border">
               <div className="flex items-center justify-between text-text-dim mb-1">
-                <span className="text-xs font-medium">Você deve neste grupo</span>
+                <span className="text-xs font-medium flex items-center gap-1.5">
+                  Você deve neste grupo
+                  <InfoTooltip
+                    content="Total que você precisa reembolsar a outros membros pelas compras feitas em contas ou cartões deles."
+                    align="start"
+                  />
+                </span>
                 <HandCoins className="size-3.5 text-rose-400" />
               </div>
               <p className="text-xl font-bold text-rose-400 tracking-tight">
@@ -72,7 +83,13 @@ export default function GroupDebtsReportSection({
 
             <Card className="p-4 bg-surface-1 border-border">
               <div className="flex items-center justify-between text-text-dim mb-1">
-                <span className="text-xs font-medium">Você tem a receber neste grupo</span>
+                <span className="text-xs font-medium flex items-center gap-1.5">
+                  Você tem a receber neste grupo
+                  <InfoTooltip
+                    content="Total que outros membros precisam lhe reembolsar pelas compras que eles fizeram em suas contas ou cartões."
+                    align="end"
+                  />
+                </span>
                 <HandCoins className="size-3.5 text-lime" />
               </div>
               <p className="text-xl font-bold text-lime tracking-tight">

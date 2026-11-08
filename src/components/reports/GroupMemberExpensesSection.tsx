@@ -2,7 +2,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { User, Users } from 'lucide-react'
 import { formatMoney } from '@/lib/format'
 import { PALETTE } from '@/lib/palette'
-import { Card } from '@/components/ui'
+import { Card, InfoTooltip } from '@/components/ui'
 import type { GroupMemberExpense } from './types'
 
 interface GroupMemberExpensesSectionProps {
@@ -30,7 +30,12 @@ export default function GroupMemberExpensesSection({ memberExpenses }: GroupMemb
       <div>
         <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
           <Users className="size-4 text-lime" />
-          Despesas por Membro Responsável
+          <span>Despesas por Membro Responsável</span>
+          <InfoTooltip
+            title="Despesas por Membro"
+            content="Totalização e participação relativa de compras realizadas por cada membro nas contas e cartões compartilhados do grupo no período."
+            align="start"
+          />
         </h2>
         <p className="text-xs text-text-dim">
           Participação e volume de gastos de cada membro nas compras do grupo neste mês
@@ -48,8 +53,12 @@ export default function GroupMemberExpensesSection({ memberExpenses }: GroupMemb
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Gráfico de Rosca */}
           <Card className="p-4 bg-surface-1 border-border flex flex-col items-center justify-center">
-            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider self-start mb-2">
-              Distribuição Relativa
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider self-start mb-2 flex items-center gap-1.5">
+              <span>Distribuição Relativa</span>
+              <InfoTooltip
+                content="Percentual de cada membro sobre o valor total de despesas do grupo neste mês."
+                align="start"
+              />
             </h3>
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">

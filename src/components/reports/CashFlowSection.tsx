@@ -1,7 +1,7 @@
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ArrowLeftRight } from 'lucide-react'
 import { formatMoney } from '@/lib/format'
-import { Card } from '@/components/ui'
+import { Card, InfoTooltip } from '@/components/ui'
 import type { MonthlyCashFlow } from './types'
 
 interface CashFlowSectionProps {
@@ -21,7 +21,12 @@ export default function CashFlowSection({ data }: CashFlowSectionProps) {
       <div>
         <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
           <ArrowLeftRight className="size-4 text-lime" />
-          Fluxo de Caixa dos Últimos 6 Meses
+          <span>Fluxo de Caixa dos Últimos 6 Meses</span>
+          <InfoTooltip
+            title="Fluxo de Caixa (6 Meses)"
+            content="Acompanhamento histórico da receita, despesa e saldo líquido gerado mês a mês para análise de consistência e capacidade de poupança no médio prazo."
+            align="start"
+          />
         </h2>
         <p className="text-xs text-text-dim">
           Comparação histórica de receitas, despesas e a capacidade líquida de poupança ao longo do tempo
