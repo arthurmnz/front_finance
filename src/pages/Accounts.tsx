@@ -75,6 +75,7 @@ export default function Accounts() {
                   </Link>
                   <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                     {a.groupId && <Badge tone="primary">{groupName(a.groupId)}</Badge>}
+                    {a.includeInTotal === false && <Badge tone="neutral">Fora do total</Badge>}
                     <div className="ml-auto flex gap-1">
                       <Button size="sm" variant="ghost" onClick={() => setForm({ open: true, account: a })}>
                         <Pencil className="size-3.5" /> Editar

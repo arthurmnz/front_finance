@@ -3,7 +3,7 @@ import { api } from '@/lib/api'
 import { useAction } from '@/lib/hooks'
 import type { Account, AccountInput, AccountType } from '@/lib/types'
 import { accountTypeLabel } from '@/lib/format'
-import { Button, Field, Input, Modal, MoneyInput, NumberInput, Select } from './ui'
+import { Button, Field, Input, Modal, MoneyInput, NumberInput, Select, Switch } from './ui'
 
 export default function AccountFormModal({
   open,
@@ -18,6 +18,7 @@ export default function AccountFormModal({
   const [type, setType] = useState<AccountType>('CHECKING')
   const [start, setStart] = useState(0)
   const [tax, setTax] = useState('')
+  const [includeInTotal, setIncludeInTotal] = useState(true)
 
   useEffect(() => {
     if (!open) return
@@ -25,6 +26,7 @@ export default function AccountFormModal({
     setType(account?.type ?? 'CHECKING')
     setStart(account?.startBalance ?? 0)
     setTax(account?.tax != null ? String(account.tax) : '')
+    setIncludeInTotal(account?.includeInTotal ?? true)
   }, [open, account])
 
   const save = useAction(
@@ -49,6 +51,7 @@ export default function AccountFormModal({
               type,
               startBalance: start,
               tax: tax === '' ? null : Number(tax),
+              includeInTotal,
             })
           }
         }}
@@ -71,6 +74,14 @@ export default function AccountFormModal({
         <Field label="Taxa (opcional)" hint="Taxa percentual ou fixa associada à conta, se houver.">
           <NumberInput min={0} value={tax} onChange={(e) => setTax(e.target.value)} placeholder="0" />
         </Field>
+        <div className="space-y-1 py-1">
+          <Switch checked={includeInTotal} onChange={setIncludeInTotal}>
+            <span className="text-sm font-medium text-white">Contabilizar no saldo total</span>
+          </Switch>
+          <p className="text-xs text-text-muted pl-14">
+            Se desativado, o saldo e movimentações desta conta não serão somados no total do dashboard.
+          </p>
+        </div>
         <Button type="submit" className="w-full" loading={save.isPending}>
           Salvar
         </Button>

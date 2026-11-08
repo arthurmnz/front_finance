@@ -4,9 +4,9 @@ import { useQueries } from '@tanstack/react-query'
 import { ArrowDownCircle, ArrowUpCircle, ChevronRight, Eye, EyeOff, Plus, Users } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '@/lib/api'
-import { useAccounts, useAllCategories, useCreditCards, useResponsibleTransactions, useTotalBalance, useUserDebtsSummary } from '@/lib/hooks'
+import { useAccounts, useAction, useAllCategories, useCreditCards, useResponsibleTransactions, useTotalBalance, useUserDebtsSummary } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
-import type { CreditCardInvoice, Transaction } from '@/lib/types'
+import type { Account, CreditCardInvoice, Transaction } from '@/lib/types'
 import { formatDate, formatMoney } from '@/lib/format'
 import { normalizeCategoryColor } from '@/lib/palette'
 import { Badge, Button, Card, Empty, PageHeader, Spinner } from '@/components/ui'
@@ -19,16 +19,30 @@ export default function Dashboard() {
   const { user } = useAuth()
   const nav = useNavigate()
   const [period, setPeriod] = useState(currentPeriod())
-  const [ignored, setIgnored] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
   const [addingAccount, setAddingAccount] = useState(false)
   const [addingCard, setAddingCard] = useState(false)
   const creditCards = useCreditCards()
   const accounts = useAccounts()
   const cats = useAllCategories().data
-  const balance = useTotalBalance(period.month, period.year, ignored)
+  const balance = useTotalBalance(period.month, period.year, [])
   const responsibleTxs = useResponsibleTransactions(period.month, period.year)
   const debtsSummary = useUserDebtsSummary(period.month, period.year)
+
+  const toggleIncludeInTotal = useAction(
+    (a: Account) =>
+      api.put('/accounts/' + a.id, {
+        name: a.name,
+        startBalance: a.startBalance,
+        type: a.type,
+        tax: a.tax,
+        includeInTotal: !a.includeInTotal,
+      }),
+    {
+      invalidate: [['accounts'], ['total-balance']],
+      success: 'Configuração da conta atualizada',
+    },
+  )
 
   const txQueries = useQueries({
     queries: (accounts.data ?? []).map((a) => ({
@@ -56,7 +70,7 @@ export default function Dashboard() {
   }, [txStamp])
 
   const summary = useMemo(() => {
-    const activeAccounts = (accounts.data ?? []).filter((a) => !ignored.includes(a.id))
+    const activeAccounts = (accounts.data ?? []).filter((a) => a.includeInTotal !== false)
     const activeIds = new Set(activeAccounts.map((a) => a.id))
     const currentBalance = balance.data?.total ?? activeAccounts.reduce((s, a) => s + a.balance, 0)
 
@@ -103,7 +117,7 @@ export default function Dashboard() {
       projectedExpense,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts.data, ignored, balance.data, allTx, invStamp])
+  }, [accounts.data, balance.data, allTx, invStamp])
 
   const combinedExpenses = useMemo(() => {
     const map = new Map<string, Transaction>()
@@ -128,16 +142,13 @@ export default function Dashboard() {
         const col = normalizeCategoryColor(c?.color, i)
         return { name: c?.name ?? 'Sem categoria', value, color: col }
       })
-      .sort((a, b) => b.value - a.value)
+    .sort((a, b) => b.value - a.value)
   }, [combinedExpenses, cats])
 
   const upcoming = allTx
     .filter((t) => t.status === 'PENDING')
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 5)
-
-  const toggleIgnore = (id: string) =>
-    setIgnored((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
 
   return (
     <>
@@ -258,12 +269,14 @@ export default function Dashboard() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      toggleIgnore(a.id)
+                      toggleIncludeInTotal.mutate(a)
                     }}
-                    className="p-1 text-text-muted hover:text-white transition"
-                    aria-label="Ignorar no saldo"
+                    disabled={toggleIncludeInTotal.isPending}
+                    className="p-1 text-text-muted hover:text-white transition disabled:opacity-50"
+                    aria-label={a.includeInTotal !== false ? 'Ignorar no saldo' : 'Incluir no saldo'}
+                    title={a.includeInTotal !== false ? 'Ignorar no saldo total' : 'Incluir no saldo total'}
                   >
-                    {ignored.includes(a.id) ? (
+                    {a.includeInTotal === false ? (
                       <EyeOff className="size-4 text-text-dim" />
                     ) : (
                       <Eye className="size-4 text-lime" />
@@ -272,7 +285,7 @@ export default function Dashboard() {
                   <Link
                     to={`/contas/${a.id}`}
                     onClick={(e) => e.stopPropagation()}
-                    className={`flex flex-1 items-center justify-between hover:text-lime transition ${ignored.includes(a.id) ? 'opacity-40' : ''}`}
+                    className={`flex flex-1 items-center justify-between hover:text-lime transition ${a.includeInTotal === false ? 'opacity-40' : ''}`}
                   >
                     <span className="text-sm text-white">{a.name}</span>
                     <span className="text-sm font-semibold tabular-nums text-white">

@@ -11,12 +11,12 @@ export interface AuthResponse { accessToken: string; tokenType: string; expiresI
 
 export interface Account {
   id: string; ownerId: string; owner?: UserSummary; name: string; startBalance: number; balance: number
-  type: AccountType; tax: number | null; groupId: string | null; createdAt: string; updatedAt: string
+  type: AccountType; tax: number | null; groupId: string | null; includeInTotal: boolean; createdAt: string; updatedAt: string
 }
 export interface UserSummary { id: string; firstName: string; lastName: string; email: string }
 export interface GroupAccount extends Omit<Account, 'ownerId'> { owner: UserSummary }
 export interface TotalBalance { total: number; monthlyIncome: number; monthlyExpense: number }
-export interface AccountInput { name: string; startBalance: number; type: AccountType; tax?: number | null }
+export interface AccountInput { name: string; startBalance: number; type: AccountType; tax?: number | null; includeInTotal?: boolean }
 export interface AccountGroupRequest {
   id: string; account: { id: string; name: string }; requester: UserSummary
   status: string; createdAt: string; updatedAt: string
