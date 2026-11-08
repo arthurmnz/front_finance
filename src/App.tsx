@@ -13,7 +13,7 @@ import CreditCards from '@/pages/CreditCards'
 import CreditCardDetail from '@/pages/CreditCardDetail'
 import AccountDetail from '@/pages/AccountDetail'
 import Transactions from '@/pages/Transactions'
-import Calendar from '@/pages/Calendar'
+import Reports from '@/pages/Reports'
 import Categories from '@/pages/Categories'
 import CategoryDetail from '@/pages/CategoryDetail'
 import Friends from '@/pages/Friends'
@@ -43,7 +43,8 @@ export default function App() {
       <Route element={<Private><Layout /></Private>}>
         <Route index element={<Dashboard />} />
         <Route path="transacoes" element={<Transactions />} />
-        <Route path="calendario" element={<Calendar />} />
+        <Route path="relatorios" element={<Reports />} />
+        <Route path="calendario" element={<Navigate to="/relatorios" replace />} />
         <Route path="contas" element={<Accounts />} />
         <Route path="contas/:id" element={<AccountDetail />} />
         <Route path="cartoes" element={<CreditCards />} />

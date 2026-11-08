@@ -12,7 +12,7 @@ import {
   Landmark,
   Plus,
   ArrowLeftRight,
-  CalendarDays,
+  BarChart3,
   CreditCard,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -30,7 +30,7 @@ export default function Layout() {
   const items = [
     { to: '/', label: 'Início', icon: LayoutDashboard, end: true },
     { to: '/transacoes', label: 'Transações', icon: ArrowLeftRight },
-    { to: '/calendario', label: 'Calendário', icon: CalendarDays },
+    { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
     { to: '/contas', label: 'Contas', icon: Wallet },
     { to: '/cartoes', label: 'Cartões', icon: CreditCard },
     { to: '/categorias', label: 'Categorias', icon: Tags },
@@ -40,7 +40,7 @@ export default function Layout() {
   ]
 
   // No mobile: 2 itens | botão de nova transação | 2 itens
-  const mobileLeft = items.filter((i) => ['/', '/calendario'].includes(i.to))
+  const mobileLeft = items.filter((i) => ['/', '/relatorios'].includes(i.to))
   const mobileRight = items
     .filter((i) => ['/transacoes', '/perfil'].includes(i.to))
     .map((i) => (i.to === '/perfil' ? { ...i, badge: requests + invites } : i))
