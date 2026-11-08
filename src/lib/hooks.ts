@@ -128,10 +128,17 @@ export const useGroupDebts = (groupId: string | undefined) =>
     queryFn: () => get<T.GroupDebtsResponse>(`/groups/${groupId}/debts`),
   })
 
-export const useUserDebtsSummary = () =>
+export const useUserDebtsSummary = (month?: number, year?: number) =>
   useQuery({
-    queryKey: ['users', 'me', 'debts-summary'],
-    queryFn: () => get<T.UserDebtsSummary>('/users/me/debts-summary'),
+    queryKey: ['users', 'me', 'debts-summary', month, year],
+    queryFn: () => get<T.UserDebtsSummary>('/users/me/debts-summary', { month, year }),
+  })
+
+export const useCardTransactions = (cardId: string | undefined, month?: number, year?: number) =>
+  useQuery({
+    queryKey: ['transactions', 'card', cardId, month, year],
+    enabled: !!cardId,
+    queryFn: () => get<T.Transaction[]>(`/transactions/card/${cardId}`, { month, year }),
   })
 
 export const useResponsibleTransactions = (month?: number, year?: number) =>

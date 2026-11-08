@@ -68,6 +68,7 @@ interface TxFilters {
   search: string
   accountId: string
   creditCardId: string
+  hideCreditCards: boolean
   categoryId: string
   responsibleId: string
   type: '' | TransactionType
@@ -78,6 +79,7 @@ const EMPTY_TX_FILTERS: TxFilters = {
   search: '',
   accountId: '',
   creditCardId: '',
+  hideCreditCards: false,
   categoryId: '',
   responsibleId: '',
   type: '',
@@ -151,6 +153,16 @@ export default function GroupDetail() {
       : [],
   })
 
+  const cardTxQueries = useQueries({
+    queries: needsEcosystemData
+      ? (cards.data ?? []).map((c) => ({
+          queryKey: ['transactions', 'card', c.id, period.month, period.year],
+          queryFn: () =>
+            api.get<Transaction[]>(`/transactions/card/${c.id}`, { params: period }).then((r) => r.data),
+        }))
+      : [],
+  })
+
   const txCardQueries = useQueries({
     queries: needsEcosystemData
       ? (cards.data ?? []).map((c) => ({
@@ -167,6 +179,7 @@ export default function GroupDetail() {
     categories.isLoading ||
     usedCategoriesQuery.isLoading ||
     txAccountQueries.some((q) => q.isLoading) ||
+    cardTxQueries.some((q) => q.isLoading) ||
     txCardQueries.some((q) => q.isLoading)
 
   const invStamp = txCardQueries.map((q) => q.dataUpdatedAt).join(',')
@@ -178,13 +191,21 @@ export default function GroupDetail() {
         map.set(t.id, t)
       }),
     )
-    txCardQueries.forEach((q) =>
-      q.data?.transactions?.forEach((t) => {
+    cardTxQueries.forEach((q) =>
+      q.data?.forEach((t) => {
         map.set(t.id, t)
       }),
     )
+    txCardQueries.forEach((q) =>
+      q.data?.transactions?.forEach((t) => {
+        const [yStr, mStr] = t.date.split('-')
+        if (Number(mStr) === period.month && Number(yStr) === period.year) {
+          map.set(t.id, t)
+        }
+      }),
+    )
     return [...map.values()]
-  }, [txAccountQueries, txCardQueries])
+  }, [txAccountQueries, cardTxQueries, txCardQueries, period.month, period.year])
 
   const groupSummary = useMemo(() => {
     const activeAccounts = (accounts.data ?? []).filter((a) => !ignored.includes(a.id))
@@ -301,7 +322,9 @@ export default function GroupDetail() {
       (t) =>
         (!term || t.title.toLowerCase().includes(term)) &&
         (!txFilters.accountId || t.accountId === txFilters.accountId || t.destinationAccountId === txFilters.accountId) &&
-        (!txFilters.creditCardId || t.creditCardId === txFilters.creditCardId) &&
+        (txFilters.hideCreditCards || txFilters.creditCardId === 'none'
+          ? !t.creditCardId
+          : !txFilters.creditCardId || t.creditCardId === txFilters.creditCardId) &&
         (!txFilters.categoryId ||
           (txFilters.categoryId === 'none' ? !t.categoryId : t.categoryId === txFilters.categoryId)) &&
         (!txFilters.responsibleId || t.responsibleId === txFilters.responsibleId) &&
@@ -317,6 +340,7 @@ export default function GroupDetail() {
   const activeTxFilterCount = [
     txFilters.accountId,
     txFilters.creditCardId,
+    txFilters.hideCreditCards,
     txFilters.categoryId,
     txFilters.responsibleId,
     txFilters.type,
@@ -776,6 +800,12 @@ export default function GroupDetail() {
                       >
                         Recorrentes
                       </button>
+                      <button
+                        className={chip(txFilters.hideCreditCards)}
+                        onClick={() => setTxF('hideCreditCards', !txFilters.hideCreditCards)}
+                      >
+                        Sem cartão de crédito
+                      </button>
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -792,6 +822,7 @@ export default function GroupDetail() {
                     <Field label="Cartão do grupo">
                       <Select value={txFilters.creditCardId} onChange={(e) => setTxF('creditCardId', e.target.value)}>
                         <option value="">Todos (contas e cartões)</option>
+                        <option value="none">Ocultar cartão de crédito (apenas contas)</option>
                         {cards.data?.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}

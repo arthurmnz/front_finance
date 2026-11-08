@@ -4,7 +4,7 @@ import { Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { useAccessibleAccounts, useAllCategories, useCreditCards } from '@/lib/hooks'
+import { useAccessibleAccounts, useAllCategories, useCreditCards, useResponsibleTransactions } from '@/lib/hooks'
 import type { Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
 import { formatMoney, fullName, txTypeLabel } from '@/lib/format'
 import { Button, Card, Empty, Field, Input, PageHeader, Select, Spinner } from '@/components/ui'
@@ -16,6 +16,7 @@ interface Filters {
   search: string
   accountId: string
   creditCardId: string
+  hideCreditCards: boolean
   categoryId: string
   responsibleId: string
   type: '' | TransactionType
@@ -26,6 +27,7 @@ const EMPTY: Filters = {
   search: '',
   accountId: '',
   creditCardId: '',
+  hideCreditCards: false,
   categoryId: '',
   responsibleId: '',
   type: '',
@@ -58,12 +60,25 @@ export default function Transactions() {
       queryFn: () => api.get<Transaction[]>(`/transactions/account/${a.id}`, { params: period }).then((r) => r.data),
     })),
   })
-  const loading = accounts.isLoading || queries.some((q) => q.isLoading)
+  const cardQueries = useQueries({
+    queries: creditCards.map((c) => ({
+      queryKey: ['transactions', 'card', c.id, period.month, period.year],
+      queryFn: () => api.get<Transaction[]>(`/transactions/card/${c.id}`, { params: period }).then((r) => r.data),
+    })),
+  })
+  const responsibleQuery = useResponsibleTransactions(period.month, period.year)
+  const loading =
+    accounts.isLoading ||
+    queries.some((q) => q.isLoading) ||
+    cardQueries.some((q) => q.isLoading) ||
+    responsibleQuery.isLoading
   const all = useMemo(() => {
     const m = new Map<string, Transaction>()
     queries.forEach((q) => q.data?.forEach((t) => m.set(t.id, t)))
+    cardQueries.forEach((q) => q.data?.forEach((t) => m.set(t.id, t)))
+    responsibleQuery.data?.forEach((t) => m.set(t.id, t))
     return [...m.values()]
-  }, [queries])
+  }, [queries, cardQueries, responsibleQuery.data])
 
   const responsibles = useMemo(() => {
     const map = new Map<string, UserSummary>()
@@ -92,7 +107,9 @@ export default function Transactions() {
       (t) =>
         (!term || t.title.toLowerCase().includes(term)) &&
         (!f.accountId || t.accountId === f.accountId || t.destinationAccountId === f.accountId) &&
-        (!f.creditCardId || t.creditCardId === f.creditCardId) &&
+        (f.hideCreditCards || f.creditCardId === 'none'
+          ? !t.creditCardId
+          : !f.creditCardId || t.creditCardId === f.creditCardId) &&
         (!f.categoryId || (f.categoryId === 'none' ? !t.categoryId : t.categoryId === f.categoryId)) &&
         (!f.responsibleId || t.responsibleId === f.responsibleId) &&
         (!f.type || t.type === f.type) &&
@@ -104,9 +121,16 @@ export default function Transactions() {
   const income = filtered.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
   const expense = filtered.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
   const net = income - expense
-  const activeCount = [f.accountId, f.creditCardId, f.categoryId, f.responsibleId, f.type, f.status, f.recurring].filter(
-    Boolean,
-  ).length
+  const activeCount = [
+    f.accountId,
+    f.creditCardId,
+    f.hideCreditCards,
+    f.categoryId,
+    f.responsibleId,
+    f.type,
+    f.status,
+    f.recurring,
+  ].filter(Boolean).length
   const accountNames = useMemo(() => new Map((accounts.data ?? []).map((a) => [a.id, a.name])), [accounts.data])
   const cardNames = useMemo(() => new Map(creditCards.map((c) => [c.id, c.name])), [creditCards])
 
@@ -172,6 +196,9 @@ export default function Transactions() {
               <button className={chip(f.recurring)} onClick={() => set('recurring', !f.recurring)}>
                 Recorrentes
               </button>
+              <button className={chip(f.hideCreditCards)} onClick={() => set('hideCreditCards', !f.hideCreditCards)}>
+                Sem cartão de crédito
+              </button>
             </div>
           </div>
 
@@ -191,6 +218,7 @@ export default function Transactions() {
             <Field label="Cartão de crédito">
               <Select value={f.creditCardId} onChange={(e) => set('creditCardId', e.target.value)}>
                 <option value="">Todos (contas e cartões)</option>
+                <option value="none">Ocultar cartão de crédito (apenas contas)</option>
                 {creditCards.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}

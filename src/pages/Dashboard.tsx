@@ -28,7 +28,7 @@ export default function Dashboard() {
   const cats = useAllCategories().data
   const balance = useTotalBalance(period.month, period.year, ignored)
   const responsibleTxs = useResponsibleTransactions(period.month, period.year)
-  const debtsSummary = useUserDebtsSummary()
+  const debtsSummary = useUserDebtsSummary(period.month, period.year)
 
   const txQueries = useQueries({
     queries: (accounts.data ?? []).map((a) => ({
