@@ -128,6 +128,9 @@ export interface DayProjection {
   simulations?: SimulatedTransaction[]
   simulatedDelta?: number
   realBalance?: number
+  pendingTxs?: Transaction[]
+  pendingDelta?: number
+  completedDelta?: number
 }
 
 export interface CalendarProjection {
@@ -140,5 +143,7 @@ export interface CalendarProjection {
   realClosing?: number
   realMin?: DayProjection
   hasSimulations?: boolean
+  totalPendingExpense?: number
+  totalPendingIncome?: number
 }
 

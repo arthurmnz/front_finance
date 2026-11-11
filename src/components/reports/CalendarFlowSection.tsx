@@ -9,6 +9,7 @@ import {
   Sparkles,
   Trash2,
   RotateCcw,
+  Clock,
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { Account, Category } from '@/lib/types'
@@ -362,6 +363,16 @@ export default function CalendarFlowSection({
                   {d.day}
                 </span>
                 <div className="flex items-center gap-1">
+                  {d.pendingTxs && d.pendingTxs.length > 0 && (
+                    <span
+                      title={`Lançamentos pendentes/não pagos (${d.pendingTxs.length}): ${
+                        (d.pendingDelta ?? 0) > 0 ? '+' : ''
+                      }${formatMoney(d.pendingDelta ?? 0)}`}
+                      className="flex items-center"
+                    >
+                      <Clock className="size-3 text-amber-400 shrink-0" />
+                    </span>
+                  )}
                   {d.simulations && d.simulations.length > 0 && (
                     <span
                       title={`Simulações: ${d.simulations
@@ -384,7 +395,7 @@ export default function CalendarFlowSection({
                   )}
                 </div>
               </div>
-              {d.delta !== 0 && (
+              {d.delta !== 0 ? (
                 <span
                   className={clsx(
                     'text-[10px] leading-none tabular-nums font-medium',
@@ -394,7 +405,15 @@ export default function CalendarFlowSection({
                   {d.delta > 0 ? '+' : '−'}
                   {formatCompact(Math.abs(d.delta))}
                 </span>
-              )}
+              ) : d.date < today && d.pendingTxs && d.pendingTxs.length > 0 && (d.pendingDelta ?? 0) !== 0 ? (
+                <span
+                  title={`Lançamento não pago: ${formatMoney(d.pendingDelta ?? 0)}`}
+                  className="text-[10px] leading-none tabular-nums font-medium text-amber-400 border-b border-dashed border-amber-400/60"
+                >
+                  {(d.pendingDelta ?? 0) > 0 ? '+' : '−'}
+                  {formatCompact(Math.abs(d.pendingDelta ?? 0))}
+                </span>
+              ) : null}
               <span
                 className={clsx(
                   'text-[11px] font-semibold leading-none sm:text-xs tabular-nums',
@@ -417,6 +436,9 @@ export default function CalendarFlowSection({
           </span>
           <span className="flex items-center gap-1.5">
             <i className="size-2 rounded-full bg-expense shrink-0" /> Negativo
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Clock className="size-3 text-amber-400 shrink-0" /> Lançamento pendente / não pago
           </span>
           <span className="flex items-center gap-1.5">
             <CardIcon className="size-3 text-violet shrink-0" /> Vencimento de fatura
@@ -459,6 +481,31 @@ export default function CalendarFlowSection({
               Simular neste dia
             </Button>
           </div>
+
+          {/* Aviso de Lançamentos Pendentes no Dia */}
+          {sel.pendingTxs && sel.pendingTxs.length > 0 && (
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-200">
+              <Clock className="mt-0.5 size-4 shrink-0 text-amber-400" />
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-white">
+                    {sel.date < today
+                      ? `Lançamento${sel.pendingTxs.length > 1 ? 's' : ''} Não Pago${sel.pendingTxs.length > 1 ? 's' : ''} / Vencido${sel.pendingTxs.length > 1 ? 's' : ''} (${sel.pendingTxs.length})`
+                      : `Lançamento${sel.pendingTxs.length > 1 ? 's' : ''} Pendente${sel.pendingTxs.length > 1 ? 's' : ''} / Previsto${sel.pendingTxs.length > 1 ? 's' : ''} (${sel.pendingTxs.length})`}
+                  </span>
+                  <span className="font-semibold tabular-nums text-amber-400">
+                    {(sel.pendingDelta ?? 0) > 0 ? '+' : ''}
+                    {formatMoney(sel.pendingDelta ?? 0)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  {sel.date < today
+                    ? 'Estes lançamentos têm data passada mas não foram pagos. Eles não descontam do saldo bancário real até serem marcados como pagos/concluídos. Para atualizar o saldo da sua conta, use o botão ao lado da transação abaixo.'
+                    : 'Estes lançamentos têm data prevista para hoje ou dias futuros e já estão integrados na simulação de fluxo de caixa futuro da conta.'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Lançamentos Simulados do Dia */}
           {sel.simulations && sel.simulations.length > 0 && (

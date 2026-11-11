@@ -79,10 +79,12 @@ export default function TransactionList({
           <button
             type="button"
             onClick={() => toggle.mutate(t.id)}
-            title={done ? 'Marcar como pendente' : 'Marcar como concluída'}
+            title={done ? 'Marcar como pendente / não pago' : 'Marcar como concluído / pago'}
             className={clsx(
               'grid size-9 shrink-0 place-items-center rounded-xl transition cursor-pointer',
-              done ? 'bg-lime-subtle text-lime' : 'bg-surface-2 text-text-muted hover:text-white',
+              done
+                ? 'bg-lime-subtle text-lime hover:bg-lime/25'
+                : 'bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25',
             )}
           >
             {done ? <Check className="size-4" /> : <Clock className="size-4" />}
@@ -118,7 +120,17 @@ export default function TransactionList({
                 <User className="size-3" /> {fullName(t.responsible)}
               </span>
             )}
-            {!isCard && !done && <Badge tone="default">Pendente</Badge>}
+            {!isCard && (
+              done ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-lime/10 border border-lime/25 px-1.5 py-0.5 text-[10px] font-medium text-lime">
+                  <Check className="size-2.5" /> Pago / Concluído
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                  <Clock className="size-2.5" /> Não pago / Pendente
+                </span>
+              )
+            )}
           </p>
         </div>
         <div className="text-right">

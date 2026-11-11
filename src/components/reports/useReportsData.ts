@@ -144,12 +144,15 @@ export function buildCalendarProjection(
     return s.type === 'INCOME' ? s.amount : -s.amount
   }
 
-  const txSource = allTransactions || transactions
+  const displaySource = transactions
+  const accountSource = allTransactions || transactions
 
   const now = new Date()
   const todayIso = toISODate(now)
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
+  const currentMonthIdx = currentYear * 12 + (currentMonth - 1)
+  const targetMonthIdx = period.year * 12 + (period.month - 1)
 
   // Ponto de partida real: saldo bancário confirmado hoje nas contas ativas selecionadas
   const realCurrentBalance = accs.reduce(
@@ -179,7 +182,7 @@ export function buildCalendarProjection(
         remaining = Math.max(0, card.currentInvoiceAmount)
       } else {
         // Fallback analítico: somatório de compras do cartão que vencem nesta fatura
-        const cardExpenses = txSource
+        const cardExpenses = accountSource
           .filter((t) => {
             if (t.creditCardId !== card.id || t.type !== 'EXPENSE') return false
             if (t.invoiceMonth != null && t.invoiceYear != null) {
@@ -200,7 +203,7 @@ export function buildCalendarProjection(
           })
           .reduce((s, t) => s + t.amount, 0)
 
-        const alreadyPaid = txSource
+        const alreadyPaid = accountSource
           .filter((t) => {
             if (t.type !== 'EXPENSE' || !isInvoicePaymentTx(t)) return false
             if (t.creditCardInvoiceId && invoice?.creditCardId && t.creditCardInvoiceId === invoice.creditCardId) return true
@@ -239,59 +242,80 @@ export function buildCalendarProjection(
     return result
   }
 
-  // 1. Saldo de abertura do mês corrente: retrocede a partir do saldo real atual
+  // No backend, o saldo da conta reflete apenas transações com status COMPLETED.
+  // Transações PENDING nunca alteram o saldo bancário da conta.
+  const completedAccountTxs = accountSource.filter((t) => t.status === 'COMPLETED' && effect(t) !== 0)
+
+  // Saldo de abertura do mês corrente: reverte as transações COMPLETED a partir do primeiro dia do mês corrente
   const firstIsoOfCurrentMonth = toISODate(new Date(currentYear, currentMonth - 1, 1))
-  const pastTxsCurrentMonth = txSource.filter((t) => {
-    const d = t.date.slice(0, 10)
-    return d >= firstIsoOfCurrentMonth && d <= todayIso && effect(t) !== 0
-  })
-  const pastTxsDeltaCurrentMonth = pastTxsCurrentMonth.reduce((s, t) => s + effect(t), 0)
-  const openingCurrentMonth = realCurrentBalance - pastTxsDeltaCurrentMonth
-  const realOpeningCurrentMonth = openingCurrentMonth
-
-  // Fechamento projetado do mês corrente
-  const futureTxsCurrentMonth = txSource.filter((t) => {
-    const p = parseDateParts(t.date)
-    const d = t.date.slice(0, 10)
-    return p.year === currentYear && p.month === currentMonth && d > todayIso && effect(t) !== 0
-  })
-  const futureTxsDeltaCurrentMonth = futureTxsCurrentMonth.reduce((s, t) => s + effect(t), 0)
-
-  const currentMonthInvoices = getMonthInvoices(currentMonth, currentYear)
-  const futureInvoicesCurrentMonth = currentMonthInvoices.filter((inv) => inv.dueIso >= todayIso)
-  const futureInvoicesDeltaCurrentMonth = futureInvoicesCurrentMonth.reduce((s, inv) => s - inv.remainingAmount, 0)
-
-  const futureSimsCurrentMonth = simulations.filter((s) => {
-    const p = parseDateParts(s.date)
-    const d = s.date.slice(0, 10)
-    return p.year === currentYear && p.month === currentMonth && d >= todayIso
-  })
-  const futureSimsDeltaCurrentMonth = futureSimsCurrentMonth.reduce((s, sim) => s + simEffect(sim), 0)
-
-  const realClosingCurrentMonth = realCurrentBalance + futureTxsDeltaCurrentMonth + futureInvoicesDeltaCurrentMonth
-  const closingCurrentMonth = realClosingCurrentMonth + futureSimsDeltaCurrentMonth
-
-  // Encadeamento temporal em cascata entre o mês atual e o mês do relatório selecionado
-  const currentMonthIdx = currentYear * 12 + (currentMonth - 1)
-  const targetMonthIdx = period.year * 12 + (period.month - 1)
+  const completedTxsFromCurrentMonth = completedAccountTxs.filter((t) => t.date.slice(0, 10) >= firstIsoOfCurrentMonth)
+  const deltaFromCurrentMonth = completedTxsFromCurrentMonth.reduce((s, t) => s + effect(t), 0)
+  const openingCurrentMonth = realCurrentBalance - deltaFromCurrentMonth
 
   let targetOpening = openingCurrentMonth
-  let targetRealOpening = realOpeningCurrentMonth
+  let targetRealOpening = openingCurrentMonth
 
-  if (targetMonthIdx > currentMonthIdx) {
-    // Projeção em cascata para meses futuros
-    let cascadeRunning = closingCurrentMonth
-    let realCascadeRunning = realClosingCurrentMonth
+  if (targetMonthIdx <= currentMonthIdx) {
+    // 1. Para o mês corrente ou qualquer mês passado:
+    // Reverte todas as transações COMPLETED a partir do primeiro dia do mês selecionado.
+    // Desta forma, o saldo de abertura do mês passado reflete exatamente a realidade histórica,
+    // sem vazar movimentações de meses posteriores e sem subtrair pendências que nunca saíram da conta.
+    const targetMonthFirstIso = toISODate(new Date(period.year, period.month - 1, 1))
+    const completedTxsFromTarget = completedAccountTxs.filter((t) => t.date.slice(0, 10) >= targetMonthFirstIso)
+    const deltaFromTarget = completedTxsFromTarget.reduce((s, t) => s + effect(t), 0)
+    targetRealOpening = realCurrentBalance - deltaFromTarget
+    targetOpening = targetRealOpening
+  } else {
+    // 2. Para meses futuros:
+    // Projeta em cascata a partir do mês corrente até o mês do relatório selecionado.
+    const daysInCurrentMonth = new Date(currentYear, currentMonth, 0).getDate()
+    const currentMonthInvoices = getMonthInvoices(currentMonth, currentYear)
+    const currentInvoicesByDay = new Map<string, number>()
+    currentMonthInvoices.forEach((inv) => {
+      currentInvoicesByDay.set(inv.dueIso, (currentInvoicesByDay.get(inv.dueIso) ?? 0) + inv.remainingAmount)
+    })
+
+    let curMonthRunningReal = openingCurrentMonth
+    let curMonthRunningSim = openingCurrentMonth
+
+    for (let day = 1; day <= daysInCurrentMonth; day++) {
+      const dayDate = toISODate(new Date(currentYear, currentMonth - 1, day))
+      const dayTxs = accountSource.filter((t) => {
+        const p = parseDateParts(t.date)
+        return p.year === currentYear && p.month === currentMonth && p.day === day && effect(t) !== 0
+      })
+      const dayCompletedDelta = dayTxs.filter((t) => t.status === 'COMPLETED').reduce((s, t) => s + effect(t), 0)
+      const dayPendingDelta = dayTxs.filter((t) => t.status === 'PENDING').reduce((s, t) => s + effect(t), 0)
+      const dayInvoiceDelta = dayDate >= todayIso ? (currentInvoicesByDay.get(dayDate) ?? 0) : 0
+
+      const daySims = simulations.filter((s) => {
+        const p = parseDateParts(s.date)
+        return p.year === currentYear && p.month === currentMonth && p.day === day
+      })
+      const daySimDelta = daySims.reduce((s, sim) => s + simEffect(sim), 0)
+
+      let dayRealDelta = dayCompletedDelta
+      if (dayDate >= todayIso) {
+        dayRealDelta += dayPendingDelta - dayInvoiceDelta
+      }
+
+      curMonthRunningReal += dayRealDelta
+      curMonthRunningSim += dayRealDelta + daySimDelta
+    }
+
+    let cascadeRunning = curMonthRunningSim
+    let realCascadeRunning = curMonthRunningReal
 
     for (let idx = currentMonthIdx + 1; idx < targetMonthIdx; idx++) {
       const intYear = Math.floor(idx / 12)
       const intMonth = (idx % 12) + 1
 
-      const intTxs = txSource.filter((t) => {
+      const intTxs = accountSource.filter((t) => {
         const p = parseDateParts(t.date)
         return p.year === intYear && p.month === intMonth && effect(t) !== 0
       })
-      const intTxsDelta = intTxs.reduce((s, t) => s + effect(t), 0)
+      const intCompletedDelta = intTxs.filter((t) => t.status === 'COMPLETED').reduce((s, t) => s + effect(t), 0)
+      const intPendingDelta = intTxs.filter((t) => t.status === 'PENDING').reduce((s, t) => s + effect(t), 0)
 
       const intInvoices = getMonthInvoices(intMonth, intYear)
       const intInvoicesDelta = intInvoices.reduce((s, inv) => s - inv.remainingAmount, 0)
@@ -302,40 +326,16 @@ export function buildCalendarProjection(
       })
       const intSimsDelta = intSims.reduce((s, sim) => s + simEffect(sim), 0)
 
-      realCascadeRunning += intTxsDelta + intInvoicesDelta
-      cascadeRunning += intTxsDelta + intInvoicesDelta + intSimsDelta
+      const intRealDelta = intCompletedDelta + intPendingDelta + intInvoicesDelta
+      realCascadeRunning += intRealDelta
+      cascadeRunning += intRealDelta + intSimsDelta
     }
 
     targetOpening = cascadeRunning
     targetRealOpening = realCascadeRunning
-  } else if (targetMonthIdx < currentMonthIdx) {
-    // Retrocesso consistente para meses passados
-    let cascadeRunning = openingCurrentMonth
-
-    for (let idx = currentMonthIdx - 1; idx >= targetMonthIdx; idx--) {
-      const intYear = Math.floor(idx / 12)
-      const intMonth = (idx % 12) + 1
-
-      const intTxs = txSource.filter((t) => {
-        const p = parseDateParts(t.date)
-        return p.year === intYear && p.month === intMonth && effect(t) !== 0
-      })
-      const intTxsDelta = intTxs.reduce((s, t) => s + effect(t), 0)
-
-      const intSims = simulations.filter((s) => {
-        const p = parseDateParts(s.date)
-        return p.year === intYear && p.month === intMonth
-      })
-      const intSimsDelta = intSims.reduce((s, sim) => s + simEffect(sim), 0)
-
-      cascadeRunning = cascadeRunning - (intTxsDelta + intSimsDelta)
-    }
-
-    targetOpening = cascadeRunning
-    targetRealOpening = cascadeRunning
   }
 
-  // 2. Construção diária do mês selecionado
+  // 3. Construção diária do mês selecionado
   const daysInMonth = new Date(period.year, period.month, 0).getDate()
   const targetInvoices = getMonthInvoices(period.month, period.year)
   const invoicesByDay = new Map<string, { cardId: string; cardName: string; remainingAmount: number }[]>()
@@ -343,12 +343,23 @@ export function buildCalendarProjection(
     invoicesByDay.set(inv.dueIso, [...(invoicesByDay.get(inv.dueIso) ?? []), inv])
   })
 
-  const byDay = new Map<string, Transaction[]>()
-  txSource.forEach((t) => {
+  // Transações para exibição no calendário (respeitando filtros de categoria/status/responsável)
+  const displayByDay = new Map<string, Transaction[]>()
+  displaySource.forEach((t) => {
+    const p = parseDateParts(t.date)
+    if (p.year === period.year && p.month === period.month) {
+      const k = t.date.slice(0, 10)
+      displayByDay.set(k, [...(displayByDay.get(k) ?? []), t])
+    }
+  })
+
+  // Transações completas de conta para rastreamento contábil fiel do saldo bancário
+  const accountByDay = new Map<string, Transaction[]>()
+  accountSource.forEach((t) => {
     const p = parseDateParts(t.date)
     if (p.year === period.year && p.month === period.month && effect(t) !== 0) {
       const k = t.date.slice(0, 10)
-      byDay.set(k, [...(byDay.get(k) ?? []), t])
+      accountByDay.set(k, [...(accountByDay.get(k) ?? []), t])
     }
   })
 
@@ -363,35 +374,64 @@ export function buildCalendarProjection(
 
   let runningReal = targetRealOpening
   let runningSim = targetOpening
+  let totalPendingExpense = 0
+  let totalPendingIncome = 0
 
   const days: DayProjection[] = []
   for (let i = 1; i <= daysInMonth; i++) {
     const date = toISODate(new Date(period.year, period.month - 1, i))
-    const txs = byDay.get(date) ?? []
+    const displayTxs = displayByDay.get(date) ?? []
+    const acTxs = accountByDay.get(date) ?? []
     const rawDayInvoices = invoicesByDay.get(date) ?? []
     const daySims = simsByDay.get(date) ?? []
 
-    // No mês atual, faturas passadas (date < todayIso) que foram pagas já estão em txs
-    const isPastInCurrentMonth =
-      period.year === currentYear && period.month === currentMonth && date < todayIso
-    const applicableInvoices = isPastInCurrentMonth ? [] : rawDayInvoices
+    const isPast = date < todayIso
+    // Faturas passadas pagas já geraram débito bancário (COMPLETED) em acTxs
+    const applicableInvoices = isPast ? [] : rawDayInvoices
 
-    const txDelta = txs.reduce((s, t) => s + effect(t), 0)
+    // Transações visíveis no dia
+    const completedDisplayTxs = displayTxs.filter((t) => t.status === 'COMPLETED')
+    const pendingDisplayTxs = displayTxs.filter((t) => t.status === 'PENDING')
+    const completedDelta = completedDisplayTxs.reduce((s, t) => s + effect(t), 0)
+    const pendingDelta = pendingDisplayTxs.reduce((s, t) => s + effect(t), 0)
+
+    // Acúmulo de lançamentos pendentes no mês
+    pendingDisplayTxs.forEach((t) => {
+      if (t.type === 'EXPENSE') totalPendingExpense += t.amount
+      else if (t.type === 'INCOME') totalPendingIncome += t.amount
+    })
+
+    // Movimentação na conta bancária:
+    // Em dias passados (date < todayIso), despesas/receitas PENDING não saíram da conta bancária.
+    // Em dias presentes e futuros (date >= todayIso), a projeção inclui PENDING e faturas.
+    const acCompletedDelta = acTxs.filter((t) => t.status === 'COMPLETED').reduce((s, t) => s + effect(t), 0)
+    const acPendingDelta = acTxs.filter((t) => t.status === 'PENDING').reduce((s, t) => s + effect(t), 0)
     const invoiceDelta = applicableInvoices.reduce((s, inv) => s - inv.remainingAmount, 0)
-    const realDelta = txDelta + invoiceDelta
+
+    const bankRealDelta = isPast
+      ? acCompletedDelta
+      : acCompletedDelta + acPendingDelta + invoiceDelta
 
     const simulatedDelta = daySims.reduce((s, sim) => s + simEffect(sim), 0)
-    const totalDelta = realDelta + simulatedDelta
+    const bankTotalDelta = bankRealDelta + simulatedDelta
 
-    runningReal += realDelta
-    runningSim += totalDelta
+    runningReal += bankRealDelta
+    runningSim += bankTotalDelta
+
+    // Delta exibido no dia
+    const dayDisplayDelta = isPast
+      ? completedDelta + simulatedDelta
+      : completedDelta + pendingDelta + invoiceDelta + simulatedDelta
 
     days.push({
       day: i,
       date,
-      txs,
+      txs: displayTxs,
+      pendingTxs: pendingDisplayTxs,
+      pendingDelta,
+      completedDelta,
       invoices: applicableInvoices,
-      delta: totalDelta,
+      delta: dayDisplayDelta,
       balance: runningSim,
       simulations: daySims,
       simulatedDelta,
@@ -419,6 +459,8 @@ export function buildCalendarProjection(
     realClosing: runningReal,
     realMin,
     hasSimulations: simulations.length > 0,
+    totalPendingExpense,
+    totalPendingIncome,
   }
 }
 
