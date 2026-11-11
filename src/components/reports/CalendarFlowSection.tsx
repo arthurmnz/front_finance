@@ -386,11 +386,16 @@ export default function CalendarFlowSection({
                   {d.invoices.length > 0 && (
                     <span
                       title={`Vencimento de fatura: ${d.invoices
-                        .map((i) => `${i.cardName} (${formatMoney(i.remainingAmount)})`)
+                        .map((i) => `${i.cardName} (${formatMoney(i.remainingAmount)})${i.isOverdue ? ' [Vencida]' : ''}`)
                         .join(', ')}`}
                       className="flex items-center"
                     >
-                      <CardIcon className="size-3 text-violet shrink-0" />
+                      <CardIcon
+                        className={clsx(
+                          'size-3 shrink-0',
+                          d.invoices.some((i) => i.isOverdue) ? 'text-expense' : 'text-violet',
+                        )}
+                      />
                     </span>
                   )}
                 </div>
@@ -583,14 +588,25 @@ export default function CalendarFlowSection({
                   to={`/cartoes/${inv.cardId}`}
                   className="flex items-center gap-3 p-3 hover:bg-surface-2 transition"
                 >
-                  <div className="grid size-9 place-items-center rounded-xl bg-violet/15 text-violet">
+                  <div
+                    className={clsx(
+                      'grid size-9 place-items-center rounded-xl',
+                      inv.isOverdue ? 'bg-expense/15 text-expense' : 'bg-violet/15 text-violet',
+                    )}
+                  >
                     <CardIcon className="size-4" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-white">Vencimento da fatura {inv.cardName}</p>
-                    <p className="text-xs text-text-dim">Débito previsto na conta vinculada</p>
+                    <p className="text-xs text-text-dim">
+                      {inv.isOverdue
+                        ? 'Pendente de pagamento — impacta projeção a partir de hoje'
+                        : 'Débito previsto na conta vinculada'}
+                    </p>
                   </div>
-                  <Badge tone="primary">Fatura</Badge>
+                  <Badge tone={inv.isOverdue ? 'danger' : 'primary'}>
+                    {inv.isOverdue ? 'Fatura Vencida' : 'Fatura'}
+                  </Badge>
                   <p className="text-sm font-semibold text-expense tabular-nums">−{formatMoney(inv.remainingAmount)}</p>
                 </Link>
               ))}

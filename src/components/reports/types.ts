@@ -122,7 +122,7 @@ export interface DayProjection {
   day: number
   date: string
   txs: Transaction[]
-  invoices: { cardId: string; cardName: string; remainingAmount: number }[]
+  invoices: { cardId: string; cardName: string; remainingAmount: number; isOverdue?: boolean }[]
   delta: number
   balance: number
   simulations?: SimulatedTransaction[]

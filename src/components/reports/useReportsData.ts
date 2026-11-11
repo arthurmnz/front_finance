@@ -115,10 +115,254 @@ export const parseDateParts = (dateStr: string) => {
 // FUNÇÕES AUXILIARES DE CÁLCULO ANALÍTICO
 // ----------------------------------------------------------------------
 
+export interface MonthSimulationParams {
+  year: number
+  month: number
+  opening: number
+  realOpening: number
+  todayIso: string
+  currentYear: number
+  currentMonth: number
+  accountSource: Transaction[]
+  displaySource: Transaction[]
+  simulations: SimulatedTransaction[]
+  getMonthInvoices: (m: number, y: number) => {
+    cardId: string
+    cardName: string
+    remainingAmount: number
+    dueIso: string
+    status?: string
+  }[]
+  effect: (t: Transaction) => number
+  simEffect: (s: SimulatedTransaction) => number
+}
+
+export interface MonthSimulationResult {
+  days: DayProjection[]
+  closing: number
+  realClosing: number
+  min: DayProjection
+  realMin: DayProjection
+  firstNegative?: DayProjection
+  totalPendingExpense: number
+  totalPendingIncome: number
+}
+
+export function simulateMonthDays(params: MonthSimulationParams): MonthSimulationResult {
+  const {
+    year,
+    month,
+    opening,
+    realOpening,
+    todayIso,
+    currentYear,
+    currentMonth,
+    accountSource,
+    displaySource,
+    simulations,
+    getMonthInvoices,
+    effect,
+    simEffect,
+  } = params
+
+  const monthIdx = year * 12 + (month - 1)
+  const currentMonthIdx = currentYear * 12 + (currentMonth - 1)
+  const isCurrentMonth = monthIdx === currentMonthIdx
+  const daysInMonth = new Date(year, month, 0).getDate()
+
+  // 1. Obter faturas apuradas para este mês
+  const rawMonthInvoices = getMonthInvoices(month, year)
+
+  // Separar faturas normais e faturas vencidas não pagas do ciclo atual.
+  // Regra fundamental: se uma fatura do mês corrente possui vencimento anterior à data de hoje
+  // (dueIso < todayIso) e não foi paga (status !== 'PAID' e remainingAmount > 0),
+  // ela NÃO pode ser descartada sumariamente; é tratada como pendência ativa de pagamento a partir de todayIso.
+  const overdueUnpaidInvoices: typeof rawMonthInvoices = []
+  const regularInvoices: typeof rawMonthInvoices = []
+
+  rawMonthInvoices.forEach((inv) => {
+    if (isCurrentMonth && inv.dueIso < todayIso && inv.remainingAmount > 0 && inv.status !== 'PAID') {
+      overdueUnpaidInvoices.push(inv)
+    } else {
+      regularInvoices.push(inv)
+    }
+  })
+
+  // Mapeamento de faturas por dia para exibição no calendário
+  const invoicesDisplayByDay = new Map<
+    string,
+    { cardId: string; cardName: string; remainingAmount: number; isOverdue?: boolean }[]
+  >()
+
+  // Faturas regulares no dia de vencimento
+  regularInvoices.forEach((inv) => {
+    const isPast = inv.dueIso < todayIso
+    if (isPast && inv.remainingAmount <= 0) return
+    invoicesDisplayByDay.set(inv.dueIso, [
+      ...(invoicesDisplayByDay.get(inv.dueIso) ?? []),
+      { cardId: inv.cardId, cardName: inv.cardName, remainingAmount: inv.remainingAmount, isOverdue: false },
+    ])
+  })
+
+  // Faturas vencidas não pagas do ciclo:
+  // Exibidas no dia de vencimento original (com flag isOverdue) e também no dia de hoje se todayIso estiver no mês
+  overdueUnpaidInvoices.forEach((inv) => {
+    invoicesDisplayByDay.set(inv.dueIso, [
+      ...(invoicesDisplayByDay.get(inv.dueIso) ?? []),
+      { cardId: inv.cardId, cardName: inv.cardName, remainingAmount: inv.remainingAmount, isOverdue: true },
+    ])
+    if (isCurrentMonth && inv.dueIso !== todayIso && todayIso.startsWith(`${year}-${String(month).padStart(2, '0')}`)) {
+      invoicesDisplayByDay.set(todayIso, [
+        ...(invoicesDisplayByDay.get(todayIso) ?? []),
+        { cardId: inv.cardId, cardName: inv.cardName, remainingAmount: inv.remainingAmount, isOverdue: true },
+      ])
+    }
+  })
+
+  // Mapeamento de débito bancário por dia na projeção da conta
+  const bankInvoiceDebitByDay = new Map<string, number>()
+  regularInvoices.forEach((inv) => {
+    if (inv.dueIso < todayIso) return
+    bankInvoiceDebitByDay.set(inv.dueIso, (bankInvoiceDebitByDay.get(inv.dueIso) ?? 0) + inv.remainingAmount)
+  })
+
+  // Faturas vencidas não pagas entram no débito bancário exatamente no dia de hoje (ou no último dia do mês corrente)
+  if (isCurrentMonth && overdueUnpaidInvoices.length > 0) {
+    const totalOverdue = overdueUnpaidInvoices.reduce((s, inv) => s + inv.remainingAmount, 0)
+    const effectiveTargetDay = todayIso.startsWith(`${year}-${String(month).padStart(2, '0')}`)
+      ? todayIso
+      : toISODate(new Date(year, month - 1, daysInMonth))
+
+    bankInvoiceDebitByDay.set(
+      effectiveTargetDay,
+      (bankInvoiceDebitByDay.get(effectiveTargetDay) ?? 0) + totalOverdue,
+    )
+  }
+
+  // 2. Mapeamento de transações bancárias e simulações por dia
+  const accountByDay = new Map<string, Transaction[]>()
+  accountSource.forEach((t) => {
+    const p = parseDateParts(t.date)
+    if (p.year === year && p.month === month && effect(t) !== 0) {
+      const k = t.date.slice(0, 10)
+      accountByDay.set(k, [...(accountByDay.get(k) ?? []), t])
+    }
+  })
+
+  const displayByDay = new Map<string, Transaction[]>()
+  displaySource.forEach((t) => {
+    const p = parseDateParts(t.date)
+    if (p.year === year && p.month === month) {
+      const k = t.date.slice(0, 10)
+      displayByDay.set(k, [...(displayByDay.get(k) ?? []), t])
+    }
+  })
+
+  const simsByDay = new Map<string, SimulatedTransaction[]>()
+  simulations.forEach((s) => {
+    const p = parseDateParts(s.date)
+    if (p.year === year && p.month === month) {
+      const k = s.date.slice(0, 10)
+      simsByDay.set(k, [...(simsByDay.get(k) ?? []), s])
+    }
+  })
+
+  let runningReal = realOpening
+  let runningSim = opening
+  let totalPendingExpense = 0
+  let totalPendingIncome = 0
+
+  const days: DayProjection[] = []
+
+  for (let i = 1; i <= daysInMonth; i++) {
+    const date = toISODate(new Date(year, month - 1, i))
+    const displayTxs = displayByDay.get(date) ?? []
+    const acTxs = accountByDay.get(date) ?? []
+    const dayInvoices = invoicesDisplayByDay.get(date) ?? []
+    const daySims = simsByDay.get(date) ?? []
+
+    const isPast = date < todayIso
+
+    // Transações visíveis no dia
+    const completedDisplayTxs = displayTxs.filter((t) => t.status === 'COMPLETED')
+    const pendingDisplayTxs = displayTxs.filter((t) => t.status === 'PENDING')
+    const completedDelta = completedDisplayTxs.reduce((s, t) => s + effect(t), 0)
+    const pendingDelta = pendingDisplayTxs.reduce((s, t) => s + effect(t), 0)
+
+    pendingDisplayTxs.forEach((t) => {
+      if (t.type === 'EXPENSE') totalPendingExpense += t.amount
+      else if (t.type === 'INCOME') totalPendingIncome += t.amount
+    })
+
+    // Movimentação na conta bancária:
+    // Em dias passados (date < todayIso), transações PENDING e faturas não pagas não saíram da conta bancária.
+    // Em dias presentes e futuros (date >= todayIso), a projeção inclui PENDING e faturas.
+    const acCompletedDelta = acTxs.filter((t) => t.status === 'COMPLETED').reduce((s, t) => s + effect(t), 0)
+    const acPendingDelta = acTxs.filter((t) => t.status === 'PENDING').reduce((s, t) => s + effect(t), 0)
+    const dayInvoiceDebit = bankInvoiceDebitByDay.get(date) ?? 0
+
+    const bankRealDelta = isPast
+      ? acCompletedDelta
+      : acCompletedDelta + acPendingDelta - dayInvoiceDebit
+
+    const simulatedDelta = daySims.reduce((s, sim) => s + simEffect(sim), 0)
+    const bankTotalDelta = bankRealDelta + simulatedDelta
+
+    runningReal += bankRealDelta
+    runningSim += bankTotalDelta
+
+    // Delta diário exibido no card
+    const dayDisplayDelta = isPast
+      ? completedDelta + simulatedDelta
+      : completedDelta + pendingDelta - dayInvoiceDebit + simulatedDelta
+
+    days.push({
+      day: i,
+      date,
+      txs: displayTxs,
+      pendingTxs: pendingDisplayTxs,
+      pendingDelta,
+      completedDelta,
+      invoices: dayInvoices,
+      delta: dayDisplayDelta,
+      balance: runningSim,
+      simulations: daySims,
+      simulatedDelta,
+      realBalance: runningReal,
+    })
+  }
+
+  const min = days.reduce(
+    (m, d) => (d.balance < m.balance ? d : m),
+    days[0] || { balance: 0, day: 1, date: '', txs: [], invoices: [], delta: 0 },
+  )
+  const realMin = days.reduce(
+    (m, d) => ((d.realBalance ?? d.balance) < (m.realBalance ?? m.balance) ? d : m),
+    days[0] || { balance: 0, day: 1, date: '', txs: [], invoices: [], delta: 0 },
+  )
+  const firstNegative = days.find((d) => d.balance < 0)
+
+  return {
+    days,
+    closing: runningSim,
+    realClosing: runningReal,
+    min,
+    realMin,
+    firstNegative,
+    totalPendingExpense,
+    totalPendingIncome,
+  }
+}
+
 export function buildCalendarProjection(
   accounts: Account[],
   transactions: Transaction[],
-  invoices: { card: CreditCard; invoice: Partial<CreditCardInvoice> }[],
+  invoices: {
+    card: CreditCard
+    invoice: Partial<CreditCardInvoice>
+    month?: number
+    year?: number
+  }[],
   period: ReportPeriod,
   accountIdFilter?: string,
   allTransactions?: Transaction[],
@@ -163,17 +407,46 @@ export function buildCalendarProjection(
   // Apuração de faturas de cartão para qualquer mês (m, y)
   const getMonthInvoices = (m: number, y: number) => {
     const daysInM = new Date(y, m, 0).getDate()
-    const result: { cardId: string; cardName: string; remainingAmount: number; dueIso: string }[] = []
+    const result: {
+      cardId: string
+      cardName: string
+      remainingAmount: number
+      dueIso: string
+      status?: string
+    }[] = []
 
-    invoices.forEach(({ card, invoice }) => {
+    // Agrupa cartões únicos presentes na lista de faturas ou contas
+    const cardMap = new Map<string, CreditCard>()
+    invoices.forEach(({ card }) => cardMap.set(card.id, card))
+
+    cardMap.forEach((card) => {
       if (accountIdFilter && card.accountId && card.accountId !== accountIdFilter) return
 
+      // 1. Procura na lista de faturas carregadas da API correspondente a este cartão e a este mês/ano
+      const matched = invoices.find(
+        (item) =>
+          item.card.id === card.id &&
+          ((item.month === m && item.year === y) ||
+            (item.invoice?.month === m && item.invoice?.year === y)),
+      )
+
       let remaining = 0
-      const isTargetPeriod = m === period.month && y === period.year
-      if (isTargetPeriod && invoice?.remainingAmount != null && invoice.remainingAmount > 0) {
-        remaining = invoice.remainingAmount
-      } else if (isTargetPeriod && invoice?.totalAmount != null) {
-        remaining = Math.max(0, invoice.totalAmount - (invoice.paidAmount ?? 0))
+      let totalAmount = 0
+      let paidAmount = 0
+      let dueDateStr: string | undefined = undefined
+      let status: string | undefined = undefined
+
+      if (
+        matched?.invoice &&
+        (matched.invoice.remainingAmount != null || matched.invoice.totalAmount != null)
+      ) {
+        const inv = matched.invoice
+        totalAmount = inv.totalAmount ?? 0
+        paidAmount = inv.paidAmount ?? 0
+        remaining =
+          inv.remainingAmount != null ? inv.remainingAmount : Math.max(0, totalAmount - paidAmount)
+        dueDateStr = inv.dueDate
+        status = inv.status
       } else if (
         card.currentInvoiceAmount != null &&
         m === card.currentInvoiceMonth &&
@@ -206,7 +479,14 @@ export function buildCalendarProjection(
         const alreadyPaid = accountSource
           .filter((t) => {
             if (t.type !== 'EXPENSE' || !isInvoicePaymentTx(t)) return false
-            if (t.creditCardInvoiceId && invoice?.creditCardId && t.creditCardInvoiceId === invoice.creditCardId) return true
+            if (
+              t.creditCardInvoiceId &&
+              matched?.invoice &&
+              'id' in matched.invoice &&
+              t.creditCardInvoiceId === (matched.invoice as { id?: string }).id
+            ) {
+              return true
+            }
             return t.title.toLowerCase().includes(card.name.toLowerCase())
           })
           .reduce((s, t) => s + t.amount, 0)
@@ -217,8 +497,8 @@ export function buildCalendarProjection(
       if (remaining <= 0) return
 
       let dueIso: string
-      if (isTargetPeriod && invoice?.dueDate) {
-        const rawIso = invoice.dueDate.slice(0, 10)
+      if (dueDateStr) {
+        const rawIso = dueDateStr.slice(0, 10)
         const p = parseDateParts(rawIso)
         if (p.year === y && p.month === m) {
           dueIso = rawIso
@@ -236,6 +516,7 @@ export function buildCalendarProjection(
         cardName: card.name,
         remainingAmount: remaining,
         dueIso,
+        status,
       })
     })
 
@@ -254,213 +535,133 @@ export function buildCalendarProjection(
 
   let targetOpening = openingCurrentMonth
   let targetRealOpening = openingCurrentMonth
+  let targetResult: MonthSimulationResult
 
-  if (targetMonthIdx <= currentMonthIdx) {
-    // 1. Para o mês corrente ou qualquer mês passado:
+  if (targetMonthIdx < currentMonthIdx) {
+    // 1. Para meses passados:
     // Reverte todas as transações COMPLETED a partir do primeiro dia do mês selecionado.
-    // Desta forma, o saldo de abertura do mês passado reflete exatamente a realidade histórica,
-    // sem vazar movimentações de meses posteriores e sem subtrair pendências que nunca saíram da conta.
     const targetMonthFirstIso = toISODate(new Date(period.year, period.month - 1, 1))
     const completedTxsFromTarget = completedAccountTxs.filter((t) => t.date.slice(0, 10) >= targetMonthFirstIso)
     const deltaFromTarget = completedTxsFromTarget.reduce((s, t) => s + effect(t), 0)
     targetRealOpening = realCurrentBalance - deltaFromTarget
     targetOpening = targetRealOpening
+
+    targetResult = simulateMonthDays({
+      year: period.year,
+      month: period.month,
+      opening: targetOpening,
+      realOpening: targetRealOpening,
+      todayIso,
+      currentYear,
+      currentMonth,
+      accountSource,
+      displaySource,
+      simulations,
+      getMonthInvoices,
+      effect,
+      simEffect,
+    })
+  } else if (targetMonthIdx === currentMonthIdx) {
+    // 2. Para o mês corrente:
+    targetRealOpening = openingCurrentMonth
+    targetOpening = openingCurrentMonth
+
+    targetResult = simulateMonthDays({
+      year: currentYear,
+      month: currentMonth,
+      opening: targetOpening,
+      realOpening: targetRealOpening,
+      todayIso,
+      currentYear,
+      currentMonth,
+      accountSource,
+      displaySource,
+      simulations,
+      getMonthInvoices,
+      effect,
+      simEffect,
+    })
   } else {
-    // 2. Para meses futuros:
-    // Projeta em cascata a partir do mês corrente até o mês do relatório selecionado.
-    const daysInCurrentMonth = new Date(currentYear, currentMonth, 0).getDate()
-    const currentMonthInvoices = getMonthInvoices(currentMonth, currentYear)
-    const currentInvoicesByDay = new Map<string, number>()
-    currentMonthInvoices.forEach((inv) => {
-      currentInvoicesByDay.set(inv.dueIso, (currentInvoicesByDay.get(inv.dueIso) ?? 0) + inv.remainingAmount)
+    // 3. Para meses futuros:
+    // Encadeamento estrito via simulateMonthDays:
+    // Simula o mês corrente (inclusive faturas ativas e simulações do mês corrente),
+    // depois simula todos os meses intermediários em cascata garantindo que
+    // opening(M+1) === closing(M) rigorosamente.
+    const curMonthResult = simulateMonthDays({
+      year: currentYear,
+      month: currentMonth,
+      opening: openingCurrentMonth,
+      realOpening: openingCurrentMonth,
+      todayIso,
+      currentYear,
+      currentMonth,
+      accountSource,
+      displaySource,
+      simulations,
+      getMonthInvoices,
+      effect,
+      simEffect,
     })
 
-    let curMonthRunningReal = openingCurrentMonth
-    let curMonthRunningSim = openingCurrentMonth
-
-    for (let day = 1; day <= daysInCurrentMonth; day++) {
-      const dayDate = toISODate(new Date(currentYear, currentMonth - 1, day))
-      const dayTxs = accountSource.filter((t) => {
-        const p = parseDateParts(t.date)
-        return p.year === currentYear && p.month === currentMonth && p.day === day && effect(t) !== 0
-      })
-      const dayCompletedDelta = dayTxs.filter((t) => t.status === 'COMPLETED').reduce((s, t) => s + effect(t), 0)
-      const dayPendingDelta = dayTxs.filter((t) => t.status === 'PENDING').reduce((s, t) => s + effect(t), 0)
-      const dayInvoiceDelta = dayDate >= todayIso ? (currentInvoicesByDay.get(dayDate) ?? 0) : 0
-
-      const daySims = simulations.filter((s) => {
-        const p = parseDateParts(s.date)
-        return p.year === currentYear && p.month === currentMonth && p.day === day
-      })
-      const daySimDelta = daySims.reduce((s, sim) => s + simEffect(sim), 0)
-
-      let dayRealDelta = dayCompletedDelta
-      if (dayDate >= todayIso) {
-        dayRealDelta += dayPendingDelta - dayInvoiceDelta
-      }
-
-      curMonthRunningReal += dayRealDelta
-      curMonthRunningSim += dayRealDelta + daySimDelta
-    }
-
-    let cascadeRunning = curMonthRunningSim
-    let realCascadeRunning = curMonthRunningReal
+    let cascadeSim = curMonthResult.closing
+    let cascadeReal = curMonthResult.realClosing
 
     for (let idx = currentMonthIdx + 1; idx < targetMonthIdx; idx++) {
       const intYear = Math.floor(idx / 12)
       const intMonth = (idx % 12) + 1
 
-      const intTxs = accountSource.filter((t) => {
-        const p = parseDateParts(t.date)
-        return p.year === intYear && p.month === intMonth && effect(t) !== 0
+      const intResult = simulateMonthDays({
+        year: intYear,
+        month: intMonth,
+        opening: cascadeSim,
+        realOpening: cascadeReal,
+        todayIso,
+        currentYear,
+        currentMonth,
+        accountSource,
+        displaySource,
+        simulations,
+        getMonthInvoices,
+        effect,
+        simEffect,
       })
-      const intCompletedDelta = intTxs.filter((t) => t.status === 'COMPLETED').reduce((s, t) => s + effect(t), 0)
-      const intPendingDelta = intTxs.filter((t) => t.status === 'PENDING').reduce((s, t) => s + effect(t), 0)
 
-      const intInvoices = getMonthInvoices(intMonth, intYear)
-      const intInvoicesDelta = intInvoices.reduce((s, inv) => s - inv.remainingAmount, 0)
-
-      const intSims = simulations.filter((s) => {
-        const p = parseDateParts(s.date)
-        return p.year === intYear && p.month === intMonth
-      })
-      const intSimsDelta = intSims.reduce((s, sim) => s + simEffect(sim), 0)
-
-      const intRealDelta = intCompletedDelta + intPendingDelta + intInvoicesDelta
-      realCascadeRunning += intRealDelta
-      cascadeRunning += intRealDelta + intSimsDelta
+      cascadeSim = intResult.closing
+      cascadeReal = intResult.realClosing
     }
 
-    targetOpening = cascadeRunning
-    targetRealOpening = realCascadeRunning
-  }
+    targetOpening = cascadeSim
+    targetRealOpening = cascadeReal
 
-  // 3. Construção diária do mês selecionado
-  const daysInMonth = new Date(period.year, period.month, 0).getDate()
-  const targetInvoices = getMonthInvoices(period.month, period.year)
-  const invoicesByDay = new Map<string, { cardId: string; cardName: string; remainingAmount: number }[]>()
-  targetInvoices.forEach((inv) => {
-    invoicesByDay.set(inv.dueIso, [...(invoicesByDay.get(inv.dueIso) ?? []), inv])
-  })
-
-  // Transações para exibição no calendário (respeitando filtros de categoria/status/responsável)
-  const displayByDay = new Map<string, Transaction[]>()
-  displaySource.forEach((t) => {
-    const p = parseDateParts(t.date)
-    if (p.year === period.year && p.month === period.month) {
-      const k = t.date.slice(0, 10)
-      displayByDay.set(k, [...(displayByDay.get(k) ?? []), t])
-    }
-  })
-
-  // Transações completas de conta para rastreamento contábil fiel do saldo bancário
-  const accountByDay = new Map<string, Transaction[]>()
-  accountSource.forEach((t) => {
-    const p = parseDateParts(t.date)
-    if (p.year === period.year && p.month === period.month && effect(t) !== 0) {
-      const k = t.date.slice(0, 10)
-      accountByDay.set(k, [...(accountByDay.get(k) ?? []), t])
-    }
-  })
-
-  const simsByDay = new Map<string, SimulatedTransaction[]>()
-  simulations.forEach((s) => {
-    const p = parseDateParts(s.date)
-    if (p.year === period.year && p.month === period.month) {
-      const k = s.date.slice(0, 10)
-      simsByDay.set(k, [...(simsByDay.get(k) ?? []), s])
-    }
-  })
-
-  let runningReal = targetRealOpening
-  let runningSim = targetOpening
-  let totalPendingExpense = 0
-  let totalPendingIncome = 0
-
-  const days: DayProjection[] = []
-  for (let i = 1; i <= daysInMonth; i++) {
-    const date = toISODate(new Date(period.year, period.month - 1, i))
-    const displayTxs = displayByDay.get(date) ?? []
-    const acTxs = accountByDay.get(date) ?? []
-    const rawDayInvoices = invoicesByDay.get(date) ?? []
-    const daySims = simsByDay.get(date) ?? []
-
-    const isPast = date < todayIso
-    // Faturas passadas pagas já geraram débito bancário (COMPLETED) em acTxs
-    const applicableInvoices = isPast ? [] : rawDayInvoices
-
-    // Transações visíveis no dia
-    const completedDisplayTxs = displayTxs.filter((t) => t.status === 'COMPLETED')
-    const pendingDisplayTxs = displayTxs.filter((t) => t.status === 'PENDING')
-    const completedDelta = completedDisplayTxs.reduce((s, t) => s + effect(t), 0)
-    const pendingDelta = pendingDisplayTxs.reduce((s, t) => s + effect(t), 0)
-
-    // Acúmulo de lançamentos pendentes no mês
-    pendingDisplayTxs.forEach((t) => {
-      if (t.type === 'EXPENSE') totalPendingExpense += t.amount
-      else if (t.type === 'INCOME') totalPendingIncome += t.amount
-    })
-
-    // Movimentação na conta bancária:
-    // Em dias passados (date < todayIso), despesas/receitas PENDING não saíram da conta bancária.
-    // Em dias presentes e futuros (date >= todayIso), a projeção inclui PENDING e faturas.
-    const acCompletedDelta = acTxs.filter((t) => t.status === 'COMPLETED').reduce((s, t) => s + effect(t), 0)
-    const acPendingDelta = acTxs.filter((t) => t.status === 'PENDING').reduce((s, t) => s + effect(t), 0)
-    const invoiceDelta = applicableInvoices.reduce((s, inv) => s - inv.remainingAmount, 0)
-
-    const bankRealDelta = isPast
-      ? acCompletedDelta
-      : acCompletedDelta + acPendingDelta + invoiceDelta
-
-    const simulatedDelta = daySims.reduce((s, sim) => s + simEffect(sim), 0)
-    const bankTotalDelta = bankRealDelta + simulatedDelta
-
-    runningReal += bankRealDelta
-    runningSim += bankTotalDelta
-
-    // Delta exibido no dia
-    const dayDisplayDelta = isPast
-      ? completedDelta + simulatedDelta
-      : completedDelta + pendingDelta + invoiceDelta + simulatedDelta
-
-    days.push({
-      day: i,
-      date,
-      txs: displayTxs,
-      pendingTxs: pendingDisplayTxs,
-      pendingDelta,
-      completedDelta,
-      invoices: applicableInvoices,
-      delta: dayDisplayDelta,
-      balance: runningSim,
-      simulations: daySims,
-      simulatedDelta,
-      realBalance: runningReal,
+    targetResult = simulateMonthDays({
+      year: period.year,
+      month: period.month,
+      opening: targetOpening,
+      realOpening: targetRealOpening,
+      todayIso,
+      currentYear,
+      currentMonth,
+      accountSource,
+      displaySource,
+      simulations,
+      getMonthInvoices,
+      effect,
+      simEffect,
     })
   }
-
-  const min = days.reduce(
-    (m, d) => (d.balance < m.balance ? d : m),
-    days[0] || { balance: 0, day: 1, date: '', txs: [], invoices: [], delta: 0 },
-  )
-  const realMin = days.reduce(
-    (m, d) => ((d.realBalance ?? d.balance) < (m.realBalance ?? m.balance) ? d : m),
-    days[0] || { balance: 0, day: 1, date: '', txs: [], invoices: [], delta: 0 },
-  )
-  const firstNegative = days.find((d) => d.balance < 0)
 
   return {
-    days,
+    days: targetResult.days,
     opening: targetOpening,
-    closing: runningSim,
-    min,
-    firstNegative,
+    closing: targetResult.closing,
+    min: targetResult.min,
+    firstNegative: targetResult.firstNegative,
     realOpening: targetRealOpening,
-    realClosing: runningReal,
-    realMin,
+    realClosing: targetResult.realClosing,
+    realMin: targetResult.realMin,
     hasSimulations: simulations.length > 0,
-    totalPendingExpense,
-    totalPendingIncome,
+    totalPendingExpense: targetResult.totalPendingExpense,
+    totalPendingIncome: targetResult.totalPendingIncome,
   }
 }
 
@@ -1054,8 +1255,14 @@ export function useIndividualReportsData(
     ],
   })
 
-  // 4. Faturas dos cartões próprios do mês selecionado
-  const invoiceQueries = useQueries({
+  const now = useMemo(() => new Date(), [])
+  const currentMonth = now.getMonth() + 1
+  const currentYear = now.getFullYear()
+  const isDifferentPeriod =
+    filters.period.month !== currentMonth || filters.period.year !== currentYear
+
+  // 4a. Faturas dos cartões próprios do mês selecionado no filtro
+  const targetInvoiceQueries = useQueries({
     queries: cardList.map((c) => ({
       queryKey: ['credit-cards', c.id, 'invoice', filters.period.month, filters.period.year],
       queryFn: () =>
@@ -1065,15 +1272,34 @@ export function useIndividualReportsData(
     })),
   })
 
+  // 4b. Faturas dos cartões próprios do mês corrente (quando o período selecionado for diferente)
+  const currentInvoiceQueries = useQueries({
+    queries: isDifferentPeriod
+      ? cardList.map((c) => ({
+          queryKey: ['credit-cards', c.id, 'invoice', currentMonth, currentYear],
+          queryFn: () =>
+            api
+              .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, {
+                params: { month: currentMonth, year: currentYear },
+              })
+              .then((r) => r.data),
+        }))
+      : [],
+  })
+
   const loading =
     accountsQuery.isLoading ||
     creditCardsQuery.isLoading ||
     accountQueries.some((q) => q.isLoading) ||
     cardTxQueries.some((q) => q.isLoading) ||
     responsibleQuery.some((q) => q.isLoading) ||
-    invoiceQueries.some((q) => q.isLoading)
+    targetInvoiceQueries.some((q) => q.isLoading) ||
+    currentInvoiceQueries.some((q) => q.isLoading)
 
-  const invoiceStamp = invoiceQueries.map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`).join(',')
+  const invoiceStamp = targetInvoiceQueries
+    .concat(currentInvoiceQueries)
+    .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
+    .join(',')
   const txStamp = accountQueries
     .concat(cardTxQueries)
     .concat(responsibleQuery)
@@ -1198,11 +1424,34 @@ export function useIndividualReportsData(
       return true
     })
 
-    const invoiceList = cardListForProjection.map((c) => {
-      const idx = cardList.findIndex((item) => item.id === c.id)
-      return {
+    const invoiceList: {
+      card: CreditCard
+      invoice: Partial<CreditCardInvoice>
+      month: number
+      year: number
+    }[] = []
+
+    cardListForProjection.forEach((c) => {
+      const targetIdx = cardList.findIndex((item) => item.id === c.id)
+      const targetData = targetIdx >= 0 ? targetInvoiceQueries[targetIdx]?.data : undefined
+      invoiceList.push({
         card: c,
-        invoice: (idx >= 0 ? invoiceQueries[idx]?.data : undefined) || ({} as CreditCardInvoice),
+        invoice: targetData || ({} as CreditCardInvoice),
+        month: targetData?.month ?? filters.period.month,
+        year: targetData?.year ?? filters.period.year,
+      })
+
+      if (isDifferentPeriod) {
+        const curIdx = cardList.findIndex((item) => item.id === c.id)
+        const curData = curIdx >= 0 ? currentInvoiceQueries[curIdx]?.data : undefined
+        if (curData) {
+          invoiceList.push({
+            card: c,
+            invoice: curData,
+            month: curData.month ?? currentMonth,
+            year: curData.year ?? currentYear,
+          })
+        }
       }
     })
 
@@ -1218,7 +1467,8 @@ export function useIndividualReportsData(
   }, [
     operationalAccounts,
     cardList,
-    invoiceQueries,
+    targetInvoiceQueries,
+    currentInvoiceQueries,
     filteredPersonalTxs,
     personalTxs,
     filters.period,
@@ -1228,6 +1478,9 @@ export function useIndividualReportsData(
     invoiceStamp,
     txStamp,
     simulations,
+    isDifferentPeriod,
+    currentMonth,
+    currentYear,
   ])
 
   const hasCardsIncluded = !filters.hideCreditCards && filters.creditCardId !== 'none'
@@ -1388,8 +1641,14 @@ export function useGroupReportsData(
     })),
   })
 
-  // 3. Faturas dos cartões do grupo para o mês selecionado
-  const invoiceQueries = useQueries({
+  const now = useMemo(() => new Date(), [])
+  const currentMonth = now.getMonth() + 1
+  const currentYear = now.getFullYear()
+  const isDifferentPeriod =
+    filters.period.month !== currentMonth || filters.period.year !== currentYear
+
+  // 3a. Faturas dos cartões do grupo para o mês selecionado
+  const targetInvoiceQueries = useQueries({
     queries: cardList.map((c) => ({
       queryKey: ['credit-cards', c.id, 'invoice', filters.period.month, filters.period.year],
       queryFn: () =>
@@ -1399,6 +1658,21 @@ export function useGroupReportsData(
     })),
   })
 
+  // 3b. Faturas dos cartões do grupo para o mês corrente (quando o período selecionado for diferente)
+  const currentInvoiceQueries = useQueries({
+    queries: isDifferentPeriod
+      ? cardList.map((c) => ({
+          queryKey: ['credit-cards', c.id, 'invoice', currentMonth, currentYear],
+          queryFn: () =>
+            api
+              .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, {
+                params: { month: currentMonth, year: currentYear },
+              })
+              .then((r) => r.data),
+        }))
+      : [],
+  })
+
   const loading =
     groupQuery.isLoading ||
     groupAccountsQuery.isLoading ||
@@ -1406,9 +1680,13 @@ export function useGroupReportsData(
     groupCategoriesQuery.isLoading ||
     accountQueries.some((q) => q.isLoading) ||
     cardTxQueries.some((q) => q.isLoading) ||
-    invoiceQueries.some((q) => q.isLoading)
+    targetInvoiceQueries.some((q) => q.isLoading) ||
+    currentInvoiceQueries.some((q) => q.isLoading)
 
-  const invoiceStamp = invoiceQueries.map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`).join(',')
+  const invoiceStamp = targetInvoiceQueries
+    .concat(currentInvoiceQueries)
+    .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
+    .join(',')
   const txStamp = accountQueries
     .concat(cardTxQueries)
     .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
@@ -1480,11 +1758,34 @@ export function useGroupReportsData(
       return true
     })
 
-    const invoiceList = cardListForProjection.map((c) => {
-      const idx = cardList.findIndex((item) => item.id === c.id)
-      return {
+    const invoiceList: {
+      card: CreditCard
+      invoice: Partial<CreditCardInvoice>
+      month: number
+      year: number
+    }[] = []
+
+    cardListForProjection.forEach((c) => {
+      const targetIdx = cardList.findIndex((item) => item.id === c.id)
+      const targetData = targetIdx >= 0 ? targetInvoiceQueries[targetIdx]?.data : undefined
+      invoiceList.push({
         card: c,
-        invoice: (idx >= 0 ? invoiceQueries[idx]?.data : undefined) || ({} as CreditCardInvoice),
+        invoice: targetData || ({} as CreditCardInvoice),
+        month: targetData?.month ?? filters.period.month,
+        year: targetData?.year ?? filters.period.year,
+      })
+
+      if (isDifferentPeriod) {
+        const curIdx = cardList.findIndex((item) => item.id === c.id)
+        const curData = curIdx >= 0 ? currentInvoiceQueries[curIdx]?.data : undefined
+        if (curData) {
+          invoiceList.push({
+            card: c,
+            invoice: curData,
+            month: curData.month ?? currentMonth,
+            year: curData.year ?? currentYear,
+          })
+        }
       }
     })
 
@@ -1500,7 +1801,8 @@ export function useGroupReportsData(
   }, [
     operationalAccounts,
     cardList,
-    invoiceQueries,
+    targetInvoiceQueries,
+    currentInvoiceQueries,
     filteredGroupTxs,
     operationalGroupTransactions,
     filters.period,
@@ -1510,6 +1812,9 @@ export function useGroupReportsData(
     invoiceStamp,
     txStamp,
     simulations,
+    isDifferentPeriod,
+    currentMonth,
+    currentYear,
   ])
 
   const hasCardsIncluded = !filters.hideCreditCards && filters.creditCardId !== 'none'
