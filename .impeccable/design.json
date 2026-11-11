@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-11T02:47:00Z",
+  "title": "Design System: Finance",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Pitch Black",
+        "canonical": "#000000",
+        "tonalRamp": ["#000000", "#070709", "#0e0e13", "#16161f", "#1e1e2b", "#323247", "#5a5a72", "#ffffff"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Obsidian Surface",
+        "canonical": "#070709",
+        "tonalRamp": ["#000000", "#070709", "#0e0e13", "#16161f", "#1e1e2b", "#323247", "#5a5a72", "#ffffff"]
+      },
+      "surface-1": {
+        "role": "neutral",
+        "displayName": "Dark Slate 1",
+        "canonical": "#0e0e13",
+        "tonalRamp": ["#000000", "#070709", "#0e0e13", "#16161f", "#1e1e2b", "#323247", "#5a5a72", "#ffffff"]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Electric Violet",
+        "canonical": "#7D39EB",
+        "tonalRamp": ["#250b52", "#4A159D", "#6626d0", "#7D39EB", "#9253f5", "#B285FF", "#d6c2ff", "#f5f0ff"]
+      },
+      "lime": {
+        "role": "secondary",
+        "displayName": "Neon Lime",
+        "canonical": "#C6FF33",
+        "tonalRamp": ["#3b5200", "#638a00", "#8cb811", "#b1eb21", "#C6FF33", "#d5ff5c", "#E4FF8F", "#f7ffe0"]
+      },
+      "income": {
+        "role": "secondary",
+        "displayName": "Neon Lime (Income)",
+        "canonical": "#C6FF33",
+        "tonalRamp": ["#3b5200", "#638a00", "#8cb811", "#b1eb21", "#C6FF33", "#d5ff5c", "#E4FF8F", "#f7ffe0"]
+      },
+      "expense": {
+        "role": "tertiary",
+        "displayName": "Vivid Carmine (Expense)",
+        "canonical": "#FF4D6A",
+        "tonalRamp": ["#4a0612", "#7a1023", "#b3203c", "#e63956", "#FF4D6A", "#ff6b83", "#ffa8b7", "#ffe5eb"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Consolidated net worth metrics and hero headings."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles and major view headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles, category names, and modal headers."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Standard content, descriptions, and input controls."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form field labels, badge chips, and bottom navigation."
+      }
+    },
+    "shadows": [
+      {
+        "name": "violet-glow",
+        "value": "0 1px 2px 0 rgba(125, 57, 235, 0.20)",
+        "purpose": "Subtle tactile depth for primary violet action buttons."
+      },
+      {
+        "name": "lime-glow",
+        "value": "0 1px 2px 0 rgba(198, 255, 51, 0.20)",
+        "purpose": "High-contrast tactile depth for lime buttons and badges."
+      },
+      {
+        "name": "fab-float",
+        "value": "0 20px 25px -5px rgba(125, 57, 235, 0.40)",
+        "purpose": "Elevated glow for mobile central bottom-bar launch button."
+      },
+      {
+        "name": "modal-deep",
+        "value": "0 25px 50px -12px rgba(0, 0, 0, 0.95)",
+        "purpose": "Dialog elevation separating modal sheets from backdrop."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press-scale",
+        "value": "transform: scale(0.98); transition: transform 0.15s ease",
+        "purpose": "Tactile micro-interaction response when tapping buttons and cards."
+      },
+      {
+        "name": "sheet-slide",
+        "value": "translateY(0) with cubic-bezier(0.16, 1, 0.3, 1) duration 200ms",
+        "purpose": "Smooth upward slide for mobile modal bottom sheets."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Standard call-to-action button for principal flows.",
+      "html": "<button class=\"ds-btn-primary\">Nova Transação</button>",
+      "css": ".ds-btn-primary { background: #7D39EB; color: #ffffff; height: 44px; padding: 0 16px; border-radius: 12px; font-weight: 500; font-size: 14px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px 0 rgba(125, 57, 235, 0.2); transition: all 0.15s ease; } .ds-btn-primary:hover { background: #9253f5; } .ds-btn-primary:active { background: #6626d0; transform: scale(0.98); }"
+    },
+    {
+      "name": "Lime Button",
+      "kind": "button",
+      "refersTo": "button-lime",
+      "description": "High-contrast action button for receipts or confirmations.",
+      "html": "<button class=\"ds-btn-lime\">Confirmar Recebimento</button>",
+      "css": ".ds-btn-lime { background: #C6FF33; color: #000000; height: 44px; padding: 0 16px; border-radius: 12px; font-weight: 600; font-size: 14px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px 0 rgba(198, 255, 51, 0.2); transition: all 0.15s ease; } .ds-btn-lime:hover { background: #d5ff5c; } .ds-btn-lime:active { background: #b1eb21; transform: scale(0.98); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis button for secondary controls and dismiss actions.",
+      "html": "<button class=\"ds-btn-ghost\">Cancelar</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: rgba(255, 255, 255, 0.72); height: 44px; padding: 0 16px; border-radius: 12px; font-weight: 500; font-size: 14px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s ease; } .ds-btn-ghost:hover { background: #16161f; color: #ffffff; }"
+    },
+    {
+      "name": "Standard Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Basic tonal surface card for metrics and transaction lists.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-title\">Saldo Bancário</p><p class=\"ds-card-val tabular-nums\">R$ 4.250,80</p></div>",
+      "css": ".ds-card { background: #0e0e13; border: 1px solid #20202d; border-radius: 16px; padding: 16px; color: #ffffff; } .ds-card-title { font-size: 12px; color: rgba(255, 255, 255, 0.64); margin: 0 0 4px 0; } .ds-card-val { font-size: 20px; font-weight: 700; color: #ffffff; margin: 0; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standard form text or monetary input with lime active focus ring.",
+      "html": "<input class=\"ds-input tabular-nums\" placeholder=\"R$ 0,00\" value=\"R$ 150,00\" />",
+      "css": ".ds-input { width: 100%; height: 44px; background: #0e0e13; border: 1px solid #20202d; border-radius: 12px; padding: 0 14px; font-size: 14px; color: #ffffff; outline: none; caret-color: #C6FF33; transition: border-color 0.15s; } .ds-input:focus { border-color: #C6FF33; box-shadow: 0 0 0 1px #C6FF33; }"
+    },
+    {
+      "name": "Income Badge",
+      "kind": "chip",
+      "refersTo": "badge-income",
+      "description": "Pill indicator for completed revenue or positive balance.",
+      "html": "<span class=\"ds-badge-income tabular-nums\">+ R$ 350,00</span>",
+      "css": ".ds-badge-income { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 11px; font-weight: 600; background: rgba(198, 255, 51, 0.12); color: #C6FF33; border: 1px solid rgba(198, 255, 51, 0.25); }"
+    },
+    {
+      "name": "Expense Badge",
+      "kind": "chip",
+      "refersTo": "badge-expense",
+      "description": "Pill indicator for completed expenses or debt payments.",
+      "html": "<span class=\"ds-badge-expense tabular-nums\">- R$ 89,90</span>",
+      "css": ".ds-badge-expense { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 11px; font-weight: 600; background: rgba(255, 77, 106, 0.14); color: #FF4D6A; border: 1px solid rgba(255, 77, 106, 0.3); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Precision Vault",
+    "overview": "O Finance expressa solidez financeira através de um ambiente escuro imersivo (#000000), construído com estratificação tonal profunda de superfícies obsidiana (#070709 a #1e1e2b) e acentos luminescentes de alta precisão: Violeta Elétrico (#7D39EB) para identidade e comandos estruturais, Lima Neon (#C6FF33) para receitas e previsões positivas, e Rosa Carmim (#FF4D6A) para saídas e pendências críticas.\n\nProjetado sob a filosofia mobile-first, cada tela se comporta como um cockpit tático no smartphone — botões com alvo de toque seguro (mínimo 44px), navegação inferior ergonômica com botão de lançamento central em destaque, e modais apresentados como folhas inferiores responsivas (bottom sheets) que respeitam a margem do sistema (safe-area-inset-bottom).",
+    "keyCharacteristics": [
+      "Contraste tático escuro: Fundo preto absoluto (#000000) com superfícies em 4 camadas de profundidade tonal delimitadas por fios de 1px (#20202d).",
+      "Luz sem exagero: Acentos saturados (violeta e lima) usados estritamente para sinalizar status, saldos positivos e ações intencionais, sem desbotar em gradientes confusos.",
+      "Rigor tipográfico e numérico: Digitação uniforme com Inter e alinhamento obrigatório de colunas contábeis através de tabular-nums.",
+      "Fluidez móvel contínua: Alvos táteis generosos, foco visível com anel lima de alto contraste e microinterações táteis ágeis (active:scale-[.98])."
+    ],
+    "rules": [
+      {
+        "name": "The Luminescent Intent Rule",
+        "body": "Cores saturadas (Violeta #7D39EB, Lima #C6FF33 e Carmim #FF4D6A) nunca preenchem superfícies completas de cartões de conteúdo. Seu uso é cirúrgico: botões de ação, chips de status, gráficos e métricas de impacto.",
+        "section": "colors"
+      },
+      {
+        "name": "The Strict Accounting Palette Rule",
+        "body": "Valores positivos e entradas de dinheiro utilizam sem exceção Lima (#C6FF33); valores negativos e saídas utilizam Carmim (#FF4D6A). Não inverta nem altere o significado de cor para transações.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Digits Rule",
+        "body": "Todo valor em moeda (R$ 0,00), saldo contábil, data numérica ou quantidade percentual deve conter a classe .tabular-nums para que cada caractere numérico ocupe exatamente a mesma largura visual.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Eyebrow Rule",
+        "body": "Títulos de seções não utilizam subtítulos menores ('eyebrows') decorativos empilhados acima. O título comunica seu contexto por peso e espaçamento.",
+        "section": "typography"
+      },
+      {
+        "name": "The Border-Separated Depth Rule",
+        "body": "Superfícies elevadas nunca contam apenas com sombra para separação. Cada camada elevada carrega uma borda perimetral de 1px (border border-border ou border-border-strong), garantindo legibilidade perfeita mesmo em telas OLED ou com baixo brilho.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do formatar todo e qualquer valor monetário com pt-BR em Real (R$ 0,00) e aplicar sempre a classe .tabular-nums.",
+      "Do respeitar as safe areas móveis (safe-bottom, env(safe-area-inset-bottom)) em qualquer elemento fixado na base da viewport.",
+      "Do manter a altura mínima de 44px (h-11) em botões e inputs interativos para garantir ergonomia de toque em smartphones.",
+      "Do utilizar a estratificação de superfícies (#000000, #070709, #0e0e13, #16161f, #1e1e2b) acompanhada de borda de 1px (#20202d) para diferenciar hierarquias de conteúdo.",
+      "Do preservar 100% das funcionalidades existentes em qualquer refinamento visual."
+    ],
+    "donts": [
+      "Don't aplicar gradientes multicoloridos ou efeitos de vidro translúcido difuso que prejudiquem a legibilidade das informações contábeis.",
+      "Don't utilizar fontes genéricas sem largura tabular em colunas ou tabelas com números e saldos.",
+      "Don't ocultar botões ou funcionalidades de desktop no celular; reestruture em gavetas, abas ou carrosséis mantendo todo o poder da ferramenta acessível.",
+      "Don't criar sombras duras sem difusão ('neobrutalistas') ou bordas grossas superiores a 1px em cartões e alertas.",
+      "Don't utilizar cinzas claros ou fundos esbranquiçados em superfícies; o ecossistema é estritamente dark mode tático."
+    ]
+  }
+}

@@ -41,8 +41,8 @@ export default function Friends() {
   const Row = ({ f }: { f: Friendship }) => {
     const u = other(f)
     return (
-      <div className="flex items-center gap-3 p-3 transition hover:bg-surface-2/40">
-        <div className="grid size-10 place-items-center rounded-full bg-violet/20 text-xs font-bold text-violet-hover">
+      <div className="flex items-center gap-3 p-3 transition-colors duration-150 hover:bg-surface-2/50">
+        <div className="grid size-10 place-items-center rounded-full bg-violet/20 border border-violet/30 text-xs font-bold text-violet-hover shadow-[0_0_8px_rgba(125,57,235,0.2)]">
           {initials(u)}
         </div>
         <div className="min-w-0 flex-1">

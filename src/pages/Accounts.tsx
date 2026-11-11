@@ -65,7 +65,7 @@ export default function Accounts() {
               return (
                 <Card key={a.id} className="p-4">
                   <Link to={`/contas/${a.id}`} className="flex items-center gap-3">
-                    <div className="grid size-11 place-items-center rounded-xl bg-violet/15 text-violet-hover">
+                    <div className="grid size-11 place-items-center rounded-xl bg-violet/15 border border-violet/25 text-violet-hover shadow-[0_0_8px_rgba(125,57,235,0.15)]">
                       <Icon className="size-5" />
                     </div>
                     <div className="min-w-0 flex-1">

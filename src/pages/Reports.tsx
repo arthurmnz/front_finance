@@ -97,15 +97,15 @@ export default function Reports() {
 
       {/* Seletor de Escopo: Meu Relatório Individual | Relatório por Grupo */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <div className="inline-flex rounded-xl bg-surface-1 border border-border p-1">
+        <div className="inline-flex rounded-xl bg-surface-1 border border-border p-1 card-highlight">
           <button
             type="button"
             onClick={() => handleScopeChange('individual')}
             className={clsx(
-              'flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition',
+              'flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-[0.98]',
               scope === 'individual'
-                ? 'bg-violet text-white shadow-md shadow-violet/30'
-                : 'text-text-muted hover:text-white',
+                ? 'bg-violet text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2),0_2px_8px_rgba(125,57,235,0.35)]'
+                : 'text-text-muted hover:text-white hover:bg-surface-2',
             )}
           >
             <User className="size-4" />
@@ -116,16 +116,16 @@ export default function Reports() {
             type="button"
             onClick={() => handleScopeChange('group')}
             className={clsx(
-              'flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition',
+              'flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-[0.98]',
               scope === 'group'
-                ? 'bg-violet text-white shadow-md shadow-violet/30'
-                : 'text-text-muted hover:text-white',
+                ? 'bg-violet text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2),0_2px_8px_rgba(125,57,235,0.35)]'
+                : 'text-text-muted hover:text-white hover:bg-surface-2',
             )}
           >
             <Users className="size-4" />
             Relatório por Grupo
             {groups.length > 0 && (
-              <span className="rounded-full bg-surface-3 px-1.5 py-0.2 text-[10px] text-text-muted">
+              <span className="rounded-full bg-white/20 px-1.5 py-0.2 text-[10px] text-white font-bold">
                 {groups.length}
               </span>
             )}

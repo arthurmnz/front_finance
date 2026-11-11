@@ -85,7 +85,7 @@ export default function CreditCards() {
                 <Card key={c.id} className="p-4">
                   <Link to={`/cartoes/${c.id}`} className="block space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="grid size-11 place-items-center rounded-xl bg-violet/15 text-violet-hover">
+                      <div className="grid size-11 place-items-center rounded-xl bg-violet/15 border border-violet/25 text-violet-hover shadow-[0_0_8px_rgba(125,57,235,0.15)]">
                         <CardIcon className="size-5" />
                       </div>
                       <div className="min-w-0 flex-1">

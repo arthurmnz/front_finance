@@ -155,7 +155,7 @@ export default function Dashboard() {
     <>
       <PageHeader
         title={`Olá, ${user?.firstName ?? ''}`}
-        subtitle="Resumo das suas finanças"
+        subtitle="Resumo consolidado do seu fluxo financeiro"
         action={
           <Button onClick={() => setAdding(true)}>
             <Plus className="size-4" /> Nova
@@ -166,24 +166,25 @@ export default function Dashboard() {
         <MonthPicker value={period} onChange={setPeriod} />
       </div>
 
-      <Card className="mb-5 p-5 bg-surface-1 border border-border">
-        <div className="grid grid-cols-2 gap-4 border-b border-border/60 pb-4">
+      {/* Hero card de saldos */}
+      <Card className="mb-5 p-5 bg-surface-1 border border-border card-highlight shadow-md">
+        <div className="grid grid-cols-2 gap-4 border-b border-border/60 pb-5">
           <div>
-            <p className="text-xs text-text-muted">Saldo total</p>
+            <p className="text-xs font-medium text-text-muted">Saldo total</p>
             <p
               className={clsx(
-                'mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
+                'mt-1 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
                 summary.currentBalance < 0 ? 'text-expense' : 'text-white',
               )}
             >
               {balance.data ? formatMoney(summary.currentBalance) : '—'}
             </p>
           </div>
-          <div className="border-l border-border/60 pl-4">
-            <p className="text-xs text-text-muted">Saldo projetado</p>
+          <div className="border-l border-border/60 pl-4 sm:pl-6">
+            <p className="text-xs font-medium text-text-muted">Saldo projetado</p>
             <p
               className={clsx(
-                'mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
+                'mt-1 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
                 summary.projectedBalance < 0 ? 'text-expense' : 'text-lime',
               )}
             >
@@ -192,40 +193,44 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div className="space-y-2">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2 rounded-xl bg-surface-2/40 border border-border/70 p-3 card-highlight">
             <div className="flex items-center gap-2.5">
-              <ArrowUpCircle className="size-6 shrink-0 text-lime" />
+              <div className="grid size-8 place-items-center rounded-xl bg-lime-subtle border border-lime/30 text-lime shrink-0">
+                <ArrowUpCircle className="size-5" />
+              </div>
               <div className="min-w-0">
-                <p className="text-xs text-text-muted">Receitas</p>
-                <p className="truncate font-semibold text-lime tabular-nums">
+                <p className="text-xs text-text-muted font-medium">Receitas realizadas</p>
+                <p className="truncate font-semibold text-lime tabular-nums text-sm sm:text-base">
                   {formatMoney(summary.realizedIncome)}
                 </p>
               </div>
             </div>
-            <div className="rounded-xl bg-surface-2 px-3 py-2">
-              <p className="text-[11px] text-text-dim">Receitas projetadas</p>
-              <p className="text-xs font-semibold text-lime tabular-nums">
+            <div className="flex items-center justify-between rounded-lg bg-surface-2/80 px-2.5 py-1.5 text-xs">
+              <span className="text-[11px] text-text-dim">Projeção total:</span>
+              <span className="font-semibold text-lime tabular-nums">
                 {formatMoney(summary.projectedIncome)}
-              </p>
+              </span>
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 rounded-xl bg-surface-2/40 border border-border/70 p-3 card-highlight">
             <div className="flex items-center gap-2.5">
-              <ArrowDownCircle className="size-6 shrink-0 text-expense" />
+              <div className="grid size-8 place-items-center rounded-xl bg-expense-subtle border border-expense/30 text-expense shrink-0">
+                <ArrowDownCircle className="size-5" />
+              </div>
               <div className="min-w-0">
-                <p className="text-xs text-text-muted">Despesas</p>
-                <p className="truncate font-semibold text-expense tabular-nums">
+                <p className="text-xs text-text-muted font-medium">Despesas realizadas</p>
+                <p className="truncate font-semibold text-expense tabular-nums text-sm sm:text-base">
                   −{formatMoney(summary.realizedExpense)}
                 </p>
               </div>
             </div>
-            <div className="rounded-xl bg-surface-2 px-3 py-2">
-              <p className="text-[11px] text-text-dim">Despesas projetadas</p>
-              <p className="text-xs font-semibold text-expense tabular-nums">
+            <div className="flex items-center justify-between rounded-lg bg-surface-2/80 px-2.5 py-1.5 text-xs">
+              <span className="text-[11px] text-text-dim">Projeção total:</span>
+              <span className="font-semibold text-expense tabular-nums">
                 −{formatMoney(summary.projectedExpense)}
-              </p>
+              </span>
             </div>
           </div>
         </div>
@@ -234,7 +239,7 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card
           onClick={() => nav('/contas')}
-          className="cursor-pointer p-4 transition hover:border-violet/40"
+          className="cursor-pointer p-4 transition-all duration-150 hover:border-violet/40 hover:bg-surface-1/90"
         >
           <div className="mb-1 flex items-center justify-between">
             <Link
@@ -251,16 +256,16 @@ export default function Dashboard() {
               }}
               aria-label="Nova conta"
               title="Nova conta"
-              className="grid size-8 place-items-center rounded-xl bg-violet/15 text-violet-hover transition hover:bg-violet/25"
+              className="grid size-8 place-items-center rounded-xl bg-violet/15 border border-violet/25 text-violet-hover transition hover:bg-violet/25 active:scale-95"
             >
               <Plus className="size-4" />
             </button>
           </div>
-          <p className="mb-3 text-xs text-text-dim">Toque no olho para ignorar uma conta do saldo total.</p>
+          <p className="mb-3 text-xs text-text-dim">Toque no olho para incluir ou ignorar a conta no saldo total.</p>
           {accounts.isLoading ? (
             <Spinner />
           ) : !accounts.data?.length ? (
-            <Empty title="Sem contas.">
+            <Empty title="Sem contas cadastradas.">
               <Button
                 size="sm"
                 onClick={(e) => {
@@ -281,7 +286,7 @@ export default function Dashboard() {
                       toggleIncludeInTotal.mutate(a)
                     }}
                     disabled={toggleIncludeInTotal.isPending}
-                    className="p-1 text-text-muted hover:text-white transition disabled:opacity-50"
+                    className="p-1 rounded-lg text-text-muted hover:text-white hover:bg-surface-2 transition active:scale-95 disabled:opacity-50"
                     aria-label={a.includeInTotal !== false ? 'Ignorar no saldo' : 'Incluir no saldo'}
                     title={a.includeInTotal !== false ? 'Ignorar no saldo total' : 'Incluir no saldo total'}
                   >
@@ -294,9 +299,12 @@ export default function Dashboard() {
                   <Link
                     to={`/contas/${a.id}`}
                     onClick={(e) => e.stopPropagation()}
-                    className={`flex flex-1 items-center justify-between hover:text-lime transition ${a.includeInTotal === false ? 'opacity-40' : ''}`}
+                    className={clsx(
+                      'flex flex-1 items-center justify-between hover:text-lime transition',
+                      a.includeInTotal === false && 'opacity-40',
+                    )}
                   >
-                    <span className="text-sm text-white">{a.name}</span>
+                    <span className="text-sm text-white font-medium">{a.name}</span>
                     <span
                       className={clsx(
                         'text-sm font-semibold tabular-nums',
@@ -357,7 +365,7 @@ export default function Dashboard() {
 
       <Card
         onClick={() => nav('/cartoes')}
-        className="mt-4 cursor-pointer p-4 transition hover:border-violet/40"
+        className="mt-4 cursor-pointer p-4 transition-all duration-150 hover:border-violet/40 hover:bg-surface-1/90"
       >
         <div className="mb-2 flex items-center justify-between">
           <Link
@@ -374,7 +382,7 @@ export default function Dashboard() {
             }}
             aria-label="Novo cartão"
             title="Novo cartão"
-            className="grid size-8 place-items-center rounded-xl bg-violet/15 text-violet-hover transition hover:bg-violet/25"
+            className="grid size-8 place-items-center rounded-xl bg-violet/15 border border-violet/25 text-violet-hover transition hover:bg-violet/25 active:scale-95"
           >
             <Plus className="size-4" />
           </button>
@@ -405,8 +413,8 @@ export default function Dashboard() {
                   <div>
                     <p className="font-medium text-white">{c.name}</p>
                     <p className="text-xs text-text-dim">
-                      Disponível: <span className="text-lime">{formatMoney(c.availableLimit)}</span> · Vence dia{' '}
-                      {c.dueDay}
+                      Disponível: <span className="text-lime tabular-nums">{formatMoney(c.availableLimit)}</span> · Vence dia{' '}
+                      <span className="tabular-nums">{c.dueDay}</span>
                     </p>
                   </div>
                   <div className="text-right">
@@ -429,7 +437,7 @@ export default function Dashboard() {
 
       <Card
         onClick={() => nav('/grupos')}
-        className="mt-4 cursor-pointer p-4 transition hover:border-violet/40"
+        className="mt-4 cursor-pointer p-4 transition-all duration-150 hover:border-violet/40 hover:bg-surface-1/90"
       >
         <div className="mb-3 flex items-center justify-between">
           <Link
@@ -464,8 +472,8 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-3 pb-2 pt-1 border-b border-border/60">
-              <div className="rounded-xl bg-surface-2 p-3">
-                <span className="text-[11px] text-text-muted">Total a pagar (mês)</span>
+              <div className="rounded-xl bg-surface-2/60 border border-border/70 p-3 card-highlight">
+                <span className="text-[11px] text-text-muted font-medium">Total a pagar (mês)</span>
                 <p
                   className={clsx(
                     'mt-0.5 text-lg font-bold tabular-nums',
@@ -475,8 +483,8 @@ export default function Dashboard() {
                   {formatMoney(debtsSummary.data.totalOwedCurrentMonth)}
                 </p>
               </div>
-              <div className="rounded-xl bg-surface-2 p-3">
-                <span className="text-[11px] text-text-muted">Total a receber (mês)</span>
+              <div className="rounded-xl bg-surface-2/60 border border-border/70 p-3 card-highlight">
+                <span className="text-[11px] text-text-muted font-medium">Total a receber (mês)</span>
                 <p className="mt-0.5 text-lg font-bold text-lime tabular-nums">
                   {formatMoney(debtsSummary.data.totalReceivableCurrentMonth)}
                 </p>
@@ -494,8 +502,8 @@ export default function Dashboard() {
                     <div>
                       <p className="font-medium text-white">{g.groupName}</p>
                       <p className="text-xs text-text-dim">
-                        Total acumulado: {g.owedTotal > 0 ? <span className="text-expense">Deve {formatMoney(g.owedTotal)}</span> : 'Em dia'}
-                        {g.receivableTotal > 0 ? ` · Tem a receber ${formatMoney(g.receivableTotal)}` : ''}
+                        Total acumulado: {g.owedTotal > 0 ? <span className="text-expense tabular-nums">Deve {formatMoney(g.owedTotal)}</span> : 'Em dia'}
+                        {g.receivableTotal > 0 ? <span className="tabular-nums"> · Tem a receber {formatMoney(g.receivableTotal)}</span> : ''}
                       </p>
                     </div>
                     <div className="text-right">
@@ -533,14 +541,13 @@ export default function Dashboard() {
               <li key={t.id} className="flex items-center justify-between py-2.5 text-sm">
                 <div>
                   <p className="font-medium text-white">{t.title}</p>
-                  <p className="text-xs text-text-dim">{formatDate(t.date)}</p>
+                  <p className="text-xs text-text-dim tabular-nums">{formatDate(t.date)}</p>
                 </div>
                 <span
-                  className={
-                    t.type === 'INCOME'
-                      ? 'font-semibold text-lime tabular-nums'
-                      : 'font-semibold text-expense tabular-nums'
-                  }
+                  className={clsx(
+                    'font-semibold tabular-nums',
+                    t.type === 'INCOME' ? 'text-lime' : 'text-expense',
+                  )}
                 >
                   {t.type === 'INCOME' ? '+' : '−'}
                   {formatMoney(t.amount)}

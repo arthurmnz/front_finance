@@ -481,13 +481,13 @@ export default function TransactionFormModal({
     <Modal open={open} onClose={onClose} title={editing ? 'Editar transação' : 'Nova transação'}>
       <form noValidate className="space-y-4" onSubmit={submit}>
         {!editing && creditCards.length > 0 && (
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1 border border-border">
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1 border border-border card-highlight">
             <button
               type="button"
               onClick={() => setSourceMode('ACCOUNT')}
               className={clsx(
-                'rounded-lg py-2 text-xs font-medium transition cursor-pointer select-none',
-                sourceMode === 'ACCOUNT' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                'rounded-lg py-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none active:scale-[0.98]',
+                sourceMode === 'ACCOUNT' ? 'bg-violet text-white font-semibold shadow-[0_1px_3px_rgba(125,57,235,0.3)]' : 'text-text-muted hover:text-white',
               )}
             >
               Conta bancária
@@ -500,8 +500,8 @@ export default function TransactionFormModal({
                 if (!creditCardId && creditCards[0]) setCreditCardId(creditCards[0].id)
               }}
               className={clsx(
-                'rounded-lg py-2 text-xs font-medium transition cursor-pointer select-none',
-                sourceMode === 'CARD' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                'rounded-lg py-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none active:scale-[0.98]',
+                sourceMode === 'CARD' ? 'bg-violet text-white font-semibold shadow-[0_1px_3px_rgba(125,57,235,0.3)]' : 'text-text-muted hover:text-white',
               )}
             >
               Cartão de crédito
@@ -510,20 +510,20 @@ export default function TransactionFormModal({
         )}
 
         {!editing && sourceMode === 'ACCOUNT' && (
-          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1 border border-border">
+          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1 border border-border card-highlight">
             {(['EXPENSE', 'INCOME', 'TRANSFER'] as const).map((t) => (
               <button
                 type="button"
                 key={t}
                 onClick={() => handleTypeChange(t)}
                 className={clsx(
-                  'rounded-lg py-2 text-xs font-semibold transition cursor-pointer select-none',
+                  'rounded-lg py-2 text-xs font-semibold transition-all duration-150 cursor-pointer select-none active:scale-[0.98]',
                   type === t
                     ? t === 'EXPENSE'
-                      ? 'bg-expense text-white shadow-sm font-bold'
+                      ? 'bg-expense text-white shadow-[0_1px_4px_rgba(255,77,106,0.35)] font-bold'
                       : t === 'INCOME'
-                        ? 'bg-lime text-black shadow-sm'
-                        : 'bg-violet text-white shadow-sm'
+                        ? 'bg-lime text-black shadow-[0_1px_4px_rgba(198,255,51,0.35)] font-bold'
+                        : 'bg-violet text-white shadow-[0_1px_4px_rgba(125,57,235,0.35)] font-bold'
                     : 'text-text-muted hover:text-white',
                 )}
               >

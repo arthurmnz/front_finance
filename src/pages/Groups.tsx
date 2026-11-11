@@ -79,9 +79,9 @@ export default function Groups() {
         ) : (
           <Card className="divide-y divide-border">
             {groups.data.map((g) => (
-              <div key={g.id} className="flex items-center hover:bg-surface-2/40 transition">
+              <div key={g.id} className="flex items-center hover:bg-surface-2/50 transition-colors duration-150">
                 <Link to={`/grupos/${g.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
-                  <div className="grid size-11 place-items-center rounded-xl bg-violet/15 text-violet-hover">
+                  <div className="grid size-11 place-items-center rounded-xl bg-violet/15 border border-violet/25 text-violet-hover shadow-[0_0_8px_rgba(125,57,235,0.15)]">
                     <UsersRound className="size-5" />
                   </div>
                   <div className="min-w-0 flex-1">

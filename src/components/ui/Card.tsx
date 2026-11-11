@@ -10,7 +10,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({ className, children
   return (
     <div
       ref={ref}
-      className={clsx('rounded-2xl bg-surface-1 border border-border text-white', className)}
+      className={clsx('rounded-2xl bg-surface-1 border border-border text-white card-highlight transition-colors duration-150', className)}
       {...p}
     >
       {children}

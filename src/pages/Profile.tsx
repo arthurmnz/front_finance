@@ -55,7 +55,7 @@ export default function Profile() {
     <>
       <PageHeader title="Perfil" />
       <Card className="mb-4 flex items-center gap-4 p-4">
-        <div className="grid size-14 place-items-center rounded-2xl bg-violet/20 text-lg font-bold text-violet-hover">
+        <div className="grid size-14 place-items-center rounded-2xl bg-violet/20 border border-violet/30 text-lg font-bold text-violet-hover shadow-[0_0_12px_rgba(125,57,235,0.2)]">
           {initials(user)}
         </div>
         <div className="min-w-0 flex-1">

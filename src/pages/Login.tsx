@@ -27,7 +27,7 @@ export default function Login() {
     <div className="grid min-h-dvh place-items-center p-5 bg-black text-white">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-violet/20 text-lime">
+          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-violet/20 border border-violet/30 text-lime shadow-[0_0_24px_rgba(125,57,235,0.35)]">
             <Landmark className="size-7" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Bem-vindo de volta</h1>
@@ -67,8 +67,8 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-surface-2 px-3 py-2 text-xs text-lime">
-                <span className="size-1 rounded-full bg-lime shrink-0" />
+              <div className="flex items-center gap-1.5 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+                <span className="size-1.5 rounded-full bg-danger shrink-0" />
                 <span>{error}</span>
               </div>
             )}

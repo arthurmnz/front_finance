@@ -101,7 +101,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in-0 duration-200"
+        className="fixed inset-0 bg-black/85 backdrop-blur-md transition-opacity animate-in fade-in-0 duration-200"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -115,12 +115,15 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
         tabIndex={-1}
         className={clsx(
           'relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl outline-none',
-          'bg-surface-1 border border-border px-5 pt-5 modal-body',
+          'bg-surface-1 border border-border px-5 pt-3.5 sm:pt-5 modal-body card-highlight',
           'shadow-2xl shadow-black/95 z-10 animate-in slide-in-from-bottom-4 duration-200',
           className,
         )}
       >
-        <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/40 pb-3">
+        {/* Mobile drag handle */}
+        <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3 sm:hidden" aria-hidden="true" />
+
+        <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/50 pb-3">
           <h2 id="modal-title" className="text-lg font-bold tracking-tight text-white truncate">
             {title}
           </h2>
@@ -128,7 +131,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            className="grid size-8 place-items-center rounded-xl text-text-muted hover:bg-surface-2 hover:text-white transition"
+            className="grid size-8 place-items-center rounded-xl text-text-muted hover:bg-surface-2 hover:text-white transition active:scale-95"
           >
             <X className="size-4" />
           </button>

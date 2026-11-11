@@ -17,22 +17,22 @@ export function MonthPicker({ value, onChange }: { value: Period; onChange: (p: 
   }
 
   return (
-    <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-surface-1 px-1 py-0.5 select-none">
+    <div className="inline-flex items-center gap-1 rounded-2xl border border-border bg-surface-1 px-1.5 py-1 select-none card-highlight shadow-sm">
       <button
         type="button"
         onClick={() => shift(-1)}
-        className="grid size-8 place-items-center rounded-lg text-text-muted hover:bg-surface-2 hover:text-white transition"
+        className="grid size-8 place-items-center rounded-xl text-text-muted hover:bg-surface-2 hover:text-white transition active:scale-95"
         aria-label="Mês anterior"
       >
         <ChevronLeft className="size-4" />
       </button>
-      <span className="min-w-36 text-center text-xs font-semibold capitalize tracking-wide text-white">
+      <span className="min-w-36 text-center text-xs font-semibold capitalize tracking-wide text-white tabular-nums">
         {monthLabel(value.month, value.year)}
       </span>
       <button
         type="button"
         onClick={() => shift(1)}
-        className="grid size-8 place-items-center rounded-lg text-text-muted hover:bg-surface-2 hover:text-white transition"
+        className="grid size-8 place-items-center rounded-xl text-text-muted hover:bg-surface-2 hover:text-white transition active:scale-95"
         aria-label="Próximo mês"
       >
         <ChevronRight className="size-4" />
