@@ -16,6 +16,11 @@ const FOCUSABLE_SELECTOR =
 export function Modal({ open, onClose, title, children, className }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const previousActiveElementRef = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
 
   useEffect(() => {
     if (!open) return
@@ -26,9 +31,9 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
     const originalOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
-    // Foco inicial: no primeiro elemento focável ou no próprio dialog
+    // Foco inicial: no primeiro elemento focável ou no próprio dialog apenas se o foco ainda não estiver dentro do dialog
     const timer = setTimeout(() => {
-      if (dialogRef.current) {
+      if (dialogRef.current && !dialogRef.current.contains(document.activeElement)) {
         const focusable = dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
         if (focusable.length > 0) {
           // Se o primeiro elemento for o botão de fechar (X) e houver outros (ex.: campos do form),
@@ -50,7 +55,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        onClose()
+        onCloseRef.current()
         return
       }
 
@@ -93,7 +98,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
         previousActiveElementRef.current.focus()
       }
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 

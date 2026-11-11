@@ -27,7 +27,7 @@ export default function AccountFormModal({
     setStart(account?.startBalance ?? 0)
     setTax(account?.tax != null ? String(account.tax) : '')
     setIncludeInTotal(account?.includeInTotal ?? true)
-  }, [open, account])
+  }, [open, account?.id])
 
   const save = useAction(
     (body: AccountInput) => (account ? api.put(`/accounts/${account.id}`, body) : api.post('/accounts', body)),

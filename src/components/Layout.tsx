@@ -9,7 +9,6 @@ import {
   UsersRound,
   UserCircle,
   LogOut,
-  Landmark,
   Plus,
   ArrowLeftRight,
   BarChart3,
@@ -20,6 +19,7 @@ import clsx from 'clsx'
 import { useAuth } from '@/lib/auth'
 import { fullName, initials } from '@/lib/format'
 import { useGroupInvitations, usePendingReceived } from '@/lib/hooks'
+import { BrandLogo } from './BrandLogo'
 
 export default function Layout() {
   const { user, logout } = useAuth()
@@ -54,9 +54,7 @@ export default function Layout() {
       {/* Sidebar desktop */}
       <aside className="hidden md:flex md:w-64 shrink-0 flex-col border-r border-border bg-surface p-4 sticky top-0 h-dvh">
         <div className="flex items-center gap-2.5 px-3 py-3 text-lg font-bold tracking-tight text-white">
-          <div className="grid size-9 place-items-center rounded-xl bg-violet/20 border border-violet/30 text-lime shadow-[0_0_16px_rgba(125,57,235,0.35)]">
-            <Landmark className="size-5" />
-          </div>
+          <BrandLogo className="size-9 drop-shadow-[0_0_12px_rgba(125,57,235,0.35)]" />
           <span className="tracking-tight text-white font-bold">Finance</span>
         </div>
 

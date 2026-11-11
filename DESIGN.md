@@ -116,6 +116,18 @@ Projetado sob a filosofia *mobile-first*, cada tela se comporta como um cockpit 
 - **Rigor tipográfico e numérico:** Digitação uniforme com Inter e alinhamento obrigatório de colunas contábeis através de `tabular-nums`.
 - **Fluidez móvel contínua:** Alvos táteis generosos, foco visível com anel lima de alto contraste e microinterações táteis ágeis (`active:scale-[.98]`).
 
+## Brand Identity & Logo
+
+O símbolo visual oficial do **Finance** é o **Neon Cash Waves** ([`public/icon.svg`](file:///home/arthurmnz/code/front_finance/public/icon.svg)), uma representação vetorial esculpida inspirada na imagem tangível do dinheiro e no dinamismo do fluxo de caixa:
+
+- **Composição Simbólica:** Três cédulas de dinheiro sobrepostas em camadas onduladas na diagonal ascendente (da esquerda inferior para a direita superior):
+  1. **Cédula Traseira (Base de Liquidez):** Contorno em Verde-Limão Neon (`#C6FF33`) com abas nos cantos inferior-esquerdo e superior-direito, com glow sutil.
+  2. **Cédula Intermediária (Velocidade e Estrutura):** Contorno em Violeta Elétrico (`#8C4BF7` / `#7D39EB`), preenchimento escuro com pesponto tracejado roxo, ponto branco de destaque no canto direito e glow violeta.
+  3. **Cédula Frontal (Previsibilidade e Foco):** Cédula ondulada em perspectiva com contorno espesso em Verde-Limão Neon (`#C6FF33`), divisão diagonal em reflexo chanfrado glossy grafite-violeta (`#28223E`), 4 pontos luminosos nos cantos internos, costura tracejada oliva e dois discos violeta (`#3D1C68`) ladeando o medalhão central.
+  4. **Medalhão Central e Cifrão ($):** Emblema circular central com anel externo em Verde-Limão Neon, dois arcos internos violeta e o símbolo clássico de dinheiro (`$`) com barra vertical única transpassando o `S`.
+- **Formato Squircle 512x512:** Base em squircle chanfrado e beveled (`#000000` / `#161520` / `#2D2B3B`), otimizado tanto para exibição reduzida em barra de navegação (36px / `size-9`) quanto para ícone nativo de PWA/Home Screen (512px).
+- **Componente Oficial:** [`BrandLogo`](file:///home/arthurmnz/code/front_finance/src/components/BrandLogo.tsx) (`src/components/BrandLogo.tsx`).
+
 ## Colors
 
 Paleta dark com base em preto puro, estratificação de tons escuros frios e destaques luminescentes em violeta elétrico, lima neon e carmim vibrante.

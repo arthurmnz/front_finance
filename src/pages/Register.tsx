@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Landmark } from 'lucide-react'
+import { BrandLogo } from '@/components/BrandLogo'
 import { toast } from 'sonner'
 import { api, errorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -31,9 +31,7 @@ export default function Register() {
     <div className="grid min-h-dvh place-items-center p-5 bg-black text-white">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-violet/20 border border-violet/30 text-lime shadow-[0_0_24px_rgba(125,57,235,0.35)]">
-            <Landmark className="size-7" />
-          </div>
+          <BrandLogo className="mx-auto mb-3 size-16 drop-shadow-[0_0_24px_rgba(125,57,235,0.45)]" />
           <h1 className="text-2xl font-bold tracking-tight text-white">Criar conta</h1>
           <p className="mt-1 text-xs text-text-muted">Comece a controlar suas finanças hoje</p>
         </div>

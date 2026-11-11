@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Landmark } from 'lucide-react'
+import { BrandLogo } from '@/components/BrandLogo'
 import { useAuth } from '@/lib/auth'
 import { errorMessage } from '@/lib/api'
 import { Button, Card, Field, Input, PasswordInput } from '@/components/ui'
@@ -27,9 +27,7 @@ export default function Login() {
     <div className="grid min-h-dvh place-items-center p-5 bg-black text-white">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-violet/20 border border-violet/30 text-lime shadow-[0_0_24px_rgba(125,57,235,0.35)]">
-            <Landmark className="size-7" />
-          </div>
+          <BrandLogo className="mx-auto mb-3 size-16 drop-shadow-[0_0_24px_rgba(125,57,235,0.45)]" />
           <h1 className="text-2xl font-bold tracking-tight text-white">Bem-vindo de volta</h1>
           <p className="mt-1 text-xs text-text-muted">Entre para controlar suas finanças</p>
         </div>

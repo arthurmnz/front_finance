@@ -17,6 +17,8 @@ interface SettleDebtModalProps {
   onSuccess?: () => void
 }
 
+const EMPTY_CARDS: CreditCard[] = []
+
 export default function SettleDebtModal({
   open,
   onClose,
@@ -26,7 +28,7 @@ export default function SettleDebtModal({
   targetYear,
   suggestedAmount,
   groupAccounts,
-  groupCards = [],
+  groupCards = EMPTY_CARDS,
   onSuccess,
 }: SettleDebtModalProps) {
   const accounts = useAccounts()
@@ -69,16 +71,21 @@ export default function SettleDebtModal({
     return list
   }, [groupAccounts, groupCards, creditor.id])
 
+  // Inicializa o valor e as notas somente quando o modal abrir ou o credor/período mudar
   useEffect(() => {
     if (open) {
       setAmount(suggestedAmount)
       setNotes(`Acerto de cartão - ${targetMonth.toString().padStart(2, '0')}/${targetYear}`)
+    }
+  }, [open, creditor.id, targetMonth, targetYear])
 
-      if (myAccounts.length > 0 && !sourceAccountId) {
-        setSourceAccountId(myAccounts[0].id)
-      }
-
-      // Prioriza a conta do cartão do credor se existir
+  // Inicializa contas padrão sem resetar o valor digitado
+  useEffect(() => {
+    if (!open) return
+    if (myAccounts.length > 0 && !sourceAccountId) {
+      setSourceAccountId(myAccounts[0].id)
+    }
+    if (!destinationAccountId) {
       const creditorCard = groupCards.find((c) => c.ownerId === creditor.id && c.accountId)
       if (creditorCard) {
         setDestinationAccountId(creditorCard.accountId)
@@ -86,7 +93,7 @@ export default function SettleDebtModal({
         setDestinationAccountId(creditorAccounts[0].id)
       }
     }
-  }, [open, suggestedAmount, targetMonth, targetYear, myAccounts, creditorAccounts, groupCards, creditor.id, sourceAccountId])
+  }, [open, myAccounts, creditorAccounts, groupCards, creditor.id, sourceAccountId, destinationAccountId])
 
   const sourceAccount = myAccounts.find((a) => a.id === sourceAccountId)
   const destAccount = creditorAccounts.find((a) => a.id === destinationAccountId)

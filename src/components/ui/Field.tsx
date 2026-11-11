@@ -10,16 +10,16 @@ export interface FieldProps {
 
 export function Field({ label, error, children, hint, className }: FieldProps) {
   return (
-    <label className={`block space-y-1.5 ${className ?? ''}`}>
-      {label && <span className="block text-xs font-medium text-text-muted">{label}</span>}
+    <div className={`block space-y-1.5 ${className ?? ''}`}>
+      {label && <label className="block text-xs font-medium text-text-muted">{label}</label>}
       {children}
       {hint && !error && <span className="block text-xs text-text-dim leading-relaxed">{hint}</span>}
       {error && (
-        <span className="flex items-center gap-1 text-xs text-lime font-medium">
-          <span className="size-1 rounded-full bg-lime shrink-0" />
+        <span className="flex items-center gap-1 text-xs text-expense font-medium">
+          <span className="size-1 rounded-full bg-expense shrink-0" />
           {error}
         </span>
       )}
-    </label>
+    </div>
   )
 }

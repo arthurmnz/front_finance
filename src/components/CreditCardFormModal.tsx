@@ -23,11 +23,17 @@ export default function CreditCardFormModal({
   useEffect(() => {
     if (!open) return
     setName(card?.name ?? '')
-    setAccountId(card?.accountId ?? accounts[0]?.id ?? '')
+    setAccountId(card?.accountId ?? '')
     setLimitAmount(card?.limitAmount ?? 0)
     setClosingDay(card?.closingDay ?? 25)
     setDueDay(card?.dueDay ?? 5)
-  }, [open, card, accounts])
+  }, [open, card?.id])
+
+  useEffect(() => {
+    if (open && !accountId && accounts.length > 0) {
+      setAccountId(card?.accountId ?? accounts[0].id)
+    }
+  }, [open, accountId, accounts, card?.accountId])
 
   const save = useAction(
     (body: CreditCardInput) => (card ? api.put(`/credit-cards/${card.id}`, body) : api.post('/credit-cards', body)),
