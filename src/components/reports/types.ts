@@ -1,3 +1,5 @@
+import type { Transaction } from '@/lib/types'
+
 export interface ReportPeriod {
   month: number
   year: number
@@ -105,5 +107,38 @@ export interface GroupMemberExpense {
   totalExpense: number
   percentage: number
   txCount: number
+}
+
+export interface SimulatedTransaction {
+  id: string
+  title: string
+  amount: number
+  type: 'INCOME' | 'EXPENSE'
+  date: string
+  accountId?: string
+}
+
+export interface DayProjection {
+  day: number
+  date: string
+  txs: Transaction[]
+  invoices: { cardId: string; cardName: string; remainingAmount: number }[]
+  delta: number
+  balance: number
+  simulations?: SimulatedTransaction[]
+  simulatedDelta?: number
+  realBalance?: number
+}
+
+export interface CalendarProjection {
+  days: DayProjection[]
+  opening: number
+  closing: number
+  min: DayProjection
+  firstNegative?: DayProjection
+  realOpening?: number
+  realClosing?: number
+  realMin?: DayProjection
+  hasSimulations?: boolean
 }
 

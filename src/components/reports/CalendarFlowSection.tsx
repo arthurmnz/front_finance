@@ -1,34 +1,36 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertCircle, CreditCard as CardIcon, TrendingDown, TrendingUp, Calendar as CalendarIcon } from 'lucide-react'
+import {
+  AlertCircle,
+  CreditCard as CardIcon,
+  TrendingDown,
+  TrendingUp,
+  Calendar as CalendarIcon,
+  Sparkles,
+  Trash2,
+  RotateCcw,
+} from 'lucide-react'
 import clsx from 'clsx'
-import type { Account, Category, Transaction } from '@/lib/types'
+import type { Account, Category } from '@/lib/types'
 import { formatCompact, formatMoney, toISODate } from '@/lib/format'
-import { Badge, Card, Empty, InfoTooltip } from '@/components/ui'
+import { Badge, Button, Card, Empty, Field, InfoTooltip, Input, Modal, MoneyInput } from '@/components/ui'
 import TransactionList from '@/components/TransactionList'
+import type { CalendarProjection, DayProjection, ReportPeriod, SimulatedTransaction } from './types'
+import { parseDateParts, useSimulations } from './useReportsData'
 
-interface DayProjection {
-  day: number
-  date: string
-  txs: Transaction[]
-  invoices: { cardId: string; cardName: string; remainingAmount: number }[]
-  delta: number
-  balance: number
-}
+export type { DayProjection }
 
-interface CalendarFlowSectionProps {
-  period: { month: number; year: number }
-  projection: {
-    days: DayProjection[]
-    opening: number
-    closing: number
-    min: DayProjection
-    firstNegative?: DayProjection
-  }
+export interface CalendarFlowSectionProps {
+  period: ReportPeriod
+  projection: CalendarProjection
   threshold: number
   accounts: Account[]
   categories: Category[]
   accountIdFilter?: string
+  simulations?: SimulatedTransaction[]
+  onAddSimulation?: (sim: Omit<SimulatedTransaction, 'id'>) => void
+  onRemoveSimulation?: (id: string) => void
+  onClearSimulations?: () => void
 }
 
 type Level = 'positive' | 'warning' | 'negative'
@@ -50,32 +52,165 @@ export default function CalendarFlowSection({
   accounts,
   categories,
   accountIdFilter,
+  simulations: controlledSimulations,
+  onAddSimulation: controlledAddSimulation,
+  onRemoveSimulation: controlledRemoveSimulation,
+  onClearSimulations: controlledClearSimulations,
 }: CalendarFlowSectionProps) {
   const [selected, setSelected] = useState<string>()
+
+  // Fallback para gerenciar simulações localmente se não controlado pelo componente pai
+  const localSimManager = useSimulations('local-reports-calendar')
+  const simulations = controlledSimulations ?? localSimManager.simulations
+  const handleAddSim = controlledAddSimulation ?? localSimManager.addSimulation
+  const handleRemoveSim = controlledRemoveSimulation ?? localSimManager.removeSimulation
+  const handleClearAll = controlledClearSimulations ?? localSimManager.clearSimulations
+
+  // Modal de Simulação
+  const [modalOpen, setModalOpen] = useState(false)
+  const [simType, setSimType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE')
+  const [simTitle, setSimTitle] = useState('')
+  const [simAmount, setSimAmount] = useState<number>(0)
+  const [simDate, setSimDate] = useState<string>('')
 
   const offset = new Date(period.year, period.month - 1, 1).getDay()
   const today = toISODate(new Date())
   const sel = projection.days.find((d) => d.date === selected)
   const accountNames = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
 
+  // Simulações que incidem no mês exibido
+  const monthSimulations = useMemo(() => {
+    return simulations.filter((s) => {
+      const p = parseDateParts(s.date)
+      return p.year === period.year && p.month === period.month
+    })
+  }, [simulations, period.year, period.month])
+
+  const monthSimNet = useMemo(() => {
+    return monthSimulations.reduce(
+      (s, sim) => s + (sim.type === 'INCOME' ? sim.amount : -sim.amount),
+      0,
+    )
+  }, [monthSimulations])
+
+  const handleOpenSimModal = (targetDate?: string) => {
+    const defaultDate =
+      targetDate ||
+      selected ||
+      (period.year === new Date().getFullYear() && period.month === new Date().getMonth() + 1
+        ? toISODate(new Date())
+        : toISODate(new Date(period.year, period.month - 1, 1)))
+    setSimDate(defaultDate)
+    setSimTitle('')
+    setSimAmount(0)
+    setSimType('EXPENSE')
+    setModalOpen(true)
+  }
+
+  const handleSaveSimulation = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!simTitle.trim() || simAmount <= 0 || !simDate) return
+    handleAddSim({
+      title: simTitle.trim(),
+      amount: simAmount,
+      type: simType,
+      date: simDate,
+      accountId: accountIdFilter || undefined,
+    })
+    setModalOpen(false)
+  }
+
   return (
     <div className="space-y-4 mb-8">
-      <div className="flex items-center justify-between">
+      {/* Cabeçalho da Seção com Ação de Simular */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
             <CalendarIcon className="size-4 text-violet" />
             <span>Previsibilidade Diária — Calendário Financeiro</span>
             <InfoTooltip
               title="Calendário Financeiro"
-              content="Projeção diária do saldo bancário considerando receitas, despesas agendadas e faturas de cartão ao longo do mês. Dias destacados em violeta estão abaixo do limite configurado e em vermelho indicam saldo negativo."
+              content="Projeção contínua do saldo bancário considerando histórico consolidado, receitas, despesas agendadas, faturas de cartão e simulações hipotéticas futuras."
               align="start"
             />
           </h2>
           <p className="text-xs text-text-dim">
-            Saldo projetado dia a dia na sua conta, integrando transações agendadas e vencimentos de fatura
+            Saldo encadeado dia a dia na sua conta, integrando transações agendadas e vencimentos de fatura
           </p>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => handleOpenSimModal()}
+            className="flex items-center gap-1.5 border-violet/40 bg-violet/10 hover:bg-violet/20 text-violet"
+          >
+            <Sparkles className="size-3.5 text-violet" />
+            Simular Lançamento
+          </Button>
+
+          {simulations.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={handleClearAll}
+              title="Limpar todas as simulações"
+              className="text-text-muted hover:text-white text-xs flex items-center gap-1"
+            >
+              <RotateCcw className="size-3" />
+              Limpar ({simulations.length})
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Banner de Cenário de Simulação Ativo */}
+      {simulations.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet/40 bg-violet-subtle/50 p-3.5 text-xs text-white">
+          <div className="flex items-center gap-2.5">
+            <div className="grid size-7 place-items-center rounded-lg bg-violet/20 text-violet">
+              <Sparkles className="size-4 text-violet" />
+            </div>
+            <div>
+              <span className="font-semibold text-white">Cenário de Simulação Ativo</span>
+              <span className="text-text-muted ml-1.5">
+                ({simulations.length} lançamento{simulations.length > 1 ? 's' : ''} simulado{simulations.length > 1 ? 's' : ''} na projeção)
+              </span>
+              {monthSimNet !== 0 && (
+                <span
+                  className={clsx(
+                    'ml-2 font-semibold tabular-nums',
+                    monthSimNet > 0 ? 'text-lime' : 'text-expense',
+                  )}
+                >
+                  Impacto líquido no mês: {monthSimNet > 0 ? '+' : ''}
+                  {formatMoney(monthSimNet)}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleOpenSimModal()}
+              className="text-[11px] font-semibold text-violet hover:underline cursor-pointer"
+            >
+              + Adicionar simulação
+            </button>
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium text-text-muted hover:text-white hover:bg-surface-3 transition cursor-pointer"
+            >
+              <RotateCcw className="size-3" />
+              Resetar projeção
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Cards de Resumo da Previsão */}
       <div className="grid grid-cols-3 gap-3">
@@ -83,7 +218,7 @@ export default function CalendarFlowSection({
           <p className="text-xs text-text-dim flex items-center gap-1">
             Início do mês
             <InfoTooltip
-              content="Saldo consolidado em contas no primeiro dia do mês antes das movimentações."
+              content="Saldo consolidado em contas no primeiro dia do mês antes das movimentações, integrando o fluxo encadeado de meses anteriores."
               align="start"
             />
           </p>
@@ -95,12 +230,18 @@ export default function CalendarFlowSection({
           >
             {formatMoney(projection.opening)}
           </p>
+          {projection.realOpening != null && projection.realOpening !== projection.opening && (
+            <p className="text-[11px] text-text-dim tabular-nums">
+              Real: {formatMoney(projection.realOpening)}
+            </p>
+          )}
         </Card>
+
         <Card className="p-3.5 bg-surface-1 border-border">
           <p className="text-xs text-text-dim flex items-center gap-1">
             Fim do mês
             <InfoTooltip
-              content="Saldo projetado em conta bancária para o último dia do mês, após todas as entradas e saídas previstas."
+              content="Saldo projetado em conta bancária para o último dia do mês, após todas as entradas, saídas previstas e simulações."
               align="center"
             />
           </p>
@@ -126,7 +267,22 @@ export default function CalendarFlowSection({
             )}
             {formatMoney(projection.closing)}
           </p>
+          {projection.realClosing != null && projection.realClosing !== projection.closing && (
+            <p className="text-[11px] text-text-dim tabular-nums flex items-center gap-1">
+              <span>Sem simulação: {formatMoney(projection.realClosing)}</span>
+              <span
+                className={clsx(
+                  'font-medium',
+                  projection.closing >= projection.realClosing ? 'text-lime' : 'text-expense',
+                )}
+              >
+                ({projection.closing >= projection.realClosing ? '+' : ''}
+                {formatMoney(projection.closing - projection.realClosing)})
+              </span>
+            </p>
+          )}
         </Card>
+
         <Card className="p-3.5 bg-surface-1 border-border">
           <p className="text-xs text-text-dim flex items-center gap-1">
             Menor saldo previsto
@@ -143,7 +299,14 @@ export default function CalendarFlowSection({
           >
             {formatMoney(projection.min.balance)}
           </p>
-          <p className="text-[11px] text-text-dim">dia {projection.min.day}</p>
+          <p className="text-[11px] text-text-dim">
+            dia {projection.min.day}
+            {projection.realMin != null && projection.realMin.balance !== projection.min.balance && (
+              <span className="block sm:inline sm:ml-2">
+                (Sem simulação: {formatMoney(projection.realMin.balance)})
+              </span>
+            )}
+          </p>
         </Card>
       </div>
 
@@ -178,10 +341,11 @@ export default function CalendarFlowSection({
               type="button"
               onClick={() => setSelected(d.date === selected ? undefined : d.date)}
               className={clsx(
-                'flex min-h-16 flex-col items-center justify-between rounded-xl border p-1 text-center transition cursor-pointer select-none sm:min-h-20 sm:p-1.5',
+                'flex min-h-16 flex-col items-center justify-between rounded-xl border p-1 text-center transition cursor-pointer select-none sm:min-h-20 sm:p-1.5 relative',
                 levelCell[levelOf(d.balance, threshold)],
                 d.date === selected && '!border-lime ring-2 ring-lime/60',
                 d.date === today && 'outline outline-1 outline-lime',
+                d.simulations && d.simulations.length > 0 && 'ring-1 ring-violet/50',
               )}
             >
               <div className="flex items-center justify-between w-full px-0.5">
@@ -197,16 +361,28 @@ export default function CalendarFlowSection({
                 >
                   {d.day}
                 </span>
-                {d.invoices.length > 0 && (
-                  <span
-                    title={`Vencimento de fatura: ${d.invoices
-                      .map((i) => `${i.cardName} (${formatMoney(i.remainingAmount)})`)
-                      .join(', ')}`}
-                    className="flex items-center"
-                  >
-                    <CardIcon className="size-3 text-violet shrink-0" />
-                  </span>
-                )}
+                <div className="flex items-center gap-1">
+                  {d.simulations && d.simulations.length > 0 && (
+                    <span
+                      title={`Simulações: ${d.simulations
+                        .map((s) => `${s.title} (${s.type === 'INCOME' ? '+' : '−'}${formatMoney(s.amount)})`)
+                        .join(', ')}`}
+                      className="flex items-center"
+                    >
+                      <Sparkles className="size-3 text-violet shrink-0" />
+                    </span>
+                  )}
+                  {d.invoices.length > 0 && (
+                    <span
+                      title={`Vencimento de fatura: ${d.invoices
+                        .map((i) => `${i.cardName} (${formatMoney(i.remainingAmount)})`)
+                        .join(', ')}`}
+                      className="flex items-center"
+                    >
+                      <CardIcon className="size-3 text-violet shrink-0" />
+                    </span>
+                  )}
+                </div>
               </div>
               {d.delta !== 0 && (
                 <span
@@ -245,24 +421,111 @@ export default function CalendarFlowSection({
           <span className="flex items-center gap-1.5">
             <CardIcon className="size-3 text-violet shrink-0" /> Vencimento de fatura
           </span>
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="size-3 text-violet shrink-0" /> Lançamento simulado
+          </span>
         </div>
         <p className="mt-1 px-1 text-[11px] text-text-dim">
-          Toque em qualquer dia para inspecionar transações e vencimentos de fatura que compõem o saldo.
+          Toque em qualquer dia para inspecionar movimentações, faturas ou simular cenários futuros de caixa.
         </p>
       </Card>
 
       {/* Painel do Dia Selecionado */}
       {sel && (
         <div className="space-y-3 pt-2">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="font-semibold text-white">Movimentações do Dia {sel.day}</h3>
-            <span className="text-xs text-text-muted">
-              Saldo projetado no encerramento:{' '}
-              <b className={clsx('tabular-nums', sel.balance < 0 ? 'text-expense' : 'text-white')}>
-                {formatMoney(sel.balance)}
-              </b>
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <div>
+              <h3 className="font-semibold text-white">Movimentações do Dia {sel.day}</h3>
+              <p className="text-xs text-text-muted">
+                Saldo projetado no encerramento:{' '}
+                <b className={clsx('tabular-nums', sel.balance < 0 ? 'text-expense' : 'text-white')}>
+                  {formatMoney(sel.balance)}
+                </b>
+                {sel.realBalance != null && sel.realBalance !== sel.balance && (
+                  <span className="text-text-dim ml-2 tabular-nums">
+                    (Sem simulações: {formatMoney(sel.realBalance)})
+                  </span>
+                )}
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handleOpenSimModal(sel.date)}
+              className="flex items-center gap-1.5 text-xs text-violet border-violet/30 hover:border-violet/60"
+            >
+              <Sparkles className="size-3.5 text-violet" />
+              Simular neste dia
+            </Button>
           </div>
+
+          {/* Lançamentos Simulados do Dia */}
+          {sel.simulations && sel.simulations.length > 0 && (
+            <Card className="divide-y divide-border bg-surface-1 border-violet/30">
+              <div className="p-2.5 bg-violet-subtle/30 px-3 flex items-center justify-between">
+                <span className="text-xs font-semibold text-violet flex items-center gap-1.5">
+                  <Sparkles className="size-3.5" />
+                  Lançamentos Simulados (Cenário Hipotético)
+                </span>
+                <span className="text-[11px] text-text-dim">
+                  Impacto no dia:{' '}
+                  <b
+                    className={clsx(
+                      'tabular-nums font-semibold',
+                      (sel.simulatedDelta ?? 0) >= 0 ? 'text-lime' : 'text-expense',
+                    )}
+                  >
+                    {(sel.simulatedDelta ?? 0) >= 0 ? '+' : ''}
+                    {formatMoney(sel.simulatedDelta ?? 0)}
+                  </b>
+                </span>
+              </div>
+              {sel.simulations.map((sim) => (
+                <div
+                  key={sim.id}
+                  className="flex items-center justify-between gap-3 p-3 hover:bg-surface-2 transition"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={clsx(
+                        'grid size-8 place-items-center rounded-lg text-xs font-bold shrink-0',
+                        sim.type === 'INCOME' ? 'bg-lime/15 text-lime' : 'bg-expense/15 text-expense',
+                      )}
+                    >
+                      {sim.type === 'INCOME' ? '+' : '−'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">{sim.title}</p>
+                      <p className="text-[11px] text-text-dim">Lançamento hipotético</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Badge tone={sim.type === 'INCOME' ? 'income' : 'expense'}>
+                      {sim.type === 'INCOME' ? 'Receita Simulada' : 'Despesa Simulada'}
+                    </Badge>
+                    <p
+                      className={clsx(
+                        'text-sm font-semibold tabular-nums',
+                        sim.type === 'INCOME' ? 'text-lime' : 'text-expense',
+                      )}
+                    >
+                      {sim.type === 'INCOME' ? '+' : '−'}
+                      {formatMoney(sim.amount)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSim(sim.id)}
+                      title="Remover simulação"
+                      className="grid size-7 place-items-center rounded-lg text-text-muted hover:text-expense hover:bg-expense/10 transition cursor-pointer"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
 
           {/* Vencimentos de faturas no dia */}
           {sel.invoices.length > 0 && (
@@ -296,10 +559,98 @@ export default function CalendarFlowSection({
               accountId={accountIdFilter || undefined}
             />
           ) : (
-            !sel.invoices.length && <Empty title="Sem movimentações registradas neste dia." />
+            !sel.invoices.length &&
+            (!sel.simulations || sel.simulations.length === 0) && (
+              <Empty title="Sem movimentações registradas neste dia." />
+            )
           )}
         </div>
       )}
+
+      {/* Modal para Adicionar Lançamento Simulado */}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Simular Lançamento Futuro"
+      >
+        <form onSubmit={handleSaveSimulation} className="space-y-4">
+          <p className="text-xs text-text-dim">
+            Adicione uma receita ou despesa hipotética para projetar o impacto no saldo bancário sem afetar seus lançamentos reais.
+          </p>
+
+          {/* Seletor de Tipo */}
+          <div>
+            <label className="text-xs font-medium text-text-dim mb-1.5 block">Tipo do Lançamento</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSimType('INCOME')}
+                className={clsx(
+                  'flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer',
+                  simType === 'INCOME'
+                    ? 'bg-lime/15 border-lime text-lime shadow-sm'
+                    : 'bg-surface-2 border-border text-text-muted hover:text-white',
+                )}
+              >
+                <TrendingUp className="size-3.5" />
+                Receita (+)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSimType('EXPENSE')}
+                className={clsx(
+                  'flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer',
+                  simType === 'EXPENSE'
+                    ? 'bg-expense/15 border-expense text-expense shadow-sm'
+                    : 'bg-surface-2 border-border text-text-muted hover:text-white',
+                )}
+              >
+                <TrendingDown className="size-3.5" />
+                Despesa (−)
+              </button>
+            </div>
+          </div>
+
+          {/* Descrição */}
+          <Field label="Descrição da Simulação">
+            <Input
+              value={simTitle}
+              onChange={(e) => setSimTitle(e.target.value)}
+              placeholder={
+                simType === 'INCOME'
+                  ? 'ex.: Freelance extra, Restituição IRPF'
+                  : 'ex.: Conserto do carro, Curso, Viagem'
+              }
+              required
+              autoFocus
+            />
+          </Field>
+
+          {/* Valor */}
+          <Field label="Valor">
+            <MoneyInput value={simAmount} onChange={setSimAmount} />
+          </Field>
+
+          {/* Data */}
+          <Field label="Data Prevista">
+            <Input
+              type="date"
+              value={simDate}
+              onChange={(e) => setSimDate(e.target.value)}
+              required
+            />
+          </Field>
+
+          <div className="mt-5 flex justify-end gap-2 pt-2 border-t border-border">
+            <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={!simTitle.trim() || simAmount <= 0 || !simDate}>
+              Adicionar ao Cenário
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

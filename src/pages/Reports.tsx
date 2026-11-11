@@ -16,7 +16,7 @@ import FutureCommitmentsSection from '@/components/reports/FutureCommitmentsSect
 import SpendingHabitsSection from '@/components/reports/SpendingHabitsSection'
 import GroupSharedSection from '@/components/reports/GroupSharedSection'
 import GroupReportsView from '@/components/reports/GroupReportsView'
-import { useIndividualReportsData, useWarningThreshold } from '@/components/reports/useReportsData'
+import { useIndividualReportsData, useSimulations, useWarningThreshold } from '@/components/reports/useReportsData'
 import type { ReportFiltersState } from '@/components/reports/types'
 
 export default function Reports() {
@@ -31,6 +31,7 @@ export default function Reports() {
 
   // Estado dos filtros individuais
   const [threshold, setThreshold] = useWarningThreshold(user?.id)
+  const { simulations, addSimulation, removeSimulation, clearSimulations } = useSimulations(user?.id)
   const [configuringThreshold, setConfiguringThreshold] = useState(false)
   const [draftThreshold, setDraftThreshold] = useState(threshold)
   const [showFilters, setShowFilters] = useState(false)
@@ -59,7 +60,7 @@ export default function Reports() {
     futureCommitments,
     spendingHabits,
     sharedGroupBalance,
-  } = useIndividualReportsData(filters, threshold, windowMonths)
+  } = useIndividualReportsData(filters, threshold, windowMonths, simulations)
 
   const handleScopeChange = (newScope: 'individual' | 'group') => {
     const params = new URLSearchParams(searchParams)
@@ -224,6 +225,10 @@ export default function Reports() {
                 accounts={allAccounts}
                 categories={categories}
                 accountIdFilter={filters.accountId}
+                simulations={simulations}
+                onAddSimulation={addSimulation}
+                onRemoveSimulation={removeSimulation}
+                onClearSimulations={clearSimulations}
               />
 
               {/* Bloco 2: Fluxo de Caixa Histórico (6 Meses) */}

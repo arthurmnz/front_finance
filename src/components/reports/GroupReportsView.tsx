@@ -11,7 +11,7 @@ import FutureCommitmentsSection from './FutureCommitmentsSection'
 import SpendingHabitsSection from './SpendingHabitsSection'
 import GroupMemberExpensesSection from './GroupMemberExpensesSection'
 import GroupDebtsReportSection from './GroupDebtsReportSection'
-import { useGroupReportsData, useWarningThreshold } from './useReportsData'
+import { useGroupReportsData, useSimulations, useWarningThreshold } from './useReportsData'
 import type { ReportFiltersState } from './types'
 
 interface GroupReportsViewProps {
@@ -20,6 +20,7 @@ interface GroupReportsViewProps {
 
 export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
   const [threshold, setThreshold] = useWarningThreshold(`group-${groupId}`)
+  const { simulations, addSimulation, removeSimulation, clearSimulations } = useSimulations(`group-${groupId}`)
   const [configuringThreshold, setConfiguringThreshold] = useState(false)
   const [draftThreshold, setDraftThreshold] = useState(threshold)
   const [showFilters, setShowFilters] = useState(false)
@@ -51,7 +52,7 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
     spendingHabits,
     memberExpenses,
     groupDebts,
-  } = useGroupReportsData(groupId, filters, threshold, windowMonths)
+  } = useGroupReportsData(groupId, filters, threshold, windowMonths, simulations)
 
   const handleOpenThresholdModal = () => {
     setDraftThreshold(threshold)
@@ -102,6 +103,10 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
             accounts={allAccounts}
             categories={categories}
             accountIdFilter={filters.accountId}
+            simulations={simulations}
+            onAddSimulation={addSimulation}
+            onRemoveSimulation={removeSimulation}
+            onClearSimulations={clearSimulations}
           />
 
           {/* Bloco Específico de Grupo: Despesas por Membro Responsável */}
