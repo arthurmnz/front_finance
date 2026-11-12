@@ -29,6 +29,7 @@ import type {
   CategoryComparison,
   CumulativeSpendingPoint,
   DayProjection,
+  DaySimulationItem,
   FinancialPlanningData,
   FutureMonthCommitment,
   GroupMemberExpense,
@@ -61,7 +62,20 @@ export function useSimulations(userId?: string) {
   const [simulations, setSimulations] = useState<SimulatedTransaction[]>(() => {
     try {
       const raw = localStorage.getItem(key)
-      return raw ? JSON.parse(raw) : []
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+      return parsed.filter(
+        (item): item is SimulatedTransaction =>
+          Boolean(
+            item &&
+              typeof item === 'object' &&
+              item.id &&
+              item.title &&
+              Number.isFinite(item.amount) &&
+              item.date,
+          ),
+      )
     } catch {
       return []
     }
@@ -102,13 +116,281 @@ export function useSimulations(userId?: string) {
   return { simulations, addSimulation, removeSimulation, clearSimulations }
 }
 
-export const parseDateParts = (dateStr: string) => {
-  const parts = dateStr.slice(0, 10).split('-')
-  return {
-    year: Number(parts[0]),
-    month: Number(parts[1]),
-    day: Number(parts[2]),
+export const parseDateParts = (dateStr?: string) => {
+  if (!dateStr || typeof dateStr !== 'string' || dateStr.length < 10) {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() }
   }
+  const parts = dateStr.slice(0, 10).split('-')
+  const y = Number(parts[0])
+  const m = Number(parts[1])
+  const d = Number(parts[2])
+  return {
+    year: Number.isFinite(y) ? y : new Date().getFullYear(),
+    month: Number.isFinite(m) ? m : new Date().getMonth() + 1,
+    day: Number.isFinite(d) ? d : 1,
+  }
+}
+
+/**
+ * Calcula a fatura e o vencimento em que uma compra no cartão incidirá,
+ * baseado na data da compra, dia de fechamento e dia de vencimento.
+ */
+export function getInvoiceForCardPurchase(
+  yc: number,
+  mc: number,
+  dc: number,
+  closingDay: number,
+  dueDay: number,
+) {
+  let invM = mc
+  let invY = yc
+  if (dc >= closingDay) {
+    invM += 1
+    if (invM > 12) {
+      invM = 1
+      invY += 1
+    }
+  }
+  const daysInInvM = new Date(invY, invM, 0).getDate()
+  const safeDue = Math.min(Math.max(1, dueDay || 10), daysInInvM)
+  const dueIso = `${invY}-${String(invM).padStart(2, '0')}-${String(safeDue).padStart(2, '0')}`
+  return { invMonth: invM, invYear: invY, dueIso, dueDay: safeDue }
+}
+
+/**
+ * Expande o conjunto de simulações cadastradas para o mês específico (month, year).
+ * Trata:
+ * - Lançamentos simples em conta
+ * - Assinaturas / recorrências em conta (isInfinite ou repetições)
+ * - Compras à vista no cartão (exibição no dia da compra + débito no vencimento da fatura)
+ * - Compras parceladas no cartão (exibição no dia da compra + N parcelas nas faturas seguintes)
+ * - Assinaturas recorrentes no cartão (exibição mensal no dia da cobrança + débito na fatura correspondente)
+ */
+export function expandSimulationsForMonth(
+  simulations: SimulatedTransaction[],
+  month: number,
+  year: number,
+  cardsMap?: Map<string, CreditCard>,
+  _accountIdFilter?: string,
+): Map<string, DaySimulationItem[]> {
+  const result = new Map<string, DaySimulationItem[]>()
+  const addItem = (dateIso: string, item: DaySimulationItem, parentId?: string) => {
+    const list = result.get(dateIso) ?? []
+    list.push({ ...item, originalId: item.originalId || parentId })
+    result.set(dateIso, list)
+  }
+
+  const daysInCurrentMonth = new Date(year, month, 0).getDate()
+  const currentMonthIdx = year * 12 + (month - 1)
+
+  simulations.forEach((sim) => {
+    const p = parseDateParts(sim.date)
+    const isCard = sim.sourceMode === 'CARD' || !!sim.creditCardId
+    const card = isCard && sim.creditCardId ? cardsMap?.get(sim.creditCardId) : undefined
+    const closingDay = card?.closingDay ?? 25
+    const dueDay = card?.dueDay ?? 10
+    const cardName = card?.name ?? sim.cardName ?? 'Cartão'
+    const cardAccountId = card?.accountId ?? sim.accountId
+    const add = (iso: string, itm: DaySimulationItem) => addItem(iso, itm, sim.id)
+
+    if (!isCard) {
+      // -------------------------------------------------------------
+      // CASO 1: CONTA BANCÁRIA
+      // -------------------------------------------------------------
+      if (!sim.isRecurring) {
+        if (p.year === year && p.month === month) {
+          const safeDay = Math.min(p.day, daysInCurrentMonth)
+          const dateIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
+          add(dateIso, { ...sim, date: dateIso })
+        }
+      } else {
+        const freq = sim.recurrenceFrequency || 'MONTHLY'
+        const simStartIdx = p.year * 12 + (p.month - 1)
+        const deltaMonths = currentMonthIdx - simStartIdx
+
+        if (deltaMonths >= 0) {
+          if (freq === 'MONTHLY') {
+            const interval = sim.recurrenceInterval || 1
+            const isDueThisMonth = deltaMonths % interval === 0
+            const notExpired = sim.isInfinite || !sim.recurrenceInstallments || deltaMonths < sim.recurrenceInstallments
+
+            if (isDueThisMonth && notExpired) {
+              const safeDay = Math.min(p.day, daysInCurrentMonth)
+              const dateIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
+              add(dateIso, {
+                ...sim,
+                id: `${sim.id}_m_${year}_${month}`,
+                date: dateIso,
+                installmentDisplay: 'Assinatura',
+              })
+            }
+          } else if (freq === 'YEARLY') {
+            const deltaYears = year - p.year
+            if (deltaYears >= 0 && month === p.month) {
+              const safeDay = Math.min(p.day, daysInCurrentMonth)
+              const dateIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
+              add(dateIso, {
+                ...sim,
+                id: `${sim.id}_y_${year}`,
+                date: dateIso,
+                installmentDisplay: 'Anual',
+              })
+            }
+          } else if (freq === 'WEEKLY') {
+            const startDate = new Date(p.year, p.month - 1, p.day)
+            const firstOfMonth = new Date(year, month - 1, 1)
+            const lastOfMonth = new Date(year, month - 1, daysInCurrentMonth)
+            let curr = new Date(startDate.getTime())
+            while (curr <= lastOfMonth) {
+              if (curr >= firstOfMonth && curr <= lastOfMonth) {
+                const d = curr.getDate()
+                const dateIso = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                add(dateIso, {
+                  ...sim,
+                  id: `${sim.id}_w_${dateIso}`,
+                  date: dateIso,
+                  installmentDisplay: 'Semanal',
+                })
+              }
+              curr.setDate(curr.getDate() + 7)
+            }
+          }
+        }
+      }
+    } else {
+      // -------------------------------------------------------------
+      // CASO 2: CARTÃO DE CRÉDITO
+      // -------------------------------------------------------------
+      const totalInstallments = sim.totalInstallments && sim.totalInstallments > 1 ? sim.totalInstallments : 1
+
+      if (!sim.isRecurring) {
+        if (totalInstallments === 1) {
+          // Subcaso 2A: Parcela única no cartão
+          const inv = getInvoiceForCardPurchase(p.year, p.month, p.day, closingDay, dueDay)
+
+          // 1. Registro visual no dia da compra (apenas se for o mês da compra)
+          if (p.year === year && p.month === month) {
+            const safeDay = Math.min(p.day, daysInCurrentMonth)
+            const purchaseIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
+            add(purchaseIso, {
+              ...sim,
+              id: `${sim.id}_card_buy`,
+              date: purchaseIso,
+              cardName,
+              isCardPurchaseDay: true,
+              effectiveDebitDate: inv.dueIso,
+              installmentDisplay: 'À vista no cartão',
+            })
+          }
+
+          // 2. Débito bancário no dia de vencimento da fatura (se for o mês da fatura)
+          if (inv.invYear === year && inv.invMonth === month) {
+            add(inv.dueIso, {
+              ...sim,
+              id: `${sim.id}_card_debit`,
+              title: `${sim.title} (Fatura ${cardName})`,
+              date: inv.dueIso,
+              accountId: cardAccountId,
+              cardName,
+              type: 'EXPENSE',
+              isCardInvoiceDebitDay: true,
+              installmentDisplay: `Fatura ${cardName}`,
+            })
+          }
+        } else {
+          // Subcaso 2B: Compra parcelada no cartão (N parcelas)
+          const firstInv = getInvoiceForCardPurchase(p.year, p.month, p.day, closingDay, dueDay)
+
+          // 1. Registro visual no dia da compra (mês da compra original)
+          if (p.year === year && p.month === month) {
+            const safeDay = Math.min(p.day, daysInCurrentMonth)
+            const purchaseIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
+            add(purchaseIso, {
+              ...sim,
+              id: `${sim.id}_card_buy`,
+              date: purchaseIso,
+              cardName,
+              isCardPurchaseDay: true,
+              effectiveDebitDate: firstInv.dueIso,
+              installmentDisplay: `Parcelado 1/${totalInstallments}`,
+            })
+          }
+
+          // 2. Débito de cada uma das N parcelas nas faturas subsequentes
+          const firstInvMonthIdx = firstInv.invYear * 12 + (firstInv.invMonth - 1)
+          for (let k = 0; k < totalInstallments; k++) {
+            const parcMonthIdx = firstInvMonthIdx + k
+            if (parcMonthIdx === currentMonthIdx) {
+              const safeDue = Math.min(Math.max(1, dueDay), daysInCurrentMonth)
+              const dueIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDue).padStart(2, '0')}`
+              add(dueIso, {
+                ...sim,
+                id: `${sim.id}_card_parc_${k + 1}`,
+                title: `${sim.title} (${k + 1}/${totalInstallments})`,
+                date: dueIso,
+                accountId: cardAccountId,
+                cardName,
+                type: 'EXPENSE',
+                isCardInvoiceDebitDay: true,
+                installmentNumber: k + 1,
+                totalInstallments,
+                installmentDisplay: `${k + 1}/${totalInstallments}`,
+              })
+            }
+          }
+        }
+      } else {
+        // Subcaso 2C: Assinatura recorrente no cartão
+        const simStartIdx = p.year * 12 + (p.month - 1)
+        const deltaMonths = currentMonthIdx - simStartIdx
+
+        // 1. Registro visual no dia da cobrança neste mês
+        if (deltaMonths >= 0) {
+          const notExpired = sim.isInfinite || !sim.recurrenceInstallments || deltaMonths < sim.recurrenceInstallments
+          if (notExpired) {
+            const safeChargeDay = Math.min(p.day, daysInCurrentMonth)
+            const chargeDateIso = `${year}-${String(month).padStart(2, '0')}-${String(safeChargeDay).padStart(2, '0')}`
+            const chargeInv = getInvoiceForCardPurchase(year, month, safeChargeDay, closingDay, dueDay)
+            add(chargeDateIso, {
+              ...sim,
+              id: `${sim.id}_card_charge_${year}_${month}`,
+              date: chargeDateIso,
+              cardName,
+              isCardPurchaseDay: true,
+              effectiveDebitDate: chargeInv.dueIso,
+              installmentDisplay: 'Assinatura Cartão',
+            })
+          }
+        }
+
+        // 2. Débito na fatura que vence neste mês
+        const chargeMonthIdx = p.day < closingDay ? currentMonthIdx : currentMonthIdx - 1
+        const chargeDelta = chargeMonthIdx - simStartIdx
+
+        if (chargeDelta >= 0) {
+          const chargeNotExpired = sim.isInfinite || !sim.recurrenceInstallments || chargeDelta < sim.recurrenceInstallments
+          if (chargeNotExpired) {
+            const safeDue = Math.min(Math.max(1, dueDay), daysInCurrentMonth)
+            const dueIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDue).padStart(2, '0')}`
+            add(dueIso, {
+              ...sim,
+              id: `${sim.id}_card_inv_debit_${year}_${month}`,
+              title: `${sim.title} (Fatura ${cardName})`,
+              date: dueIso,
+              accountId: cardAccountId,
+              cardName,
+              type: 'EXPENSE',
+              isCardInvoiceDebitDay: true,
+              installmentDisplay: 'Assinatura',
+            })
+          }
+        }
+      }
+    }
+  })
+
+  return result
 }
 
 // ----------------------------------------------------------------------
@@ -126,6 +408,8 @@ export interface MonthSimulationParams {
   accountSource: Transaction[]
   displaySource: Transaction[]
   simulations: SimulatedTransaction[]
+  cardsMap?: Map<string, CreditCard>
+  accountIdFilter?: string
   getMonthInvoices: (m: number, y: number) => {
     cardId: string
     cardName: string
@@ -134,7 +418,7 @@ export interface MonthSimulationParams {
     status?: string
   }[]
   effect: (t: Transaction) => number
-  simEffect: (s: SimulatedTransaction) => number
+  simEffect: (s: SimulatedTransaction | DaySimulationItem) => number
 }
 
 export interface MonthSimulationResult {
@@ -160,6 +444,8 @@ export function simulateMonthDays(params: MonthSimulationParams): MonthSimulatio
     accountSource,
     displaySource,
     simulations,
+    cardsMap,
+    accountIdFilter,
     getMonthInvoices,
     effect,
     simEffect,
@@ -258,14 +544,13 @@ export function simulateMonthDays(params: MonthSimulationParams): MonthSimulatio
     }
   })
 
-  const simsByDay = new Map<string, SimulatedTransaction[]>()
-  simulations.forEach((s) => {
-    const p = parseDateParts(s.date)
-    if (p.year === year && p.month === month) {
-      const k = s.date.slice(0, 10)
-      simsByDay.set(k, [...(simsByDay.get(k) ?? []), s])
-    }
-  })
+  const simsByDay = expandSimulationsForMonth(
+    simulations,
+    month,
+    year,
+    cardsMap,
+    accountIdFilter,
+  )
 
   let runningReal = realOpening
   let runningSim = opening
@@ -367,9 +652,16 @@ export function buildCalendarProjection(
   accountIdFilter?: string,
   allTransactions?: Transaction[],
   simulations: SimulatedTransaction[] = [],
+  cards?: CreditCard[],
 ): CalendarProjection {
   const accs = accounts.filter((a) => !accountIdFilter || a.id === accountIdFilter)
   const ids = new Set(accs.map((a) => a.id))
+
+  const cardsMap = new Map<string, CreditCard>()
+  if (cards) {
+    cards.forEach((c) => cardsMap.set(c.id, c))
+  }
+  invoices.forEach(({ card }) => cardsMap.set(card.id, card))
 
   const effect = (t: Transaction) => {
     if (t.creditCardId) return 0
@@ -383,7 +675,8 @@ export function buildCalendarProjection(
     return v
   }
 
-  const simEffect = (s: SimulatedTransaction) => {
+  const simEffect = (s: SimulatedTransaction | DaySimulationItem) => {
+    if ('isCardPurchaseDay' in s && s.isCardPurchaseDay) return 0
     if (accountIdFilter && s.accountId && s.accountId !== accountIdFilter) return 0
     return s.type === 'INCOME' ? s.amount : -s.amount
   }
@@ -557,6 +850,8 @@ export function buildCalendarProjection(
       accountSource,
       displaySource,
       simulations,
+      cardsMap,
+      accountIdFilter,
       getMonthInvoices,
       effect,
       simEffect,
@@ -577,6 +872,8 @@ export function buildCalendarProjection(
       accountSource,
       displaySource,
       simulations,
+      cardsMap,
+      accountIdFilter,
       getMonthInvoices,
       effect,
       simEffect,
@@ -598,6 +895,8 @@ export function buildCalendarProjection(
       accountSource,
       displaySource,
       simulations,
+      cardsMap,
+      accountIdFilter,
       getMonthInvoices,
       effect,
       simEffect,
@@ -621,6 +920,8 @@ export function buildCalendarProjection(
         accountSource,
         displaySource,
         simulations,
+        cardsMap,
+        accountIdFilter,
         getMonthInvoices,
         effect,
         simEffect,
@@ -644,6 +945,8 @@ export function buildCalendarProjection(
       accountSource,
       displaySource,
       simulations,
+      cardsMap,
+      accountIdFilter,
       getMonthInvoices,
       effect,
       simEffect,
@@ -1463,6 +1766,7 @@ export function useIndividualReportsData(
       filters.accountId,
       personalTxs,
       simulations,
+      cardList,
     )
   }, [
     operationalAccounts,
@@ -1797,6 +2101,7 @@ export function useGroupReportsData(
       filters.accountId,
       operationalGroupTransactions,
       simulations,
+      cardList,
     )
   }, [
     operationalAccounts,

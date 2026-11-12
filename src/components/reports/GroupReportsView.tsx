@@ -102,6 +102,7 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
             threshold={threshold}
             accounts={allAccounts}
             categories={categories}
+            creditCards={creditCards}
             accountIdFilter={filters.accountId}
             simulations={simulations}
             onAddSimulation={addSimulation}

@@ -224,6 +224,7 @@ export default function Reports() {
                 threshold={threshold}
                 accounts={allAccounts}
                 categories={categories}
+                creditCards={creditCards}
                 accountIdFilter={filters.accountId}
                 simulations={simulations}
                 onAddSimulation={addSimulation}

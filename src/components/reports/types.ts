@@ -114,8 +114,28 @@ export interface SimulatedTransaction {
   title: string
   amount: number
   type: 'INCOME' | 'EXPENSE'
-  date: string
+  date: string // ISO YYYY-MM-DD (data da compra/início)
   accountId?: string
+  sourceMode?: 'ACCOUNT' | 'CARD'
+  creditCardId?: string
+  cardName?: string
+  isRecurring?: boolean
+  recurrenceFrequency?: 'MONTHLY' | 'WEEKLY' | 'YEARLY'
+  recurrenceInterval?: number
+  recurrenceInstallments?: number
+  isInfinite?: boolean
+  installmentNumber?: number
+  totalInstallments?: number
+  notes?: string
+}
+
+export interface DaySimulationItem extends SimulatedTransaction {
+  originalId?: string
+  isCardPurchaseDay?: boolean
+  isCardInvoiceDebitDay?: boolean
+  installmentDisplay?: string
+  effectiveDebitDate?: string
+  simulatedDebitCardName?: string
 }
 
 export interface DayProjection {
@@ -125,7 +145,7 @@ export interface DayProjection {
   invoices: { cardId: string; cardName: string; remainingAmount: number; isOverdue?: boolean }[]
   delta: number
   balance: number
-  simulations?: SimulatedTransaction[]
+  simulations?: (SimulatedTransaction | DaySimulationItem)[]
   simulatedDelta?: number
   realBalance?: number
   pendingTxs?: Transaction[]
