@@ -481,7 +481,7 @@ export default function CreditCardDetail() {
             {allTransactions.length > 0 && !filteredTransactions.length ? (
               <Empty title="Nenhum lançamento na fatura com esses filtros." />
             ) : (
-              <TransactionList items={filteredTransactions} categories={cats} showResponsible />
+              <TransactionList items={filteredTransactions} categories={cats} groupByDay showResponsible />
             )}
           </>
         )}
