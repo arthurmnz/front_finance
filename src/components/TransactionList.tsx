@@ -103,6 +103,11 @@ export default function TransactionList({
             )}
             {t.recurrenceGroupId && !t.installmentNumber && <Repeat className="size-3 shrink-0 text-text-dim" />}
             {t.type === 'TRANSFER' && <ArrowLeftRight className="size-3 shrink-0 text-text-dim" />}
+            {t.type === 'TRANSFER' && t.generatesDebt && (
+              <Badge tone="primary" className="shrink-0 text-[10px]">
+                Gera dívida
+              </Badge>
+            )}
           </p>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-text-dim mt-0.5">
             {!groupByDay && <span className="tabular-nums">{formatDate(t.date)}</span>}

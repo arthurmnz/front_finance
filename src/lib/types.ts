@@ -61,6 +61,7 @@ export interface Transaction {
   recurrenceInterval: number | null; isInfinite: boolean
   creditCardId?: string | null; creditCardInvoiceId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
   installmentNumber?: number | null; totalInstallments?: number | null
+  generatesDebt?: boolean
   createdAt: string; updatedAt: string
 }
 export interface AccountSplitInput {
@@ -75,10 +76,12 @@ export interface CreateTransactionInput {
   creditCardId?: string | null; creditCardInvoiceId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
   installmentAmountMode?: 'INSTALLMENT' | 'TOTAL'
   splits?: AccountSplitInput[] | null
+  generatesDebt?: boolean
 }
 export interface UpdateTransactionInput {
   title: string; amount: number; date: string; categoryId?: string | null; status: TransactionStatus
   updateAllFuture: boolean; invoiceMonth?: number | null; invoiceYear?: number | null
+  generatesDebt?: boolean | null
 }
 
 export interface Friendship { id: string; requester: UserSummary; addressee: UserSummary; status: FriendshipStatus; createdAt: string; updatedAt: string }
@@ -132,6 +135,7 @@ export interface DebtSettlement {
   date: string
   transactionId: string | null
   notes: string | null
+  isForgiveness?: boolean
   createdAt: string
 }
 
@@ -150,6 +154,14 @@ export interface SettleDebtInput {
   targetYear: number
   sourceAccountId: string
   destinationAccountId: string
+  notes?: string | null
+}
+
+export interface ForgiveDebtInput {
+  debtorId: string
+  amount: number
+  targetMonth: number
+  targetYear: number
   notes?: string | null
 }
 

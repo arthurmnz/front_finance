@@ -10,6 +10,7 @@ export interface ConfirmDialogProps {
   message?: string
   confirmLabel?: string
   cancelLabel?: string
+  confirmVariant?: 'primary' | 'danger' | 'outline' | 'ghost'
   loading?: boolean
   children?: ReactNode
 }
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   message,
   confirmLabel = 'Confirmar',
   cancelLabel = 'Cancelar',
+  confirmVariant = 'danger',
   loading,
   children,
 }: ConfirmDialogProps) {
@@ -34,7 +36,7 @@ export function ConfirmDialog({
           {cancelLabel}
         </Button>
         <Button
-          variant="danger"
+          variant={confirmVariant}
           className="flex-1 font-semibold"
           loading={loading}
           onClick={onConfirm}

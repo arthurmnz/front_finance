@@ -30,12 +30,12 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
           <span>Balanço Compartilhado & Acertos de Grupos</span>
           <InfoTooltip
             title="Balanço Compartilhado"
-            content="Consolidação de transações cruzadas em cartões de terceiros e saldos pendentes a pagar ou a receber em todos os seus grupos."
+            content="Consolidação de compras em cartões compartilhados, transferências com saldo devedor e saldos pendentes a pagar ou a receber em todos os seus grupos."
             align="start"
           />
         </h2>
         <p className="text-xs text-text-dim">
-          Gastos cruzados em cartões compartilhados e acertos pendentes entre membros nos grupos
+          Gastos cruzados em cartões compartilhados, transferências com saldo devedor e acertos pendentes entre membros nos grupos
         </p>
       </div>
 
@@ -46,7 +46,7 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
           </div>
           <h3 className="text-sm font-semibold text-white">Sem pendências ou gastos compartilhados</h3>
           <p className="text-xs text-text-dim mt-1 max-w-md mx-auto">
-            Você não possui compras em cartões de terceiros nem acertos pendentes registrados para este período.
+            Você não possui compras em cartões compartilhados, transferências com saldo devedor nem acertos pendentes registrados para este período.
           </p>
         </Card>
       ) : (
@@ -96,13 +96,13 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
                 <span className="text-xs font-medium flex items-center gap-1.5">
                   Devo no Mês (Grupos)
                   <InfoTooltip
-                    content="Total que você precisa reembolsar a outros membros em todos os seus grupos para este mês."
+                    content="Total que você precisa reembolsar a outros membros em todos os seus grupos para este mês (compras em cartão compartilhado e transferências com saldo devedor)."
                     align="center"
                   />
                 </span>
                 <HandCoins className="size-3.5 text-expense" />
               </div>
-              <p className="text-lg font-bold text-expense tracking-tight">
+              <p className="text-lg font-bold text-expense tracking-tight tabular-nums">
                 {formatMoney(data.totalOwedByMe)}
               </p>
               <p className="text-[11px] text-text-dim mt-1">
@@ -115,13 +115,13 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
                 <span className="text-xs font-medium flex items-center gap-1.5">
                   Tenho a Receber (Grupos)
                   <InfoTooltip
-                    content="Total que outros membros têm pendente para reembolsar a você em todos os seus grupos para este mês."
+                    content="Total que outros membros têm pendente para reembolsar a você em todos os seus grupos para este mês (compras em cartão compartilhado e transferências com saldo devedor)."
                     align="end"
                   />
                 </span>
                 <HandCoins className="size-3.5 text-lime" />
               </div>
-              <p className="text-lg font-bold text-lime tracking-tight">
+              <p className="text-lg font-bold text-lime tracking-tight tabular-nums">
                 {formatMoney(data.totalReceivableByMe)}
               </p>
               <p className="text-[11px] text-text-dim mt-1">

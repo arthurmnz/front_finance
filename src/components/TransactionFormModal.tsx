@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Plus, Split, Trash2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCards } from '@/lib/hooks'
 import type {
   CreateTransactionInput,
@@ -32,6 +33,7 @@ export default function TransactionFormModal({
   defaultCreditCardId,
   defaultInvoicePeriod: initialInvoicePeriod,
 }: Props) {
+  const { user } = useAuth()
   const editing = !!transaction
   const accounts = useAccessibleAccounts().data ?? []
   const creditCards = useCreditCards().data ?? []
@@ -48,6 +50,7 @@ export default function TransactionFormModal({
   const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear())
   const [invoiceManual, setInvoiceManual] = useState(false)
   const [destId, setDestId] = useState('')
+  const [generatesDebt, setGeneratesDebt] = useState(false)
   const [categoryId, setCategoryId] = useState('')
   const [status, setStatus] = useState<TransactionStatus>('PENDING')
   const [recurring, setRecurring] = useState(false)
@@ -78,6 +81,35 @@ export default function TransactionFormModal({
     () => accounts.find((a) => a.id === effectiveAccountId),
     [accounts, effectiveAccountId],
   )
+  const destAccount = useMemo(() => accounts.find((a) => a.id === destId), [accounts, destId])
+  const editDestAccount = useMemo(
+    () => accounts.find((a) => a.id === transaction?.destinationAccountId),
+    [accounts, transaction?.destinationAccountId],
+  )
+  const canGenerateDebt =
+    !editing &&
+    sourceMode === 'ACCOUNT' &&
+    type === 'TRANSFER' &&
+    Boolean(
+      selectedAccount &&
+        destAccount &&
+        selectedAccount.ownerId !== destAccount.ownerId &&
+        selectedAccount.ownerId === user?.id &&
+        (selectedAccount.groupId || destAccount.groupId),
+    )
+  const canEditGeneratesDebt =
+    editing &&
+    transaction?.type === 'TRANSFER' &&
+    !transaction?.creditCardId &&
+    Boolean(
+      selectedAccount &&
+        editDestAccount &&
+        selectedAccount.ownerId !== editDestAccount.ownerId &&
+        selectedAccount.ownerId === user?.id &&
+        (selectedAccount.groupId || editDestAccount.groupId),
+    )
+  const debtRecipientOwner = !editing ? destAccount?.owner : editDestAccount?.owner
+  const debtRecipientName = debtRecipientOwner ? fullName(debtRecipientOwner) : 'o destinatário'
   const effectiveGroupId = useMemo(() => {
     if (sourceMode === 'CARD' || transaction?.creditCardId) {
       return selectedCard?.groupId ?? selectedAccount?.groupId ?? undefined
@@ -105,6 +137,7 @@ export default function TransactionFormModal({
     const cid = t?.creditCardId ?? defaultCreditCardId ?? creditCards[0]?.id ?? ''
     setCreditCardId(cid)
     setDestId(t?.destinationAccountId ?? '')
+    setGeneratesDebt(Boolean(t?.generatesDebt))
     setCategoryId(t?.categoryId ?? '')
     setStatus(t?.status ?? 'PENDING')
     setRecurring(false)
@@ -377,6 +410,7 @@ export default function TransactionFormModal({
         updateAllFuture: allFuture,
         invoiceMonth: transaction?.creditCardId ? invoiceMonth : null,
         invoiceYear: transaction?.creditCardId ? invoiceYear : null,
+        generatesDebt: canEditGeneratesDebt ? generatesDebt : undefined,
       })
     } else if (sourceMode === 'CARD') {
       if (!selectedCard) return
@@ -468,6 +502,7 @@ export default function TransactionFormModal({
         recurrenceInstallments: installments,
         isInfinite: recurring && infinite,
         installmentAmountMode: recurring && !infinite ? installmentAmountMode : 'INSTALLMENT',
+        generatesDebt: canGenerateDebt ? generatesDebt : false,
       })
     }
   }
@@ -799,10 +834,30 @@ export default function TransactionFormModal({
                 .map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
+                    {a.owner ? ` (${fullName(a.owner)})` : ''}
                   </option>
                 ))}
             </Select>
           </Field>
+        )}
+
+        {(canGenerateDebt || canEditGeneratesDebt) && (
+          <div className="space-y-1.5 rounded-xl border border-violet/30 bg-violet/10 p-3">
+            <Checkbox
+              checked={generatesDebt}
+              onChange={(checked) => {
+                setGeneratesDebt(checked)
+                if (checked && status === 'PENDING') {
+                  setStatus('COMPLETED')
+                }
+              }}
+            >
+              Adicionar como saldo devedor para <b className="text-white">{debtRecipientName}</b>
+            </Checkbox>
+            <p className="pl-6 text-xs text-text-dim">
+              Registra esta transferência como empréstimo/adiantamento na aba Acertos do grupo (contabilizado quando a transferência está efetivada).
+            </p>
+          </div>
         )}
 
         <Field label="Categoria">

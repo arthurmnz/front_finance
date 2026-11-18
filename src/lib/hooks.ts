@@ -171,6 +171,20 @@ export function useSettleDebt(groupId: string | undefined) {
   )
 }
 
+export function useForgiveDebt(groupId: string | undefined) {
+  return useAction<T.ForgiveDebtInput, T.DebtSettlement>(
+    (input) => api.post<T.DebtSettlement>(`/groups/${groupId}/debts/forgive`, input).then((r) => r.data),
+    {
+      invalidate: [
+        ['groups', groupId, 'debts'],
+        ['groups'],
+        ['users', 'me', 'debts-summary'],
+      ],
+      success: 'Dívida perdoada com sucesso!',
+    },
+  )
+}
+
 // ---------- Mutations ----------
 export function useAction<V, R = unknown>(
   fn: (v: V) => Promise<R>,
@@ -188,4 +202,11 @@ export function useAction<V, R = unknown>(
   })
 }
 
-export const ALL_MONEY = [['accounts'], ['total-balance'], ['transactions'], ['credit-cards']]
+export const ALL_MONEY = [
+  ['accounts'],
+  ['total-balance'],
+  ['transactions'],
+  ['credit-cards'],
+  ['groups'],
+  ['users', 'me', 'debts-summary'],
+]

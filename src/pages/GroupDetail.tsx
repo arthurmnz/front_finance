@@ -62,6 +62,7 @@ import CategoryManager from '@/components/CategoryManager'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
 import SettleDebtModal from '@/components/SettleDebtModal'
+import ForgiveDebtModal from '@/components/ForgiveDebtModal'
 import GroupReportsView from '@/components/reports/GroupReportsView'
 
 type Tab = 'overview' | 'transactions' | 'reports' | 'settlements' | 'members' | 'accounts' | 'cards' | 'categories' | 'requests' | 'settings'
@@ -116,6 +117,12 @@ export default function GroupDetail() {
     targetMonth: number
     targetYear: number
     suggestedAmount: number
+  } | null>(null)
+  const [forgiveTarget, setForgiveTarget] = useState<{
+    debtor: UserSummary
+    targetMonth: number
+    targetYear: number
+    maxAmount: number
   } | null>(null)
   const [expandedPairs, setExpandedPairs] = useState<Set<string>>(new Set())
 
@@ -984,9 +991,9 @@ export default function GroupDetail() {
               {groupDebtsQuery.isLoading ? (
                 <Spinner />
               ) : !groupDebts?.monthlyBalances.length || groupDebts.monthlyBalances.every((m) => !m.userBalances.length) ? (
-                <Empty title="Nenhum acerto pendente ou compra compartilhada no grupo.">
+                <Empty title="Nenhum acerto pendente ou lançamento compartilhado no grupo.">
                   <p className="text-xs text-text-dim">
-                    Quando um membro utilizar o cartão de outro membro neste grupo, o rateio e controle de quitação por fatura aparecerão aqui.
+                    Quando um membro utilizar o cartão compartilhado de outro membro ou realizar transferências com saldo devedor neste grupo, o rateio e controle de quitação aparecerão aqui.
                   </p>
                 </Empty>
               ) : (
@@ -1056,7 +1063,7 @@ export default function GroupDetail() {
                                       )}
                                     </div>
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                       {isDebtor && b.netAmount > 0 && (
                                         <Button
                                           size="sm"
@@ -1071,6 +1078,24 @@ export default function GroupDetail() {
                                           }
                                         >
                                           Quitar mês
+                                        </Button>
+                                      )}
+
+                                      {isCreditor && b.netAmount > 0 && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="border-lime/40 bg-lime/10 text-lime hover:bg-lime/20"
+                                          onClick={() =>
+                                            setForgiveTarget({
+                                              debtor: b.debtor,
+                                              targetMonth: m.month,
+                                              targetYear: m.year,
+                                              maxAmount: b.netAmount,
+                                            })
+                                          }
+                                        >
+                                          Perdoar dívida
                                         </Button>
                                       )}
 
@@ -1096,20 +1121,20 @@ export default function GroupDetail() {
                                   {isExpanded && (
                                     <div className="mt-3 rounded-xl bg-surface-2 p-3 space-y-3">
                                       <p className="text-xs font-semibold text-text-dim">
-                                        Detalhamento das compras na fatura ({m.month.toString().padStart(2, '0')}/{m.year})
+                                        Detalhamento dos lançamentos do mês ({m.month.toString().padStart(2, '0')}/{m.year})
                                       </p>
 
                                       {b.grossDebts.map((gd, idx) => (
                                         <div key={idx} className="space-y-2 border-t border-border/40 pt-2 text-xs">
                                           <div className="flex items-center justify-between text-text-muted">
                                             <span>
-                                              Compras no cartão do credor:{' '}
+                                              Compras no cartão / transferências:{' '}
                                               <strong className="text-white tabular-nums">
                                                 {formatMoney(gd.grossAmount)}
                                               </strong>
                                             </span>
                                             {gd.settledAmount > 0 && (
-                                              <span className="text-lime">
+                                              <span className="text-lime tabular-nums">
                                                 Já abatido: {formatMoney(gd.settledAmount)}
                                               </span>
                                             )}
@@ -1123,11 +1148,12 @@ export default function GroupDetail() {
                                               >
                                                 <div className="min-w-0 pr-2">
                                                   <p className="truncate text-white font-medium">{tx.title}</p>
-                                                  <p className="text-[11px] text-text-dim">
+                                                  <p className="text-[11px] text-text-dim tabular-nums">
                                                     {formatDate(tx.date)}
                                                     {tx.installmentNumber && tx.totalInstallments
                                                       ? ` · Parcela ${tx.installmentNumber}/${tx.totalInstallments}`
                                                       : ''}
+                                                    {tx.type === 'TRANSFER' ? ' · Transferência com saldo devedor' : ''}
                                                   </p>
                                                 </div>
                                                 <span className="shrink-0 font-semibold text-white tabular-nums">
@@ -1159,22 +1185,36 @@ export default function GroupDetail() {
 
                   <ul className="divide-y divide-border/60">
                     {groupDebts.settlements.map((s) => (
-                      <li key={s.id} className="py-2.5 flex items-center justify-between text-xs">
-                        <div>
-                          <p className="text-white font-medium">
-                            {fullName(s.debtor)} transferiu{' '}
-                            <span className="text-lime font-bold tabular-nums">
-                              {formatMoney(s.amount)}
-                            </span>{' '}
-                            para {fullName(s.creditor)}
-                          </p>
-                          <p className="text-text-dim text-[11px]">
-                            {formatDate(s.date)} · Referente à fatura{' '}
+                      <li key={s.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          {s.isForgiveness ? (
+                            <p className="text-white font-medium">
+                              {fullName(s.creditor)} perdoou{' '}
+                              <span className="text-lime font-bold tabular-nums">
+                                {formatMoney(s.amount)}
+                              </span>{' '}
+                              da dívida de {fullName(s.debtor)}
+                            </p>
+                          ) : (
+                            <p className="text-white font-medium">
+                              {fullName(s.debtor)} transferiu{' '}
+                              <span className="text-lime font-bold tabular-nums">
+                                {formatMoney(s.amount)}
+                              </span>{' '}
+                              para {fullName(s.creditor)}
+                            </p>
+                          )}
+                          <p className="text-text-dim text-[11px] tabular-nums">
+                            {formatDate(s.date)} · Referente à competência{' '}
                             {s.targetMonth.toString().padStart(2, '0')}/{s.targetYear}
                             {s.notes ? ` · "${s.notes}"` : ''}
                           </p>
                         </div>
-                        <Badge tone="primary">Acerto Efetuado</Badge>
+                        {s.isForgiveness ? (
+                          <Badge tone="income" className="shrink-0">Dívida Perdoada</Badge>
+                        ) : (
+                          <Badge tone="primary" className="shrink-0">Acerto Efetuado</Badge>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -1458,6 +1498,17 @@ export default function GroupDetail() {
               suggestedAmount={settleTarget.suggestedAmount}
               groupAccounts={accounts.data ?? []}
               groupCards={cards.data ?? []}
+            />
+          )}
+          {forgiveTarget && (
+            <ForgiveDebtModal
+              open={!!forgiveTarget}
+              onClose={() => setForgiveTarget(null)}
+              groupId={id!}
+              debtor={forgiveTarget.debtor}
+              targetMonth={forgiveTarget.targetMonth}
+              targetYear={forgiveTarget.targetYear}
+              maxAmount={forgiveTarget.maxAmount}
             />
           )}
         </>

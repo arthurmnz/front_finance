@@ -32,12 +32,12 @@ export default function GroupDebtsReportSection({
             <span>Balanço de Acertos entre Membros</span>
             <InfoTooltip
               title="Acertos do Grupo"
-              content="Cálculo compensatório de dívidas e créditos entre os membros do grupo decorrentes de compras individuais realizadas em recursos de terceiros."
+              content="Cálculo compensatório de dívidas e créditos entre os membros do grupo decorrentes de compras em cartão compartilhado e transferências com saldo devedor."
               align="start"
             />
           </h2>
           <p className="text-xs text-text-dim">
-            Compensação de despesas e saldos líquidos a acertar entre os membros do grupo
+            Compensação de compras em cartão compartilhado, transferências com saldo devedor e saldos líquidos a acertar entre os membros do grupo
           </p>
         </div>
 
@@ -69,13 +69,13 @@ export default function GroupDebtsReportSection({
                 <span className="text-xs font-medium flex items-center gap-1.5">
                   Você deve neste grupo
                   <InfoTooltip
-                    content="Total que você precisa reembolsar a outros membros pelas compras feitas em contas ou cartões deles."
+                    content="Total que você precisa reembolsar a outros membros por compras em cartão compartilhado ou transferências com saldo devedor."
                     align="start"
                   />
                 </span>
                 <HandCoins className="size-3.5 text-expense" />
               </div>
-              <p className="text-xl font-bold text-expense tracking-tight">
+              <p className="text-xl font-bold text-expense tracking-tight tabular-nums">
                 {formatMoney(debts?.totalOwedByMe ?? 0)}
               </p>
               <p className="text-[11px] text-text-dim mt-1">Saldo devedor total acumulado</p>
@@ -86,13 +86,13 @@ export default function GroupDebtsReportSection({
                 <span className="text-xs font-medium flex items-center gap-1.5">
                   Você tem a receber neste grupo
                   <InfoTooltip
-                    content="Total que outros membros precisam lhe reembolsar pelas compras que eles fizeram em suas contas ou cartões."
+                    content="Total que outros membros precisam lhe reembolsar por compras em cartão compartilhado ou transferências registradas com saldo devedor."
                     align="end"
                   />
                 </span>
                 <HandCoins className="size-3.5 text-lime" />
               </div>
-              <p className="text-xl font-bold text-lime tracking-tight">
+              <p className="text-xl font-bold text-lime tracking-tight tabular-nums">
                 {formatMoney(debts?.totalReceivableByMe ?? 0)}
               </p>
               <p className="text-[11px] text-text-dim mt-1">Saldo credor total acumulado</p>
