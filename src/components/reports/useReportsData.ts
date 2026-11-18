@@ -135,6 +135,7 @@ export const parseDateParts = (dateStr?: string) => {
 /**
  * Calcula a fatura e o vencimento em que uma compra no cartão incidirá,
  * baseado na data da compra, dia de fechamento e dia de vencimento.
+ * Espelha `CreditCardEntity.defaultInvoiceMonthYear` e `format.ts:defaultInvoicePeriod`.
  */
 export function getInvoiceForCardPurchase(
   yc: number,
@@ -143,19 +144,38 @@ export function getInvoiceForCardPurchase(
   closingDay: number,
   dueDay: number,
 ) {
-  let invM = mc
-  let invY = yc
-  if (dc >= closingDay) {
-    invM += 1
-    if (invM > 12) {
-      invM = 1
-      invY += 1
-    }
-  }
+  const safeClosing = closingDay || 25
+  const safeDueInput = dueDay || 10
+  const offset = (dc >= safeClosing ? 1 : 0) + (safeDueInput < safeClosing ? 1 : 0)
+  const d = new Date(yc, mc - 1 + offset, 1)
+  const invM = d.getMonth() + 1
+  const invY = d.getFullYear()
   const daysInInvM = new Date(invY, invM, 0).getDate()
-  const safeDue = Math.min(Math.max(1, dueDay || 10), daysInInvM)
+  const safeDue = Math.min(Math.max(1, safeDueInput), daysInInvM)
   const dueIso = `${invY}-${String(invM).padStart(2, '0')}-${String(safeDue).padStart(2, '0')}`
   return { invMonth: invM, invYear: invY, dueIso, dueDay: safeDue }
+}
+
+/**
+ * Resolve o período de fatura (mês, ano) ao qual uma transação de cartão pertence.
+ */
+export function resolveTransactionInvoicePeriod(
+  t: Transaction,
+  cardsMap: Map<string, CreditCard>,
+): { month: number; year: number } {
+  if (t.invoiceMonth != null && t.invoiceYear != null) {
+    return { month: t.invoiceMonth, year: t.invoiceYear }
+  }
+  const p = parseDateParts(t.date)
+  const card = t.creditCardId ? cardsMap.get(t.creditCardId) : undefined
+  const inv = getInvoiceForCardPurchase(
+    p.year,
+    p.month,
+    p.day,
+    card?.closingDay ?? 25,
+    card?.dueDay ?? 10,
+  )
+  return { month: inv.invMonth, year: inv.invYear }
 }
 
 /**
@@ -365,17 +385,27 @@ export function expandSimulationsForMonth(
         }
 
         // 2. Débito na fatura que vence neste mês
-        const chargeMonthIdx = p.day < closingDay ? currentMonthIdx : currentMonthIdx - 1
-        const chargeDelta = chargeMonthIdx - simStartIdx
+        for (const k of [0, 1, 2]) {
+          const chargeIdx = currentMonthIdx - k
+          const chargeDelta = chargeIdx - simStartIdx
+          if (chargeDelta < 0) continue
 
-        if (chargeDelta >= 0) {
-          const chargeNotExpired = sim.isInfinite || !sim.recurrenceInstallments || chargeDelta < sim.recurrenceInstallments
-          if (chargeNotExpired) {
-            const safeDue = Math.min(Math.max(1, dueDay), daysInCurrentMonth)
+          const chargeNotExpired =
+            sim.isInfinite || !sim.recurrenceInstallments || chargeDelta < sim.recurrenceInstallments
+          if (!chargeNotExpired) continue
+
+          const cY = Math.floor(chargeIdx / 12)
+          const cM = (chargeIdx % 12) + 1
+          const daysInChargeMonth = new Date(cY, cM, 0).getDate()
+          const safeChargeDay = Math.min(p.day, daysInChargeMonth)
+          const chargeInv = getInvoiceForCardPurchase(cY, cM, safeChargeDay, closingDay, dueDay)
+
+          if (chargeInv.invMonth === month && chargeInv.invYear === year) {
+            const safeDue = Math.min(Math.max(1, dueDay || 10), daysInCurrentMonth)
             const dueIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDue).padStart(2, '0')}`
             add(dueIso, {
               ...sim,
-              id: `${sim.id}_card_inv_debit_${year}_${month}`,
+              id: `${sim.id}_card_inv_debit_${year}_${month}_${cY}_${cM}`,
               title: `${sim.title} (Fatura ${cardName})`,
               date: dueIso,
               accountId: cardAccountId,
@@ -653,6 +683,7 @@ export function buildCalendarProjection(
   allTransactions?: Transaction[],
   simulations: SimulatedTransaction[] = [],
   cards?: CreditCard[],
+  referenceDate: Date = new Date(),
 ): CalendarProjection {
   const accs = accounts.filter((a) => !accountIdFilter || a.id === accountIdFilter)
   const ids = new Set(accs.map((a) => a.id))
@@ -684,7 +715,7 @@ export function buildCalendarProjection(
   const displaySource = transactions
   const accountSource = allTransactions || transactions
 
-  const now = new Date()
+  const now = referenceDate
   const todayIso = toISODate(now)
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
@@ -715,13 +746,20 @@ export function buildCalendarProjection(
     cardMap.forEach((card) => {
       if (accountIdFilter && card.accountId && card.accountId !== accountIdFilter) return
 
-      // 1. Procura na lista de faturas carregadas da API correspondente a este cartão e a este mês/ano
-      const matched = invoices.find(
+      // 1. Procura na lista de faturas carregadas da API correspondente a este cartão e a este mês/ano,
+      // priorizando itens com valores reais sobre objetos vazios {}
+      const matchingInvoices = invoices.filter(
         (item) =>
           item.card.id === card.id &&
           ((item.month === m && item.year === y) ||
             (item.invoice?.month === m && item.invoice?.year === y)),
       )
+      const matched =
+        matchingInvoices.find(
+          (item) =>
+            item.invoice != null &&
+            (item.invoice.remainingAmount != null || item.invoice.totalAmount != null),
+        ) ?? matchingInvoices[0]
 
       let remaining = 0
       let totalAmount = 0
@@ -747,44 +785,33 @@ export function buildCalendarProjection(
       ) {
         remaining = Math.max(0, card.currentInvoiceAmount)
       } else {
-        // Fallback analítico: somatório de compras do cartão que vencem nesta fatura
-        const cardExpenses = accountSource
+        // Fallback analítico: somatório líquido de compras e estornos do cartão que vencem nesta fatura
+        const rawCardPurchases = accountSource
           .filter((t) => {
-            if (t.creditCardId !== card.id || t.type !== 'EXPENSE') return false
-            if (t.invoiceMonth != null && t.invoiceYear != null) {
-              return t.invoiceMonth === m && t.invoiceYear === y
+            if (
+              t.creditCardId !== card.id ||
+              (t.type !== 'EXPENSE' && t.type !== 'INCOME') ||
+              isInvoicePaymentTx(t)
+            ) {
+              return false
             }
-            const p = parseDateParts(t.date)
-            const closing = card.closingDay || 25
-            let invM = p.month
-            let invY = p.year
-            if (p.day >= closing) {
-              invM += 1
-              if (invM > 12) {
-                invM = 1
-                invY += 1
-              }
-            }
-            return invM === m && invY === y
+            const invPeriod = resolveTransactionInvoicePeriod(t, cardsMap)
+            return invPeriod.month === m && invPeriod.year === y
           })
-          .reduce((s, t) => s + t.amount, 0)
+          .reduce((s, t) => s + (t.type === 'INCOME' ? -t.amount : t.amount), 0)
+
+        const cardPurchases = Math.max(0, rawCardPurchases)
+
+        const matchedInvoiceId =
+          matched?.invoice && 'id' in matched.invoice
+            ? (matched.invoice as { id?: string }).id
+            : undefined
 
         const alreadyPaid = accountSource
-          .filter((t) => {
-            if (t.type !== 'EXPENSE' || !isInvoicePaymentTx(t)) return false
-            if (
-              t.creditCardInvoiceId &&
-              matched?.invoice &&
-              'id' in matched.invoice &&
-              t.creditCardInvoiceId === (matched.invoice as { id?: string }).id
-            ) {
-              return true
-            }
-            return t.title.toLowerCase().includes(card.name.toLowerCase())
-          })
+          .filter((t) => isInvoicePaymentForCardPeriod(t, card, m, y, matchedInvoiceId))
           .reduce((s, t) => s + t.amount, 0)
 
-        remaining = Math.max(0, cardExpenses - alreadyPaid)
+        remaining = Math.max(0, cardPurchases - alreadyPaid)
       }
 
       if (remaining <= 0) return
@@ -904,8 +931,9 @@ export function buildCalendarProjection(
 
     let cascadeSim = curMonthResult.closing
     let cascadeReal = curMonthResult.realClosing
+    const maxCascadeIdx = Math.min(targetMonthIdx, currentMonthIdx + MAX_CASCADE_INVOICE_MONTHS)
 
-    for (let idx = currentMonthIdx + 1; idx < targetMonthIdx; idx++) {
+    for (let idx = currentMonthIdx + 1; idx < maxCascadeIdx; idx++) {
       const intYear = Math.floor(idx / 12)
       const intMonth = (idx % 12) + 1
 
@@ -969,7 +997,44 @@ export function buildCalendarProjection(
 }
 
 export const isInvoicePaymentTx = (t: Transaction) =>
-  Boolean(t.creditCardInvoiceId || t.title.startsWith('Pagamento fatura'))
+  !t.creditCardId &&
+  Boolean(t.creditCardInvoiceId || t.title.trim().toLowerCase().startsWith('pagamento fatura'))
+
+const INVOICE_PAYMENT_TITLE_REGEX = /^pagamento fatura (.+) \((0?[1-9]|1[0-2])\/(\d{4})\)$/i
+
+/**
+ * Verifica se uma transação representa um pagamento concluído pertencente à fatura
+ * específica de (card, month, year), evitando que pagamentos de outros meses ou
+ * cartões com nome semelhante sejam abatidos no fallback analítico.
+ */
+export function isInvoicePaymentForCardPeriod(
+  t: Transaction,
+  card: CreditCard,
+  month: number,
+  year: number,
+  matchedInvoiceId?: string,
+): boolean {
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year)) {
+    return false
+  }
+  if (t.creditCardId || t.type !== 'EXPENSE' || t.status !== 'COMPLETED' || !isInvoicePaymentTx(t)) {
+    return false
+  }
+  if (matchedInvoiceId && t.creditCardInvoiceId === matchedInvoiceId) {
+    return true
+  }
+  if (matchedInvoiceId && t.creditCardInvoiceId && t.creditCardInvoiceId !== matchedInvoiceId) {
+    return false
+  }
+  const match = INVOICE_PAYMENT_TITLE_REGEX.exec(t.title.trim())
+  if (!match) return false
+  const [, rawCardName, rawMonth, rawYear] = match
+  return (
+    rawCardName.trim().toLowerCase() === card.name.trim().toLowerCase() &&
+    Number(rawMonth) === month &&
+    Number(rawYear) === year
+  )
+}
 
 export function buildKpis(
   currentMonthTxs: Transaction[],
@@ -1122,7 +1187,7 @@ export function buildFutureCommitments(
   period: ReportPeriod,
   hideCreditCards: boolean,
 ): FutureMonthCommitment[] {
-  const cardClosingMap = new Map(cards.map((c) => [c.id, c.closingDay]))
+  const cardsMap = new Map(cards.map((c) => [c.id, c]))
   const list: FutureMonthCommitment[] = []
 
   for (let i = 1; i <= 6; i++) {
@@ -1135,25 +1200,9 @@ export function buildFutureCommitments(
       allTxs
         .filter((t) => !!t.creditCardId && t.type === 'EXPENSE')
         .forEach((t) => {
-          if (t.invoiceMonth != null && t.invoiceYear != null) {
-            if (t.invoiceMonth === m && t.invoiceYear === y) {
-              cardCommitted += t.amount
-            }
-          } else {
-            const p = parseDateParts(t.date)
-            const closingDay = (t.creditCardId && cardClosingMap.get(t.creditCardId)) || 25
-            let invM = p.month
-            let invY = p.year
-            if (p.day >= closingDay) {
-              invM += 1
-              if (invM > 12) {
-                invM = 1
-                invY += 1
-              }
-            }
-            if (invM === m && invY === y) {
-              cardCommitted += t.amount
-            }
+          const invPeriod = resolveTransactionInvoicePeriod(t, cardsMap)
+          if (invPeriod.month === m && invPeriod.year === y) {
+            cardCommitted += t.amount
           }
         })
     }
@@ -1326,7 +1375,19 @@ export function calculateFinancialPlanning(
   windowMonths: 6 | 12 = 6,
 ): FinancialPlanningData {
   const operationalAccountIds = new Set(operationalAccounts.map((a) => a.id))
-  const cardClosingMap = new Map(cards.map((c) => [c.id, c.closingDay || 25]))
+  const cardsMap = new Map(cards.map((c) => [c.id, c]))
+
+  const txBelongsToPeriod = (t: Transaction, m: number, y: number): boolean => {
+    if (t.creditCardId) {
+      const inv = resolveTransactionInvoicePeriod(t, cardsMap)
+      return inv.month === m && inv.year === y
+    }
+    if (operationalAccountIds.has(t.accountId)) {
+      const p = parseDateParts(t.date)
+      return p.month === m && p.year === y
+    }
+    return false
+  }
 
   // 1. Totais Guardados (Reserva e Investimentos somados separadamente)
   const totalSavings = savingsAccounts.reduce((sum, a) => sum + (a.balance ?? 0), 0)
@@ -1336,28 +1397,7 @@ export function calculateFinancialPlanning(
   // de contas operacionais e cartões de crédito (ignorando pagamento de fatura)
   const fixedTxsInSelectedMonth = allTxs.filter((t) => {
     if (t.type !== 'EXPENSE' || !t.isInfinite || isInvoicePaymentTx(t)) return false
-    if (t.creditCardId) {
-      if (t.invoiceMonth != null && t.invoiceYear != null) {
-        return t.invoiceMonth === period.month && t.invoiceYear === period.year
-      }
-      const p = parseDateParts(t.date)
-      const closingDay = cardClosingMap.get(t.creditCardId) || 25
-      let invM = p.month
-      let invY = p.year
-      if (p.day >= closingDay) {
-        invM += 1
-        if (invM > 12) {
-          invM = 1
-          invY += 1
-        }
-      }
-      return invM === period.month && invY === period.year
-    }
-    if (operationalAccountIds.has(t.accountId)) {
-      const p = parseDateParts(t.date)
-      return p.month === period.month && p.year === period.year
-    }
-    return false
+    return txBelongsToPeriod(t, period.month, period.year)
   })
 
   let fixedMonthlyCost = fixedTxsInSelectedMonth.reduce((s, t) => s + t.amount, 0)
@@ -1392,28 +1432,7 @@ export function calculateFinancialPlanning(
     const monthVarSum = allTxs
       .filter((t) => {
         if (t.type !== 'EXPENSE' || t.isInfinite || isInvoicePaymentTx(t)) return false
-        if (t.creditCardId) {
-          if (t.invoiceMonth != null && t.invoiceYear != null) {
-            return t.invoiceMonth === m && t.invoiceYear === y
-          }
-          const p = parseDateParts(t.date)
-          const closingDay = cardClosingMap.get(t.creditCardId) || 25
-          let invM = p.month
-          let invY = p.year
-          if (p.day >= closingDay) {
-            invM += 1
-            if (invM > 12) {
-              invM = 1
-              invY += 1
-            }
-          }
-          return invM === m && invY === y
-        }
-        if (operationalAccountIds.has(t.accountId)) {
-          const p = parseDateParts(t.date)
-          return p.month === m && p.year === y
-        }
-        return false
+        return txBelongsToPeriod(t, m, y)
       })
       .reduce((s, t) => s + t.amount, 0)
 
@@ -1433,28 +1452,7 @@ export function calculateFinancialPlanning(
     const currentMonthVar = allTxs
       .filter((t) => {
         if (t.type !== 'EXPENSE' || t.isInfinite || isInvoicePaymentTx(t)) return false
-        if (t.creditCardId) {
-          if (t.invoiceMonth != null && t.invoiceYear != null) {
-            return t.invoiceMonth === period.month && t.invoiceYear === period.year
-          }
-          const p = parseDateParts(t.date)
-          const closingDay = cardClosingMap.get(t.creditCardId) || 25
-          let invM = p.month
-          let invY = p.year
-          if (p.day >= closingDay) {
-            invM += 1
-            if (invM > 12) {
-              invM = 1
-              invY += 1
-            }
-          }
-          return invM === period.month && invY === period.year
-        }
-        if (operationalAccountIds.has(t.accountId)) {
-          const p = parseDateParts(t.date)
-          return p.month === period.month && p.year === period.year
-        }
-        return false
+        return txBelongsToPeriod(t, period.month, period.year)
       })
       .reduce((s, t) => s + t.amount, 0)
 
@@ -1482,6 +1480,121 @@ export function calculateFinancialPlanning(
   }
 }
 
+export const MAX_CASCADE_INVOICE_MONTHS = 60
+
+/**
+ * Calcula todos os períodos (mês, ano) de faturas necessários para projetar
+ * o calendário até `targetPeriod` mantendo a cascata estrita a partir do mês corrente.
+ */
+export function getRequiredInvoicePeriods(
+  currentMonth: number,
+  currentYear: number,
+  targetPeriod: ReportPeriod,
+): ReportPeriod[] {
+  const safeCurrentMonth = Number.isInteger(currentMonth)
+    ? Math.min(12, Math.max(1, currentMonth))
+    : 1
+  const safeTargetMonth = Number.isInteger(targetPeriod.month)
+    ? Math.min(12, Math.max(1, targetPeriod.month))
+    : safeCurrentMonth
+  const safeCurrentYear = Number.isInteger(currentYear) ? currentYear : new Date().getFullYear()
+  const safeTargetYear = Number.isInteger(targetPeriod.year)
+    ? targetPeriod.year
+    : safeCurrentYear
+
+  const currentIdx = safeCurrentYear * 12 + (safeCurrentMonth - 1)
+  const targetIdx = safeTargetYear * 12 + (safeTargetMonth - 1)
+
+  if (targetIdx <= currentIdx) {
+    return [{ month: safeTargetMonth, year: safeTargetYear }]
+  }
+
+  const maxIdx = Math.min(targetIdx, currentIdx + MAX_CASCADE_INVOICE_MONTHS)
+  const periods: ReportPeriod[] = []
+  for (let idx = currentIdx; idx <= maxIdx; idx++) {
+    periods.push({
+      month: (idx % 12) + 1,
+      year: Math.floor(idx / 12),
+    })
+  }
+
+  if (targetIdx - currentIdx > MAX_CASCADE_INVOICE_MONTHS) {
+    periods.push({ month: safeTargetMonth, year: safeTargetYear })
+  }
+
+  return periods
+}
+
+/**
+ * Combina alvos (cartão × período) com os respectivos dados retornados pela API de faturas.
+ */
+export function buildProjectionInvoiceList(
+  targets: { card: CreditCard; month: number; year: number }[],
+  invoicesData: (CreditCardInvoice | undefined)[],
+) {
+  return targets.map((target, idx) => {
+    const data = invoicesData[idx]
+    return {
+      card: target.card,
+      invoice: data || ({} as CreditCardInvoice),
+      month: data?.month ?? target.month,
+      year: data?.year ?? target.year,
+    }
+  })
+}
+
+function useProjectionInvoices(
+  cardList: CreditCard[],
+  filters: ReportFiltersState,
+  currentMonth: number,
+  currentYear: number,
+) {
+  const cardListForProjection = useMemo(
+    () =>
+      cardList.filter((c) => {
+        if (filters.hideCreditCards || filters.creditCardId === 'none') return false
+        if (filters.creditCardId && c.id !== filters.creditCardId) return false
+        return true
+      }),
+    [cardList, filters.hideCreditCards, filters.creditCardId],
+  )
+
+  const targets = useMemo(() => {
+    const periods = getRequiredInvoicePeriods(currentMonth, currentYear, filters.period)
+    return cardListForProjection.flatMap((card) =>
+      periods.map((p) => ({ card, month: p.month, year: p.year })),
+    )
+  }, [cardListForProjection, currentMonth, currentYear, filters.period.month, filters.period.year])
+
+  const queries = useQueries({
+    queries: targets.map((target) => ({
+      queryKey: ['credit-cards', target.card.id, 'invoice', target.month, target.year],
+      queryFn: () =>
+        api
+          .get<CreditCardInvoice>(`/credit-cards/${target.card.id}/invoice`, {
+            params: { month: target.month, year: target.year },
+          })
+          .then((r) => r.data),
+    })),
+  })
+
+  const invoiceLoading = queries.some((q) => q.isLoading)
+  const invoiceStamp = queries
+    .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
+    .join(',')
+
+  const invoiceList = useMemo(
+    () =>
+      buildProjectionInvoiceList(
+        targets,
+        queries.map((q) => q.data),
+      ),
+    [targets, invoiceStamp],
+  )
+
+  return { invoiceLoading, invoiceList, invoiceStamp }
+}
+
 // ----------------------------------------------------------------------
 // HOOK 1: RELATÓRIO ESTRITAMENTE INDIVIDUAL DO USUÁRIO LOGADO
 // ----------------------------------------------------------------------
@@ -1500,7 +1613,7 @@ export function useIndividualReportsData(
 
   // Todas as contas próprias do usuário
   const allOwnAccounts = useMemo(
-    () => (accountsQuery.data ?? []).filter((a) => !user?.id || a.ownerId === user.id),
+    () => (accountsQuery.data ?? []).filter((a) => Boolean(user?.id) && a.ownerId === user?.id),
     [accountsQuery.data, user?.id],
   )
 
@@ -1528,7 +1641,7 @@ export function useIndividualReportsData(
   )
 
   const cardList = useMemo(
-    () => (creditCardsQuery.data ?? []).filter((c) => !user?.id || c.ownerId === user.id),
+    () => (creditCardsQuery.data ?? []).filter((c) => Boolean(user?.id) && c.ownerId === user?.id),
     [creditCardsQuery.data, user?.id],
   )
 
@@ -1561,34 +1674,14 @@ export function useIndividualReportsData(
   const now = useMemo(() => new Date(), [])
   const currentMonth = now.getMonth() + 1
   const currentYear = now.getFullYear()
-  const isDifferentPeriod =
-    filters.period.month !== currentMonth || filters.period.year !== currentYear
 
-  // 4a. Faturas dos cartões próprios do mês selecionado no filtro
-  const targetInvoiceQueries = useQueries({
-    queries: cardList.map((c) => ({
-      queryKey: ['credit-cards', c.id, 'invoice', filters.period.month, filters.period.year],
-      queryFn: () =>
-        api
-          .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, { params: filters.period })
-          .then((r) => r.data),
-    })),
-  })
-
-  // 4b. Faturas dos cartões próprios do mês corrente (quando o período selecionado for diferente)
-  const currentInvoiceQueries = useQueries({
-    queries: isDifferentPeriod
-      ? cardList.map((c) => ({
-          queryKey: ['credit-cards', c.id, 'invoice', currentMonth, currentYear],
-          queryFn: () =>
-            api
-              .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, {
-                params: { month: currentMonth, year: currentYear },
-              })
-              .then((r) => r.data),
-        }))
-      : [],
-  })
+  // 4. Faturas de todos os meses da cascata (mês corrente até o período selecionado)
+  const { invoiceLoading, invoiceList, invoiceStamp } = useProjectionInvoices(
+    cardList,
+    filters,
+    currentMonth,
+    currentYear,
+  )
 
   const loading =
     accountsQuery.isLoading ||
@@ -1596,13 +1689,8 @@ export function useIndividualReportsData(
     accountQueries.some((q) => q.isLoading) ||
     cardTxQueries.some((q) => q.isLoading) ||
     responsibleQuery.some((q) => q.isLoading) ||
-    targetInvoiceQueries.some((q) => q.isLoading) ||
-    currentInvoiceQueries.some((q) => q.isLoading)
+    invoiceLoading
 
-  const invoiceStamp = targetInvoiceQueries
-    .concat(currentInvoiceQueries)
-    .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
-    .join(',')
   const txStamp = accountQueries
     .concat(cardTxQueries)
     .concat(responsibleQuery)
@@ -1719,72 +1807,36 @@ export function useIndividualReportsData(
     })
   }, [filteredPersonalTxs, prevMonth, prevYear])
 
+  const calendarAllTransactions = useMemo(
+    () => [...personalTxs, ...thirdPartyOnMyCardTxs],
+    [personalTxs, thirdPartyOnMyCardTxs],
+  )
+
   // Projeção do Calendário Financeiro Individual
   const projection = useMemo(() => {
-    const cardListForProjection = cardList.filter((c) => {
-      if (filters.hideCreditCards || filters.creditCardId === 'none') return false
-      if (filters.creditCardId && c.id !== filters.creditCardId) return false
-      return true
-    })
-
-    const invoiceList: {
-      card: CreditCard
-      invoice: Partial<CreditCardInvoice>
-      month: number
-      year: number
-    }[] = []
-
-    cardListForProjection.forEach((c) => {
-      const targetIdx = cardList.findIndex((item) => item.id === c.id)
-      const targetData = targetIdx >= 0 ? targetInvoiceQueries[targetIdx]?.data : undefined
-      invoiceList.push({
-        card: c,
-        invoice: targetData || ({} as CreditCardInvoice),
-        month: targetData?.month ?? filters.period.month,
-        year: targetData?.year ?? filters.period.year,
-      })
-
-      if (isDifferentPeriod) {
-        const curIdx = cardList.findIndex((item) => item.id === c.id)
-        const curData = curIdx >= 0 ? currentInvoiceQueries[curIdx]?.data : undefined
-        if (curData) {
-          invoiceList.push({
-            card: c,
-            invoice: curData,
-            month: curData.month ?? currentMonth,
-            year: curData.year ?? currentYear,
-          })
-        }
-      }
-    })
-
     return buildCalendarProjection(
       operationalAccounts,
       filteredPersonalTxs,
       invoiceList,
       filters.period,
       filters.accountId,
-      personalTxs,
+      calendarAllTransactions,
       simulations,
       cardList,
+      now,
     )
   }, [
     operationalAccounts,
     cardList,
-    targetInvoiceQueries,
-    currentInvoiceQueries,
+    invoiceList,
     filteredPersonalTxs,
-    personalTxs,
+    calendarAllTransactions,
     filters.period,
     filters.accountId,
-    filters.hideCreditCards,
-    filters.creditCardId,
     invoiceStamp,
     txStamp,
     simulations,
-    isDifferentPeriod,
-    currentMonth,
-    currentYear,
+    now,
   ])
 
   const hasCardsIncluded = !filters.hideCreditCards && filters.creditCardId !== 'none'
@@ -1948,34 +2000,14 @@ export function useGroupReportsData(
   const now = useMemo(() => new Date(), [])
   const currentMonth = now.getMonth() + 1
   const currentYear = now.getFullYear()
-  const isDifferentPeriod =
-    filters.period.month !== currentMonth || filters.period.year !== currentYear
 
-  // 3a. Faturas dos cartões do grupo para o mês selecionado
-  const targetInvoiceQueries = useQueries({
-    queries: cardList.map((c) => ({
-      queryKey: ['credit-cards', c.id, 'invoice', filters.period.month, filters.period.year],
-      queryFn: () =>
-        api
-          .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, { params: filters.period })
-          .then((r) => r.data),
-    })),
-  })
-
-  // 3b. Faturas dos cartões do grupo para o mês corrente (quando o período selecionado for diferente)
-  const currentInvoiceQueries = useQueries({
-    queries: isDifferentPeriod
-      ? cardList.map((c) => ({
-          queryKey: ['credit-cards', c.id, 'invoice', currentMonth, currentYear],
-          queryFn: () =>
-            api
-              .get<CreditCardInvoice>(`/credit-cards/${c.id}/invoice`, {
-                params: { month: currentMonth, year: currentYear },
-              })
-              .then((r) => r.data),
-        }))
-      : [],
-  })
+  // 3. Faturas dos cartões do grupo para toda a cascata até o mês selecionado
+  const { invoiceLoading, invoiceList, invoiceStamp } = useProjectionInvoices(
+    cardList,
+    filters,
+    currentMonth,
+    currentYear,
+  )
 
   const loading =
     groupQuery.isLoading ||
@@ -1984,13 +2016,8 @@ export function useGroupReportsData(
     groupCategoriesQuery.isLoading ||
     accountQueries.some((q) => q.isLoading) ||
     cardTxQueries.some((q) => q.isLoading) ||
-    targetInvoiceQueries.some((q) => q.isLoading) ||
-    currentInvoiceQueries.some((q) => q.isLoading)
+    invoiceLoading
 
-  const invoiceStamp = targetInvoiceQueries
-    .concat(currentInvoiceQueries)
-    .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
-    .join(',')
   const txStamp = accountQueries
     .concat(cardTxQueries)
     .map((q) => `${q.dataUpdatedAt}:${q.isSuccess}`)
@@ -2056,43 +2083,6 @@ export function useGroupReportsData(
 
   // Projeção do Calendário Financeiro do Grupo (apenas contas operacionais)
   const projection = useMemo(() => {
-    const cardListForProjection = cardList.filter((c) => {
-      if (filters.hideCreditCards || filters.creditCardId === 'none') return false
-      if (filters.creditCardId && c.id !== filters.creditCardId) return false
-      return true
-    })
-
-    const invoiceList: {
-      card: CreditCard
-      invoice: Partial<CreditCardInvoice>
-      month: number
-      year: number
-    }[] = []
-
-    cardListForProjection.forEach((c) => {
-      const targetIdx = cardList.findIndex((item) => item.id === c.id)
-      const targetData = targetIdx >= 0 ? targetInvoiceQueries[targetIdx]?.data : undefined
-      invoiceList.push({
-        card: c,
-        invoice: targetData || ({} as CreditCardInvoice),
-        month: targetData?.month ?? filters.period.month,
-        year: targetData?.year ?? filters.period.year,
-      })
-
-      if (isDifferentPeriod) {
-        const curIdx = cardList.findIndex((item) => item.id === c.id)
-        const curData = curIdx >= 0 ? currentInvoiceQueries[curIdx]?.data : undefined
-        if (curData) {
-          invoiceList.push({
-            card: c,
-            invoice: curData,
-            month: curData.month ?? currentMonth,
-            year: curData.year ?? currentYear,
-          })
-        }
-      }
-    })
-
     return buildCalendarProjection(
       operationalAccounts,
       filteredGroupTxs,
@@ -2102,24 +2092,20 @@ export function useGroupReportsData(
       operationalGroupTransactions,
       simulations,
       cardList,
+      now,
     )
   }, [
     operationalAccounts,
     cardList,
-    targetInvoiceQueries,
-    currentInvoiceQueries,
+    invoiceList,
     filteredGroupTxs,
     operationalGroupTransactions,
     filters.period,
     filters.accountId,
-    filters.hideCreditCards,
-    filters.creditCardId,
     invoiceStamp,
     txStamp,
     simulations,
-    isDifferentPeriod,
-    currentMonth,
-    currentYear,
+    now,
   ])
 
   const hasCardsIncluded = !filters.hideCreditCards && filters.creditCardId !== 'none'
