@@ -7,6 +7,7 @@ import {
   calculateFinancialPlanning,
   expandSimulationsForMonth,
   getInvoiceForCardPurchase,
+  getMergedRequiredInvoicePeriods,
   getRequiredInvoicePeriods,
   isInvoicePaymentForCardPeriod,
   resolveTransactionInvoicePeriod,
@@ -1645,5 +1646,89 @@ describe('Blindagem Contábil do Calendário Financeiro (buildCalendarProjection
     expect(day10Acc1.invoices[0].cardId).toBe(card1.id)
     // 1.000 (acc_1) - 300 (card_1) - 200 (tx_acc1_pend) = 500 (acc_2 e card_2 ignorados)
     expect(projFilteredAcc1.closing).toBe(50000)
+  })
+
+  it('19. getMergedRequiredInvoicePeriods e independência entre mês do relatório geral e mês do calendário', () => {
+    // Relatório geral em Nov/2026 e calendário avançado para Dez/2026 -> união deduplicada [11/2026, 12/2026]
+    expect(
+      getMergedRequiredInvoicePeriods(11, 2026, [
+        { month: 11, year: 2026 },
+        { month: 12, year: 2026 },
+      ]),
+    ).toEqual([
+      { month: 11, year: 2026 },
+      { month: 12, year: 2026 },
+    ])
+
+    // Relatório geral no passado (Out/2026) e calendário em Jan/2027 -> inclui Out/2026 e toda a cascata Nov..Jan
+    expect(
+      getMergedRequiredInvoicePeriods(11, 2026, [
+        { month: 10, year: 2026 },
+        { month: 1, year: 2027 },
+      ]),
+    ).toEqual([
+      { month: 10, year: 2026 },
+      { month: 11, year: 2026 },
+      { month: 12, year: 2026 },
+      { month: 1, year: 2027 },
+    ])
+
+    // Meses iguais não geram duplicatas
+    expect(
+      getMergedRequiredInvoicePeriods(11, 2026, [
+        { month: 1, year: 2027 },
+        { month: 1, year: 2027 },
+      ]),
+    ).toEqual([
+      { month: 11, year: 2026 },
+      { month: 12, year: 2026 },
+      { month: 1, year: 2027 },
+    ])
+
+    // Projeções independentes mantêm relatório em Nov/2026 enquanto calendário avança para Dez/2026
+    const account = makeAccount({ balance: 150000 })
+    const card = makeCreditCard({ accountId: account.id, closingDay: 25, dueDay: 10 })
+    const apiInvoices = new Map<string, CreditCardInvoice>([
+      ['11/2026', makeInvoice(card, 11, 2026, 20000, { dueDate: '2026-11-10T00:00:00Z' }).invoice as CreditCardInvoice],
+      ['12/2026', makeInvoice(card, 12, 2026, 50000, { dueDate: '2026-12-10T00:00:00Z' }).invoice as CreditCardInvoice],
+    ])
+    const periods = getMergedRequiredInvoicePeriods(11, 2026, [
+      { month: 11, year: 2026 },
+      { month: 12, year: 2026 },
+    ])
+    const targets = periods.map((p) => ({ card, month: p.month, year: p.year }))
+    const invoiceList = buildProjectionInvoiceList(
+      targets,
+      targets.map((t) => apiInvoices.get(`${t.month}/${t.year}`)),
+    )
+
+    const reportProjNov = buildCalendarProjection(
+      [account],
+      [],
+      invoiceList,
+      { month: 11, year: 2026 },
+      undefined,
+      [],
+      [],
+      [card],
+      FIXED_TODAY,
+    )
+    const calendarProjDez = buildCalendarProjection(
+      [account],
+      [],
+      invoiceList,
+      { month: 12, year: 2026 },
+      undefined,
+      [],
+      [],
+      [card],
+      FIXED_TODAY,
+    )
+
+    // Nov fecha descontando apenas a fatura vencida de Nov (1500 - 200 = 1300)
+    expect(reportProjNov.closing).toBe(130000)
+    // Dez abre com 1300 (closing de Nov) e fecha descontando a fatura de Dez (1300 - 500 = 800)
+    expect(calendarProjDez.opening).toBe(130000)
+    expect(calendarProjDez.closing).toBe(80000)
   })
 })

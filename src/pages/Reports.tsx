@@ -17,7 +17,7 @@ import SpendingHabitsSection from '@/components/reports/SpendingHabitsSection'
 import GroupSharedSection from '@/components/reports/GroupSharedSection'
 import GroupReportsView from '@/components/reports/GroupReportsView'
 import { useIndividualReportsData, useSimulations, useWarningThreshold } from '@/components/reports/useReportsData'
-import type { ReportFiltersState } from '@/components/reports/types'
+import type { ReportFiltersState, ReportPeriod } from '@/components/reports/types'
 
 export default function Reports() {
   const { user } = useAuth()
@@ -45,9 +45,21 @@ export default function Reports() {
     categoryId: '',
     status: '',
   })
+  const [calendarPeriod, setCalendarPeriod] = useState<ReportPeriod>(filters.period)
+
+  const handleFiltersChange = (nextFilters: ReportFiltersState) => {
+    const periodChanged =
+      nextFilters.period.month !== filters.period.month ||
+      nextFilters.period.year !== filters.period.year
+    setFilters(nextFilters)
+    if (periodChanged) {
+      setCalendarPeriod(nextFilters.period)
+    }
+  }
 
   const {
     loading,
+    calendarLoading,
     accounts,
     allAccounts,
     creditCards,
@@ -60,7 +72,7 @@ export default function Reports() {
     futureCommitments,
     spendingHabits,
     sharedGroupBalance,
-  } = useIndividualReportsData(filters, threshold, windowMonths, simulations)
+  } = useIndividualReportsData(filters, threshold, windowMonths, simulations, calendarPeriod)
 
   const handleScopeChange = (newScope: 'individual' | 'group') => {
     const params = new URLSearchParams(searchParams)
@@ -191,7 +203,7 @@ export default function Reports() {
         <div className="space-y-6">
           <ReportFilters
             filters={filters}
-            onChange={setFilters}
+            onChange={handleFiltersChange}
             accounts={accounts}
             creditCards={creditCards}
             categories={categories}
@@ -219,7 +231,10 @@ export default function Reports() {
 
               {/* Previsibilidade: Calendário Financeiro Interativo Individual */}
               <CalendarFlowSection
-                period={filters.period}
+                period={calendarPeriod}
+                reportPeriod={filters.period}
+                onPeriodChange={setCalendarPeriod}
+                loading={calendarLoading}
                 projection={projection}
                 threshold={threshold}
                 accounts={allAccounts}

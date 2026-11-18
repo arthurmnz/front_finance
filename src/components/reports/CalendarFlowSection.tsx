@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertCircle,
@@ -12,11 +12,13 @@ import {
   Clock,
   Layers,
   Repeat,
+  Loader2,
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { Account, Category, CreditCard } from '@/lib/types'
-import { formatCompact, formatMoney, toISODate } from '@/lib/format'
+import { formatCompact, formatMoney, monthLabel, toISODate } from '@/lib/format'
 import { Badge, Button, Card, Empty, InfoTooltip } from '@/components/ui'
+import { MonthPicker } from '@/components/MonthPicker'
 import TransactionList from '@/components/TransactionList'
 import type { CalendarProjection, DayProjection, DaySimulationItem, ReportPeriod, SimulatedTransaction } from './types'
 import { useSimulations } from './useReportsData'
@@ -27,6 +29,9 @@ export type { DayProjection }
 
 export interface CalendarFlowSectionProps {
   period: ReportPeriod
+  reportPeriod?: ReportPeriod
+  onPeriodChange?: (period: ReportPeriod) => void
+  loading?: boolean
   projection: CalendarProjection
   threshold: number
   accounts: Account[]
@@ -53,6 +58,9 @@ const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 export default function CalendarFlowSection({
   period,
+  reportPeriod,
+  onPeriodChange,
+  loading = false,
   projection,
   threshold,
   accounts,
@@ -65,6 +73,19 @@ export default function CalendarFlowSection({
   onClearSimulations: controlledClearSimulations,
 }: CalendarFlowSectionProps) {
   const [selected, setSelected] = useState<string>()
+
+  useEffect(() => {
+    const prefix = `${period.year}-${String(period.month).padStart(2, '0')}-`
+    setSelected((prev) => (prev && !prev.startsWith(prefix) ? undefined : prev))
+  }, [period.year, period.month])
+
+  const isPeriodDivergent = Boolean(
+    reportPeriod &&
+      (period.month !== reportPeriod.month || period.year !== reportPeriod.year),
+  )
+  const reportShortLabel = reportPeriod
+    ? `${monthLabel(reportPeriod.month, reportPeriod.year).slice(0, 3)}/${String(reportPeriod.year).slice(-2)}`
+    : ''
 
   // Fallback para gerenciar simulações localmente se não controlado pelo componente pai
   const localSimManager = useSimulations('local-reports-calendar')
@@ -101,24 +122,65 @@ export default function CalendarFlowSection({
 
   return (
     <div className="space-y-4 mb-8">
-      {/* Cabeçalho da Seção com Ação de Simular */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Cabeçalho da Seção com Seletor Próprio do Calendário e Ação de Simular */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
-            <CalendarIcon className="size-4 text-violet" />
+          <h2 className="text-base font-semibold text-white tracking-tight flex flex-wrap items-center gap-2">
+            <CalendarIcon className="size-4 text-violet shrink-0" />
             <span>Previsibilidade Diária — Calendário Financeiro</span>
             <InfoTooltip
               title="Calendário Financeiro"
               content="Projeção contínua do saldo bancário considerando histórico consolidado, receitas, despesas agendadas, faturas de cartão e simulações hipotéticas futuras."
               align="start"
             />
+            {isPeriodDivergent && reportPeriod && (
+              <Badge tone="primary">
+                Relatório geral em {reportShortLabel}
+              </Badge>
+            )}
           </h2>
           <p className="text-xs text-text-dim">
             Saldo encadeado dia a dia na sua conta, integrando transações agendadas, faturas de cartão e simulações
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {onPeriodChange && (
+            <div className="flex flex-wrap items-center gap-2">
+              <MonthPicker
+                value={period}
+                onChange={(p) => {
+                  setSelected(undefined)
+                  onPeriodChange(p)
+                }}
+              />
+
+              {isPeriodDivergent && reportPeriod && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSelected(undefined)
+                    onPeriodChange(reportPeriod)
+                  }}
+                  title={`Voltar para o mês do relatório geral (${monthLabel(reportPeriod.month, reportPeriod.year)})`}
+                  className="h-10 rounded-xl border border-violet/30 bg-violet-subtle/50 px-3 text-xs text-white hover:bg-violet/20 hover:border-violet/50"
+                >
+                  <RotateCcw className="size-3.5 text-violet" />
+                  <span>Voltar p/ {reportShortLabel}</span>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {loading && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium text-text-muted">
+              <Loader2 className="size-3 animate-spin text-violet" />
+              Atualizando faturas...
+            </span>
+          )}
+
           <Button
             type="button"
             size="sm"
@@ -322,7 +384,10 @@ export default function CalendarFlowSection({
       )}
 
       {/* Grid do Calendário */}
-      <Card className="p-3 sm:p-4 bg-surface-1 border-border">
+      <Card
+        className="p-3 sm:p-4 bg-surface-1 border-border"
+        aria-busy={loading || undefined}
+      >
         <div className="mb-2 grid grid-cols-7 text-center text-[10px] font-semibold uppercase tracking-wider text-text-dim">
           {WEEKDAYS.map((d) => (
             <div key={d} className="py-1">
@@ -330,7 +395,7 @@ export default function CalendarFlowSection({
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
+        <div className={clsx('grid grid-cols-7 gap-1 transition-opacity', loading && 'opacity-75')}>
           {Array.from({ length: offset }, (_, i) => (
             <div key={`empty-${i}`} />
           ))}

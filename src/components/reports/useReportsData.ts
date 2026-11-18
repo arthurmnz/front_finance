@@ -1526,6 +1526,29 @@ export function getRequiredInvoicePeriods(
 }
 
 /**
+ * Une e deduplica os períodos de faturas exigidos para múltiplos alvos
+ * (ex.: mês geral do relatório e mês independente do calendário financeiro).
+ */
+export function getMergedRequiredInvoicePeriods(
+  currentMonth: number,
+  currentYear: number,
+  targetPeriods: ReportPeriod[],
+): ReportPeriod[] {
+  const map = new Map<string, ReportPeriod>()
+  targetPeriods.forEach((target) => {
+    getRequiredInvoicePeriods(currentMonth, currentYear, target).forEach((p) => {
+      const key = `${p.year}-${p.month}`
+      if (!map.has(key)) {
+        map.set(key, p)
+      }
+    })
+  })
+  return [...map.values()].sort(
+    (a, b) => a.year * 12 + (a.month - 1) - (b.year * 12 + (b.month - 1)),
+  )
+}
+
+/**
  * Combina alvos (cartão × período) com os respectivos dados retornados pela API de faturas.
  */
 export function buildProjectionInvoiceList(
@@ -1548,6 +1571,7 @@ function useProjectionInvoices(
   filters: ReportFiltersState,
   currentMonth: number,
   currentYear: number,
+  calendarPeriod?: ReportPeriod,
 ) {
   const cardListForProjection = useMemo(
     () =>
@@ -1559,12 +1583,25 @@ function useProjectionInvoices(
     [cardList, filters.hideCreditCards, filters.creditCardId],
   )
 
+  const effectiveCalendarPeriod = calendarPeriod ?? filters.period
+
   const targets = useMemo(() => {
-    const periods = getRequiredInvoicePeriods(currentMonth, currentYear, filters.period)
+    const periods = getMergedRequiredInvoicePeriods(currentMonth, currentYear, [
+      filters.period,
+      effectiveCalendarPeriod,
+    ])
     return cardListForProjection.flatMap((card) =>
       periods.map((p) => ({ card, month: p.month, year: p.year })),
     )
-  }, [cardListForProjection, currentMonth, currentYear, filters.period.month, filters.period.year])
+  }, [
+    cardListForProjection,
+    currentMonth,
+    currentYear,
+    filters.period.month,
+    filters.period.year,
+    effectiveCalendarPeriod.month,
+    effectiveCalendarPeriod.year,
+  ])
 
   const queries = useQueries({
     queries: targets.map((target) => ({
@@ -1604,6 +1641,7 @@ export function useIndividualReportsData(
   _threshold?: number,
   calculationWindow: 6 | 12 = 6,
   simulations: SimulatedTransaction[] = [],
+  calendarPeriod?: ReportPeriod,
 ) {
   const { user } = useAuth()
   const accountsQuery = useAccounts()
@@ -1675,12 +1713,15 @@ export function useIndividualReportsData(
   const currentMonth = now.getMonth() + 1
   const currentYear = now.getFullYear()
 
-  // 4. Faturas de todos os meses da cascata (mês corrente até o período selecionado)
+  const effectiveCalendarPeriod = calendarPeriod ?? filters.period
+
+  // 4. Faturas de todos os meses da cascata (mês corrente até relatório geral / calendário)
   const { invoiceLoading, invoiceList, invoiceStamp } = useProjectionInvoices(
     cardList,
     filters,
     currentMonth,
     currentYear,
+    effectiveCalendarPeriod,
   )
 
   const loading =
@@ -1688,8 +1729,7 @@ export function useIndividualReportsData(
     creditCardsQuery.isLoading ||
     accountQueries.some((q) => q.isLoading) ||
     cardTxQueries.some((q) => q.isLoading) ||
-    responsibleQuery.some((q) => q.isLoading) ||
-    invoiceLoading
+    responsibleQuery.some((q) => q.isLoading)
 
   const txStamp = accountQueries
     .concat(cardTxQueries)
@@ -1812,8 +1852,8 @@ export function useIndividualReportsData(
     [personalTxs, thirdPartyOnMyCardTxs],
   )
 
-  // Projeção do Calendário Financeiro Individual
-  const projection = useMemo(() => {
+  // Projeção do mês geral do relatório (utilizada pelos KPIs executivos)
+  const reportProjection = useMemo(() => {
     return buildCalendarProjection(
       operationalAccounts,
       filteredPersonalTxs,
@@ -1839,11 +1879,45 @@ export function useIndividualReportsData(
     now,
   ])
 
+  const isSameCalendarPeriod =
+    effectiveCalendarPeriod.month === filters.period.month &&
+    effectiveCalendarPeriod.year === filters.period.year
+
+  // Projeção do Calendário Financeiro Individual (independente do mês geral quando navegado no calendário)
+  const projection = useMemo(() => {
+    if (isSameCalendarPeriod) return reportProjection
+    return buildCalendarProjection(
+      operationalAccounts,
+      filteredPersonalTxs,
+      invoiceList,
+      effectiveCalendarPeriod,
+      filters.accountId,
+      calendarAllTransactions,
+      simulations,
+      cardList,
+      now,
+    )
+  }, [
+    isSameCalendarPeriod,
+    reportProjection,
+    operationalAccounts,
+    cardList,
+    invoiceList,
+    filteredPersonalTxs,
+    calendarAllTransactions,
+    effectiveCalendarPeriod,
+    filters.accountId,
+    invoiceStamp,
+    txStamp,
+    simulations,
+    now,
+  ])
+
   const hasCardsIncluded = !filters.hideCreditCards && filters.creditCardId !== 'none'
 
   const kpis = useMemo(
-    () => buildKpis(currentMonthTxs, projection, filters.period, hasCardsIncluded),
-    [currentMonthTxs, projection, filters.period, hasCardsIncluded],
+    () => buildKpis(currentMonthTxs, reportProjection, filters.period, hasCardsIncluded),
+    [currentMonthTxs, reportProjection, filters.period, hasCardsIncluded],
   )
   const cashFlowHistory = useMemo(
     () => buildCashFlowHistory(filteredPersonalTxs, filters.period, hasCardsIncluded),
@@ -1911,6 +1985,7 @@ export function useIndividualReportsData(
 
   return {
     loading,
+    calendarLoading: invoiceLoading,
     accounts: operationalAccounts,
     allAccounts: allOwnAccounts,
     savingsAccounts,
@@ -1938,6 +2013,7 @@ export function useGroupReportsData(
   _threshold?: number,
   calculationWindow: 6 | 12 = 6,
   simulations: SimulatedTransaction[] = [],
+  calendarPeriod?: ReportPeriod,
 ) {
   const groupQuery = useGroup(groupId)
   const groupAccountsQuery = useGroupAccounts(groupId)
@@ -2001,12 +2077,15 @@ export function useGroupReportsData(
   const currentMonth = now.getMonth() + 1
   const currentYear = now.getFullYear()
 
-  // 3. Faturas dos cartões do grupo para toda a cascata até o mês selecionado
+  const effectiveCalendarPeriod = calendarPeriod ?? filters.period
+
+  // 3. Faturas dos cartões do grupo para toda a cascata (relatório geral e calendário)
   const { invoiceLoading, invoiceList, invoiceStamp } = useProjectionInvoices(
     cardList,
     filters,
     currentMonth,
     currentYear,
+    effectiveCalendarPeriod,
   )
 
   const loading =
@@ -2015,8 +2094,7 @@ export function useGroupReportsData(
     groupCardsQuery.isLoading ||
     groupCategoriesQuery.isLoading ||
     accountQueries.some((q) => q.isLoading) ||
-    cardTxQueries.some((q) => q.isLoading) ||
-    invoiceLoading
+    cardTxQueries.some((q) => q.isLoading)
 
   const txStamp = accountQueries
     .concat(cardTxQueries)
@@ -2081,8 +2159,8 @@ export function useGroupReportsData(
     })
   }, [filteredGroupTxs, prevMonth, prevYear])
 
-  // Projeção do Calendário Financeiro do Grupo (apenas contas operacionais)
-  const projection = useMemo(() => {
+  // Projeção do mês geral do grupo (utilizada pelos KPIs executivos)
+  const reportProjection = useMemo(() => {
     return buildCalendarProjection(
       operationalAccounts,
       filteredGroupTxs,
@@ -2108,11 +2186,45 @@ export function useGroupReportsData(
     now,
   ])
 
+  const isSameCalendarPeriod =
+    effectiveCalendarPeriod.month === filters.period.month &&
+    effectiveCalendarPeriod.year === filters.period.year
+
+  // Projeção do Calendário Financeiro do Grupo (independente do mês geral quando navegado no calendário)
+  const projection = useMemo(() => {
+    if (isSameCalendarPeriod) return reportProjection
+    return buildCalendarProjection(
+      operationalAccounts,
+      filteredGroupTxs,
+      invoiceList,
+      effectiveCalendarPeriod,
+      filters.accountId,
+      operationalGroupTransactions,
+      simulations,
+      cardList,
+      now,
+    )
+  }, [
+    isSameCalendarPeriod,
+    reportProjection,
+    operationalAccounts,
+    cardList,
+    invoiceList,
+    filteredGroupTxs,
+    operationalGroupTransactions,
+    effectiveCalendarPeriod,
+    filters.accountId,
+    invoiceStamp,
+    txStamp,
+    simulations,
+    now,
+  ])
+
   const hasCardsIncluded = !filters.hideCreditCards && filters.creditCardId !== 'none'
 
   const kpis = useMemo(
-    () => buildKpis(currentMonthTxs, projection, filters.period, hasCardsIncluded),
-    [currentMonthTxs, projection, filters.period, hasCardsIncluded],
+    () => buildKpis(currentMonthTxs, reportProjection, filters.period, hasCardsIncluded),
+    [currentMonthTxs, reportProjection, filters.period, hasCardsIncluded],
   )
   const cashFlowHistory = useMemo(
     () => buildCashFlowHistory(filteredGroupTxs, filters.period, hasCardsIncluded),
@@ -2160,6 +2272,7 @@ export function useGroupReportsData(
 
   return {
     loading,
+    calendarLoading: invoiceLoading,
     group,
     members,
     accounts: operationalAccounts,

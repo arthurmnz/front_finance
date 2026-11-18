@@ -12,7 +12,7 @@ import SpendingHabitsSection from './SpendingHabitsSection'
 import GroupMemberExpensesSection from './GroupMemberExpensesSection'
 import GroupDebtsReportSection from './GroupDebtsReportSection'
 import { useGroupReportsData, useSimulations, useWarningThreshold } from './useReportsData'
-import type { ReportFiltersState } from './types'
+import type { ReportFiltersState, ReportPeriod } from './types'
 
 interface GroupReportsViewProps {
   groupId: string
@@ -35,9 +35,21 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
     responsibleId: '',
     status: '',
   })
+  const [calendarPeriod, setCalendarPeriod] = useState<ReportPeriod>(filters.period)
+
+  const handleFiltersChange = (nextFilters: ReportFiltersState) => {
+    const periodChanged =
+      nextFilters.period.month !== filters.period.month ||
+      nextFilters.period.year !== filters.period.year
+    setFilters(nextFilters)
+    if (periodChanged) {
+      setCalendarPeriod(nextFilters.period)
+    }
+  }
 
   const {
     loading,
+    calendarLoading,
     members,
     accounts,
     allAccounts,
@@ -52,7 +64,7 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
     spendingHabits,
     memberExpenses,
     groupDebts,
-  } = useGroupReportsData(groupId, filters, threshold, windowMonths, simulations)
+  } = useGroupReportsData(groupId, filters, threshold, windowMonths, simulations, calendarPeriod)
 
   const handleOpenThresholdModal = () => {
     setDraftThreshold(threshold)
@@ -68,7 +80,7 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
     <div className="space-y-6">
       <ReportFilters
         filters={filters}
-        onChange={setFilters}
+        onChange={handleFiltersChange}
         accounts={accounts}
         creditCards={creditCards}
         categories={categories}
@@ -97,7 +109,10 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
 
           {/* Previsibilidade: Calendário Financeiro do Grupo */}
           <CalendarFlowSection
-            period={filters.period}
+            period={calendarPeriod}
+            reportPeriod={filters.period}
+            onPeriodChange={setCalendarPeriod}
+            loading={calendarLoading}
             projection={projection}
             threshold={threshold}
             accounts={allAccounts}
