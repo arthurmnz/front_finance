@@ -5,9 +5,10 @@ import clsx from 'clsx'
 import { ArrowDownCircle, ArrowUpCircle, ChevronRight, Eye, EyeOff, Plus, Users } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '@/lib/api'
+import { resolveTransactionCategory } from '@/lib/categories'
 import { useAccounts, useAction, useAllCategories, useCreditCards, useResponsibleTransactions, useTotalBalance, useUserDebtsSummary } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
-import type { Account, CreditCardInvoice, Transaction } from '@/lib/types'
+import type { Account, CategoryLevel, CreditCardInvoice, Transaction } from '@/lib/types'
 import { formatDate, formatMoney } from '@/lib/format'
 import { normalizeCategoryColor } from '@/lib/palette'
 import { Badge, Button, Card, Empty, PageHeader, Spinner } from '@/components/ui'
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [adding, setAdding] = useState(false)
   const [addingAccount, setAddingAccount] = useState(false)
   const [addingCard, setAddingCard] = useState(false)
+  const [categoryView, setCategoryView] = useState<CategoryLevel>('GENERAL')
   const creditCards = useCreditCards()
   const accounts = useAccounts()
   const cats = useAllCategories().data
@@ -131,20 +133,56 @@ export default function Dashboard() {
     return [...map.values()]
   }, [allTx, responsibleTxs.data, user?.id])
 
+  const catMap = useMemo(() => new Map((cats ?? []).map((c) => [c.id, c])), [cats])
+
   const byCategory = useMemo(() => {
-    const map = new Map<string, number>()
+    const map = new Map<string, { name: string; subLabel?: string; icon?: string | null; value: number; rawColor?: string | null }>()
     combinedExpenses.forEach((t) => {
-      const k = t.categoryId ?? 'none'
-      map.set(k, (map.get(k) ?? 0) + t.amount)
+      const resolved = resolveTransactionCategory(t, catMap)
+      const isUncategorized = !resolved.general && !resolved.specific
+
+      let key: string
+      let name: string
+      let subLabel: string | undefined
+      let icon: string | null | undefined
+      let rawColor: string | null | undefined
+
+      if (isUncategorized) {
+        key = 'none'
+        name = 'Sem categoria'
+      } else if (categoryView === 'GENERAL') {
+        const target = resolved.general ?? resolved.specific
+        key = target?.id ?? 'none'
+        name = target?.name ?? 'Sem categoria'
+        icon = target?.icon ?? resolved.icon
+        rawColor = target?.color ?? resolved.color
+      } else {
+        const target = resolved.specific ?? resolved.general
+        key = target?.id ?? 'none'
+        name = target?.name ?? resolved.shortLabel
+        subLabel = resolved.specific && resolved.general ? resolved.general.name : undefined
+        icon = resolved.icon
+        rawColor = resolved.color
+      }
+
+      const prev = map.get(key)
+      if (prev) {
+        prev.value += t.amount
+      } else {
+        map.set(key, { name, subLabel, icon, value: t.amount, rawColor })
+      }
     })
-    return [...map.entries()]
-      .map(([id, value], i) => {
-        const c = cats?.find((cat) => cat.id === id)
-        const col = normalizeCategoryColor(c?.color, i)
-        return { name: c?.name ?? 'Sem categoria', value, color: col }
-      })
-    .sort((a, b) => b.value - a.value)
-  }, [combinedExpenses, cats])
+
+    return [...map.values()]
+      .map((item, i) => ({
+        name: item.name,
+        subLabel: item.subLabel,
+        icon: item.icon,
+        value: item.value,
+        color: item.name === 'Sem categoria' && !item.rawColor ? '#8E8EA0' : normalizeCategoryColor(item.rawColor, i),
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [combinedExpenses, catMap, categoryView])
 
   const upcoming = allTx
     .filter((t) => t.status === 'PENDING')
@@ -321,7 +359,31 @@ export default function Dashboard() {
         </Card>
 
         <Card className="p-4">
-          <h2 className="mb-3 font-semibold text-white">Despesas por categoria</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-white">Despesas por categoria</h2>
+            <div className="inline-flex rounded-lg bg-surface-2 p-0.5 border border-border">
+              <button
+                type="button"
+                onClick={() => setCategoryView('GENERAL')}
+                className={clsx(
+                  'rounded-md px-2.5 py-1 text-[11px] font-medium transition cursor-pointer select-none',
+                  categoryView === 'GENERAL' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                )}
+              >
+                Geral
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryView('SPECIFIC')}
+                className={clsx(
+                  'rounded-md px-2.5 py-1 text-[11px] font-medium transition cursor-pointer select-none',
+                  categoryView === 'SPECIFIC' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                )}
+              >
+                Específica
+              </button>
+            </div>
+          </div>
           {txLoading ? (
             <Spinner />
           ) : !byCategory.length ? (
@@ -353,7 +415,11 @@ export default function Dashboard() {
                 {byCategory.slice(0, 5).map((c, i) => (
                   <li key={i} className="flex items-center gap-2 text-xs text-text-muted">
                     <span className="size-2 rounded-full shrink-0" style={{ background: c.color }} />
-                    <span className="truncate">{c.name}</span>
+                    <span className="truncate">
+                      {c.icon ? `${c.icon} ` : ''}
+                      {c.name}
+                      {c.subLabel ? <span className="text-text-dim"> · {c.subLabel}</span> : null}
+                    </span>
                     <span className="ml-auto font-medium text-white tabular-nums">{formatMoney(c.value)}</span>
                   </li>
                 ))}

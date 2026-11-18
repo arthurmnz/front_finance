@@ -10,9 +10,15 @@ import {
   useGroupCategories,
   useGroupCreditCards,
   useGroupDebts,
+  useGroupUsedCategories,
   useUserDebtsSummary,
 } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
+import {
+  matchesCategoryFilter,
+  resolveTransactionCategory,
+  synthesizeGeneralCategory,
+} from '@/lib/categories'
 import type {
   Account,
   Category,
@@ -23,7 +29,7 @@ import type {
   Transaction,
 } from '@/lib/types'
 import { monthLabel, toISODate } from '@/lib/format'
-import { normalizeCategoryColor, PALETTE } from '@/lib/palette'
+import { normalizeCategoryColor } from '@/lib/palette'
 import type {
   CalendarProjection,
   CategoryComparison,
@@ -1120,65 +1126,185 @@ export function buildCategoryEvolution(
   categories: Category[],
   hasCardsIncluded: boolean = true,
 ): CategoryComparison[] {
-  const currentCatMap = new Map<string, number>()
-  let totalCurrentExpense = 0
-  currentMonthTxs
-    .filter((t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)))
-    .forEach((t) => {
-      const key = t.categoryId || 'none'
-      currentCatMap.set(key, (currentCatMap.get(key) ?? 0) + t.amount)
-      totalCurrentExpense += t.amount
-    })
-
-  const prevCatMap = new Map<string, number>()
-  prevMonthTxs
-    .filter((t) => t.type === 'EXPENSE' && (!hasCardsIncluded || !isInvoicePaymentTx(t)))
-    .forEach((t) => {
-      const key = t.categoryId || 'none'
-      prevCatMap.set(key, (prevCatMap.get(key) ?? 0) + t.amount)
-    })
-
   const catInfoMap = new Map(categories.map((c) => [c.id, c]))
-  const allCatKeys = new Set([...currentCatMap.keys(), ...prevCatMap.keys()])
-  const comparisons: CategoryComparison[] = []
 
-  let colorIdx = 0
-  allCatKeys.forEach((key) => {
-    const currentAmt = currentCatMap.get(key) ?? 0
-    const prevAmt = prevCatMap.get(key) ?? 0
-    if (currentAmt === 0 && prevAmt === 0) return
+  interface ChildAccumulator {
+    id: string
+    name: string
+    icon?: string | null
+    rawColor?: string | null
+    parentId?: string | null
+    parentName?: string
+    currentAmount: number
+    previousAmount: number
+  }
 
-    let name = 'Sem categoria'
-    let color: string = PALETTE[colorIdx % PALETTE.length]
+  interface GeneralAccumulator {
+    key: string
+    id?: string
+    name: string
+    icon?: string | null
+    rawColor?: string | null
+    level?: 'GENERAL' | 'SPECIFIC'
+    currentAmount: number
+    previousAmount: number
+    children: Map<string, ChildAccumulator>
+  }
 
-    if (key !== 'none') {
-      const cat = catInfoMap.get(key)
-      if (cat) {
-        name = cat.name
-        color = normalizeCategoryColor(cat.color)
-      }
+  const buckets = new Map<string, GeneralAccumulator>()
+  let totalCurrentExpense = 0
+
+  const accumulate = (t: Transaction, periodKind: 'current' | 'previous') => {
+    if (t.type !== 'EXPENSE' || (hasCardsIncluded && isInvoicePaymentTx(t))) return
+    if (periodKind === 'current') totalCurrentExpense += t.amount
+
+    const resolved = resolveTransactionCategory(t, catInfoMap)
+    const isUncategorized = !resolved.general && !resolved.specific
+
+    let key: string
+    let id: string | undefined
+    let name: string
+    let icon: string | null | undefined
+    let rawColor: string | null | undefined
+    let level: 'GENERAL' | 'SPECIFIC' | undefined
+
+    if (isUncategorized) {
+      key = 'none'
+      name = 'Sem categoria'
+      rawColor = '#8E8EA0'
+    } else if (resolved.general) {
+      key = resolved.general.id
+      id = resolved.general.id
+      name = resolved.general.name
+      icon = resolved.general.icon ?? resolved.icon
+      rawColor = resolved.general.color ?? resolved.color
+      level = 'GENERAL'
     } else {
-      color = '#8E8EA0'
+      const onlySpec = resolved.specific!
+      key = onlySpec.id
+      id = onlySpec.id
+      name = onlySpec.name
+      icon = onlySpec.icon
+      rawColor = onlySpec.color
+      level = 'SPECIFIC'
     }
 
+    let bucket = buckets.get(key)
+    if (!bucket) {
+      bucket = {
+        key,
+        id,
+        name,
+        icon,
+        rawColor,
+        level,
+        currentAmount: 0,
+        previousAmount: 0,
+        children: new Map(),
+      }
+      buckets.set(key, bucket)
+    }
+
+    if (periodKind === 'current') bucket.currentAmount += t.amount
+    else bucket.previousAmount += t.amount
+
+    if (resolved.general && resolved.specific) {
+      const childKey = resolved.specific.id
+      let child = bucket.children.get(childKey)
+      if (!child) {
+        child = {
+          id: resolved.specific.id,
+          name: resolved.specific.name,
+          icon: resolved.specific.icon ?? resolved.general.icon,
+          rawColor: resolved.specific.color ?? resolved.general.color,
+          parentId: resolved.general.id,
+          parentName: resolved.general.name,
+          currentAmount: 0,
+          previousAmount: 0,
+        }
+        bucket.children.set(childKey, child)
+      }
+      if (periodKind === 'current') child.currentAmount += t.amount
+      else child.previousAmount += t.amount
+    }
+  }
+
+  currentMonthTxs.forEach((t) => accumulate(t, 'current'))
+  prevMonthTxs.forEach((t) => accumulate(t, 'previous'))
+
+  const comparisons: CategoryComparison[] = []
+  let colorIdx = 0
+
+  buckets.forEach((bucket) => {
+    if (bucket.currentAmount === 0 && bucket.previousAmount === 0) return
+
+    const color =
+      bucket.key === 'none' ? '#8E8EA0' : normalizeCategoryColor(bucket.rawColor, colorIdx)
     colorIdx++
-    const pctOfTotal = totalCurrentExpense > 0 ? Math.round((currentAmt / totalCurrentExpense) * 100) : 0
-    const isNew = prevAmt === 0 && currentAmt > 0
-    const momVariation = prevAmt > 0 ? Math.round(((currentAmt - prevAmt) / prevAmt) * 100) : null
+
+    const pctOfTotal =
+      totalCurrentExpense > 0 ? Math.round((bucket.currentAmount / totalCurrentExpense) * 100) : 0
+    const isNew = bucket.previousAmount === 0 && bucket.currentAmount > 0
+    const momVariation =
+      bucket.previousAmount > 0
+        ? Math.round(((bucket.currentAmount - bucket.previousAmount) / bucket.previousAmount) * 100)
+        : null
+
+    let childColorIdx = 0
+    const children: CategoryComparison[] = [...bucket.children.values()]
+      .filter((ch) => ch.currentAmount > 0 || ch.previousAmount > 0)
+      .map((ch) => {
+        const chColor = normalizeCategoryColor(ch.rawColor ?? bucket.rawColor, childColorIdx++)
+        const chPct =
+          totalCurrentExpense > 0 ? Math.round((ch.currentAmount / totalCurrentExpense) * 100) : 0
+        const chIsNew = ch.previousAmount === 0 && ch.currentAmount > 0
+        const chMom =
+          ch.previousAmount > 0
+            ? Math.round(((ch.currentAmount - ch.previousAmount) / ch.previousAmount) * 100)
+            : null
+        return {
+          id: ch.id,
+          name: ch.name,
+          icon: ch.icon,
+          color: chColor,
+          level: 'SPECIFIC' as const,
+          parentId: ch.parentId,
+          parentName: ch.parentName,
+          currentAmount: ch.currentAmount,
+          previousAmount: ch.previousAmount,
+          percentageOfTotal: chPct,
+          momVariationPct: chMom,
+          isNew: chIsNew,
+        }
+      })
+      .sort(
+        (a, b) =>
+          b.currentAmount - a.currentAmount ||
+          b.previousAmount - a.previousAmount ||
+          a.name.localeCompare(b.name, 'pt-BR'),
+      )
 
     comparisons.push({
-      id: key !== 'none' ? key : undefined,
-      name,
+      id: bucket.id,
+      name: bucket.name,
+      icon: bucket.icon,
       color,
-      currentAmount: currentAmt,
-      previousAmount: prevAmt,
+      level: bucket.level,
+      currentAmount: bucket.currentAmount,
+      previousAmount: bucket.previousAmount,
       percentageOfTotal: pctOfTotal,
       momVariationPct: momVariation,
       isNew,
+      children,
     })
   })
 
-  return comparisons.sort((a, b) => b.currentAmount - a.currentAmount)
+  return comparisons.sort(
+    (a, b) =>
+      b.currentAmount - a.currentAmount ||
+      b.previousAmount - a.previousAmount ||
+      a.name.localeCompare(b.name, 'pt-BR'),
+  )
 }
 
 export function buildFutureCommitments(
@@ -1821,12 +1947,11 @@ export function useIndividualReportsData(
       if (filters.creditCardId === 'none' && t.creditCardId) return false
       if (filters.creditCardId && filters.creditCardId !== 'none' && t.creditCardId !== filters.creditCardId) return false
       if (filters.accountId && t.accountId !== filters.accountId && t.destinationAccountId !== filters.accountId) return false
-      if (filters.categoryId === 'none' && t.categoryId) return false
-      if (filters.categoryId && filters.categoryId !== 'none' && t.categoryId !== filters.categoryId) return false
+      if (!matchesCategoryFilter(t.categoryId, filters.categoryId, categories, t.category)) return false
       if (filters.status && t.status !== filters.status) return false
       return true
     })
-  }, [personalTxs, filters])
+  }, [personalTxs, filters, categories])
 
   const { month: selMonth, year: selYear } = filters.period
   const prevDate = new Date(selYear, selMonth - 2, 1)
@@ -2019,6 +2144,7 @@ export function useGroupReportsData(
   const groupAccountsQuery = useGroupAccounts(groupId)
   const groupCardsQuery = useGroupCreditCards(groupId)
   const groupCategoriesQuery = useGroupCategories(groupId)
+  const groupUsedCategoriesQuery = useGroupUsedCategories(groupId)
   const groupDebtsQuery = useGroupDebts(groupId)
 
   const group = groupQuery.data
@@ -2055,7 +2181,39 @@ export function useGroupReportsData(
   )
 
   const cardList: CreditCard[] = useMemo(() => groupCardsQuery.data ?? [], [groupCardsQuery.data])
-  const categories: Category[] = useMemo(() => groupCategoriesQuery.data ?? [], [groupCategoriesQuery.data])
+  const categories: Category[] = useMemo(() => {
+    const map = new Map<string, Category>()
+    ;(groupCategoriesQuery.data ?? []).forEach((c) => map.set(c.id, c))
+    ;(groupUsedCategoriesQuery.data ?? []).forEach((uc) => {
+      if (uc.parent && !map.has(uc.parent.id)) {
+        map.set(
+          uc.parent.id,
+          synthesizeGeneralCategory(uc.parent, {
+            userId: uc.ownerId,
+            groupId: uc.isPersonal ? null : groupId,
+          }),
+        )
+      }
+      if (!map.has(uc.id)) {
+        map.set(uc.id, {
+          id: uc.id,
+          name: uc.name,
+          description: null,
+          userId: uc.ownerId,
+          groupId: uc.isPersonal ? null : groupId,
+          type: uc.type ?? 'EXPENSE',
+          level: uc.level ?? (uc.parentId || uc.parent ? 'SPECIFIC' : 'GENERAL'),
+          parentId: uc.parentId ?? uc.parent?.id ?? null,
+          parent: uc.parent ?? null,
+          color: uc.color,
+          icon: uc.icon,
+          createdAt: '',
+          updatedAt: '',
+        })
+      }
+    })
+    return [...map.values()]
+  }, [groupCategoriesQuery.data, groupUsedCategoriesQuery.data, groupId])
 
   // 1. Transações de todas as contas do grupo
   const accountQueries = useQueries({
@@ -2132,13 +2290,12 @@ export function useGroupReportsData(
       if (filters.creditCardId === 'none' && t.creditCardId) return false
       if (filters.creditCardId && filters.creditCardId !== 'none' && t.creditCardId !== filters.creditCardId) return false
       if (filters.accountId && t.accountId !== filters.accountId && t.destinationAccountId !== filters.accountId) return false
-      if (filters.categoryId === 'none' && t.categoryId) return false
-      if (filters.categoryId && filters.categoryId !== 'none' && t.categoryId !== filters.categoryId) return false
+      if (!matchesCategoryFilter(t.categoryId, filters.categoryId, categories, t.category)) return false
       if (filters.status && t.status !== filters.status) return false
       if (filters.responsibleId && t.responsibleId !== filters.responsibleId) return false
       return true
     })
-  }, [operationalGroupTransactions, filters])
+  }, [operationalGroupTransactions, filters, categories])
 
   const { month: selMonth, year: selYear } = filters.period
   const prevDate = new Date(selYear, selMonth - 2, 1)

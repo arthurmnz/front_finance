@@ -3,8 +3,12 @@ import { Plus, Split, Trash2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { isGeneralCategory, isTypeCompatibleWithTransaction } from '@/lib/categories'
 import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCards } from '@/lib/hooks'
 import type {
+  Category,
+  CategoryInput,
+  CategoryType,
   CreateTransactionInput,
   RecurrenceFrequency,
   Transaction,
@@ -51,7 +55,12 @@ export default function TransactionFormModal({
   const [invoiceManual, setInvoiceManual] = useState(false)
   const [destId, setDestId] = useState('')
   const [generatesDebt, setGeneratesDebt] = useState(false)
+  const [generalCategoryId, setGeneralCategoryId] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [addingSpecific, setAddingSpecific] = useState(false)
+  const [newSpecificName, setNewSpecificName] = useState('')
+  const [newSpecificIcon, setNewSpecificIcon] = useState('')
+  const [localCreatedSpecifics, setLocalCreatedSpecifics] = useState<Category[]>([])
   const [status, setStatus] = useState<TransactionStatus>('PENDING')
   const [recurring, setRecurring] = useState(false)
   const [freq, setFreq] = useState<RecurrenceFrequency>('MONTHLY')
@@ -138,7 +147,19 @@ export default function TransactionFormModal({
     setCreditCardId(cid)
     setDestId(t?.destinationAccountId ?? '')
     setGeneratesDebt(Boolean(t?.generatesDebt))
+    const existingCat = t?.categoryId ? allCategories.find((c) => c.id === t.categoryId) : undefined
+    const inferredGeneralId = t?.categoryId
+      ? existingCat?.parentId ??
+        t.category?.parentId ??
+        t.category?.parent?.id ??
+        (existingCat && isGeneralCategory(existingCat) ? existingCat.id : '__missing__')
+      : ''
+    setGeneralCategoryId(inferredGeneralId)
     setCategoryId(t?.categoryId ?? '')
+    setAddingSpecific(false)
+    setNewSpecificName('')
+    setNewSpecificIcon('')
+    setLocalCreatedSpecifics([])
     setStatus(t?.status ?? 'PENDING')
     setRecurring(false)
     setFreq('MONTHLY')
@@ -186,7 +207,28 @@ export default function TransactionFormModal({
     setInvoiceYear(def.year)
   }, [open, editing, sourceMode, selectedCard, date, invoiceManual])
 
-  const filterCat = (c: { type: string }) => type === 'TRANSFER' || c.type === 'BOTH' || c.type === type
+  const filterCat = (c: { type: CategoryType }) => isTypeCompatibleWithTransaction(c.type, type)
+
+  const mergedCategories = useMemo(() => {
+    const map = new Map<string, Category>()
+    allCategories.forEach((c) => map.set(c.id, c))
+    localCreatedSpecifics.forEach((c) => map.set(c.id, c))
+    return [...map.values()]
+  }, [allCategories, localCreatedSpecifics])
+
+  // Se as categorias carregarem após a abertura do modal em edição, hidrata a categoria geral pai automaticamente
+  useEffect(() => {
+    if (!open || !editing || !transaction?.categoryId || generalCategoryId !== '__missing__') return
+    const existingCat = mergedCategories.find((c) => c.id === transaction.categoryId)
+    const resolvedParent =
+      existingCat?.parentId ??
+      transaction.category?.parentId ??
+      transaction.category?.parent?.id ??
+      (existingCat && isGeneralCategory(existingCat) ? existingCat.id : undefined)
+    if (resolvedParent) {
+      setGeneralCategoryId(resolvedParent)
+    }
+  }, [open, editing, transaction?.categoryId, transaction?.category, generalCategoryId, mergedCategories])
 
   const sortedGroupsCategories = useMemo(() => {
     if (!effectiveGroupId) return groupsCategories
@@ -197,38 +239,196 @@ export default function TransactionFormModal({
     })
   }, [groupsCategories, effectiveGroupId])
 
-  const filteredMyCategories = useMemo(
-    () => myCategories.filter(filterCat),
+  const filteredMyGeneralCategories = useMemo(
+    () =>
+      myCategories
+        .filter((c) => !c.groupId && isGeneralCategory(c) && filterCat(c))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     [myCategories, type],
   )
 
-  const renderedCategoryIds = useMemo(() => {
+  const filteredGroupGeneralCategories = useMemo(
+    () =>
+      sortedGroupsCategories
+        .map(({ group, categories: gCats }) => ({
+          group,
+          categories: gCats
+            .filter((c) => c.groupId === group.id && isGeneralCategory(c) && filterCat(c))
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+        }))
+        .filter((entry) => entry.categories.length > 0),
+    [sortedGroupsCategories, type],
+  )
+
+  const renderedGeneralCategoryIds = useMemo(() => {
     const ids = new Set<string>()
-    filteredMyCategories.forEach((c) => ids.add(c.id))
-    sortedGroupsCategories.forEach(({ categories: gCats }) => {
-      gCats.filter(filterCat).forEach((c) => ids.add(c.id))
+    filteredMyGeneralCategories.forEach((c) => ids.add(c.id))
+    filteredGroupGeneralCategories.forEach(({ categories: gCats }) => {
+      gCats.forEach((c) => ids.add(c.id))
     })
     return ids
-  }, [filteredMyCategories, sortedGroupsCategories, type])
+  }, [filteredMyGeneralCategories, filteredGroupGeneralCategories])
 
-  const missingCategory = useMemo(() => {
-    if (!categoryId || renderedCategoryIds.has(categoryId)) return null
-    return (
-      allCategories.find((c) => c.id === categoryId) ??
-      ({ id: categoryId, name: 'Categoria selecionada', icon: null } as {
-        id: string
-        name: string
-        icon?: string | null
+  const selectedGeneralCategory = useMemo(() => {
+    if (!generalCategoryId || generalCategoryId === '__missing__') return undefined
+    const found = mergedCategories.find((c) => c.id === generalCategoryId)
+    if (found) return found
+    if (transaction?.category?.parent?.id === generalCategoryId) {
+      const p = transaction.category.parent
+      return {
+        id: p.id,
+        name: p.name,
+        color: p.color ?? null,
+        icon: p.icon ?? null,
+        description: null,
+        userId: null,
+        groupId: null,
+        type: p.type,
+        level: 'GENERAL' as const,
+        parentId: null,
+        parent: null,
+        createdAt: '',
+        updatedAt: '',
+      }
+    }
+    return undefined
+  }, [generalCategoryId, mergedCategories, transaction?.category])
+
+  const missingGeneralFallback = useMemo(() => {
+    if (!generalCategoryId) return null
+    if (generalCategoryId === '__missing__') {
+      const txCat = transaction?.category
+      const parentName = txCat?.parent?.name
+      return {
+        id: '__missing__',
+        label: parentName
+          ? `${txCat?.parent?.icon ? `${txCat.parent.icon} ` : ''}${parentName}`
+          : txCat
+            ? `${txCat.icon ? `${txCat.icon} ` : ''}${txCat.name} (categoria atual)`
+            : 'Categoria atual (membro)',
+      }
+    }
+    if (!renderedGeneralCategoryIds.has(generalCategoryId)) {
+      const cat = selectedGeneralCategory
+      if (cat) {
+        return {
+          id: cat.id,
+          label: `${cat.icon ? `${cat.icon} ` : ''}${cat.name}`,
+        }
+      }
+    }
+    return null
+  }, [generalCategoryId, renderedGeneralCategoryIds, selectedGeneralCategory, transaction?.category])
+
+  const specificCategories = useMemo(() => {
+    if (!generalCategoryId || generalCategoryId === '__missing__') return []
+    const expectedGroupId = selectedGeneralCategory?.groupId ?? null
+    return mergedCategories
+      .filter((c) => {
+        if (isGeneralCategory(c)) return false
+        if (c.parentId !== generalCategoryId && c.parent?.id !== generalCategoryId) return false
+        if (selectedGeneralCategory) {
+          if (expectedGroupId ? c.groupId !== expectedGroupId : Boolean(c.groupId)) return false
+        }
+        return filterCat(c)
       })
-    )
-  }, [categoryId, renderedCategoryIds, allCategories])
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  }, [generalCategoryId, mergedCategories, selectedGeneralCategory, type])
+
+  const canCreateSpecificInSelectedGeneral = useMemo(() => {
+    if (!selectedGeneralCategory || generalCategoryId === '__missing__') return false
+    if (!allCategories.some((c) => c.id === selectedGeneralCategory.id)) return false
+    if (selectedGeneralCategory.groupId) {
+      const grp = groupsCategories.find((g) => g.group.id === selectedGeneralCategory.groupId)?.group
+      return grp?.myRole === 'OWNER' || grp?.myRole === 'ADMIN'
+    }
+    return !selectedGeneralCategory.userId || selectedGeneralCategory.userId === user?.id
+  }, [selectedGeneralCategory, generalCategoryId, allCategories, groupsCategories, user?.id])
+
+  const missingSpecificFallback = useMemo(() => {
+    if (!categoryId || !generalCategoryId || generalCategoryId === '__missing__') return null
+    if (specificCategories.some((c) => c.id === categoryId)) return null
+    const found = mergedCategories.find((c) => c.id === categoryId) ?? transaction?.category
+    if (found) {
+      return {
+        id: found.id,
+        label: `${found.icon ? `${found.icon} ` : ''}${found.name}`,
+      }
+    }
+    return { id: categoryId, label: 'Categoria específica atual' }
+  }, [categoryId, generalCategoryId, specificCategories, mergedCategories, transaction?.category])
+
+  const createSpecific = useAction<CategoryInput, Category>(
+    (b) => api.post<Category>('/categories', b).then((r) => r.data),
+    {
+      invalidate: [['categories']],
+      success: 'Categoria específica criada',
+      onSuccess: (created) => {
+        setLocalCreatedSpecifics((prev) => [...prev.filter((x) => x.id !== created.id), created])
+        setCategoryId(created.id)
+        setNewSpecificName('')
+        setNewSpecificIcon('')
+        setAddingSpecific(false)
+      },
+    },
+  )
+
+  const handleCreateSpecific = () => {
+    const trimmed = newSpecificName.trim()
+    if (!trimmed) {
+      toast.error('Informe o nome da categoria específica.')
+      return
+    }
+    if (!selectedGeneralCategory || !canCreateSpecificInSelectedGeneral) return
+    const newSubType: CategoryType =
+      selectedGeneralCategory.type !== 'BOTH'
+        ? selectedGeneralCategory.type
+        : type === 'EXPENSE' || type === 'INCOME'
+          ? type
+          : 'BOTH'
+
+    createSpecific.mutate({
+      name: trimmed,
+      type: newSubType,
+      level: 'SPECIFIC',
+      parentId: selectedGeneralCategory.id,
+      color: selectedGeneralCategory.color ?? null,
+      icon: newSpecificIcon.trim() || null,
+      groupId: selectedGeneralCategory.groupId ?? null,
+    })
+  }
+
+  const handleGeneralCategoryChange = (nextGeneralId: string) => {
+    setGeneralCategoryId(nextGeneralId)
+    setAddingSpecific(false)
+    setNewSpecificName('')
+    setNewSpecificIcon('')
+    if (!nextGeneralId) {
+      setCategoryId('')
+      return
+    }
+    if (nextGeneralId === '__missing__') {
+      setCategoryId(transaction?.categoryId ?? '')
+      return
+    }
+    setCategoryId('')
+  }
 
   const handleTypeChange = (newType: TransactionType) => {
     if (newType === type) return
     setType(newType)
+    if (generalCategoryId && generalCategoryId !== '__missing__') {
+      const genCat = mergedCategories.find((c) => c.id === generalCategoryId)
+      if (genCat && !isTypeCompatibleWithTransaction(genCat.type, newType)) {
+        setGeneralCategoryId('')
+        setCategoryId('')
+        setAddingSpecific(false)
+        return
+      }
+    }
     if (categoryId) {
-      const selectedCat = allCategories.find((c) => c.id === categoryId)
-      if (newType !== 'TRANSFER' && selectedCat && selectedCat.type !== 'BOTH' && selectedCat.type !== newType) {
+      const selectedCat = mergedCategories.find((c) => c.id === categoryId)
+      if (selectedCat && !isTypeCompatibleWithTransaction(selectedCat.type, newType)) {
         setCategoryId('')
       }
     }
@@ -400,6 +600,10 @@ export default function TransactionFormModal({
     e.preventDefault()
     const effectiveTotal = activeSplit ? (amount > 0 ? amount : splitsSum) : amount
     if (!title.trim() || effectiveTotal <= 0) return
+    if (generalCategoryId && generalCategoryId !== '__missing__' && !categoryId) {
+      toast.error('Selecione uma categoria específica.')
+      return
+    }
     if (editing) {
       save.mutate({
         title: title.trim(),
@@ -860,41 +1064,144 @@ export default function TransactionFormModal({
           </div>
         )}
 
-        <Field label="Categoria">
-          <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">Sem categoria</option>
-            {missingCategory && (
-              <option value={missingCategory.id}>
-                {missingCategory.icon ? `${missingCategory.icon} ` : ''}
-                {missingCategory.name}
-              </option>
-            )}
-            {filteredMyCategories.length > 0 && (
-              <optgroup label="Minhas categorias">
-                {filteredMyCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.icon ? `${c.icon} ` : ''}
-                    {c.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {sortedGroupsCategories.map(({ group, categories: gCats }) => {
-              const filtered = gCats.filter(filterCat)
-              if (filtered.length === 0) return null
-              return (
-                <optgroup key={group.id} label={`Categorias: ${group.name}`}>
-                  {filtered.map((c) => (
+        <div className="space-y-3">
+          <Field label="Categoria geral">
+            <Select value={generalCategoryId} onChange={(e) => handleGeneralCategoryChange(e.target.value)}>
+              <option value="">Sem categoria</option>
+              {missingGeneralFallback && (
+                <option value={missingGeneralFallback.id}>{missingGeneralFallback.label}</option>
+              )}
+              {filteredMyGeneralCategories.length > 0 && (
+                <optgroup label="Minhas categorias">
+                  {filteredMyGeneralCategories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.icon ? `${c.icon} ` : ''}
                       {c.name}
                     </option>
                   ))}
                 </optgroup>
-              )
-            })}
-          </Select>
-        </Field>
+              )}
+              {filteredGroupGeneralCategories.map(({ group, categories: gCats }) => (
+                <optgroup key={group.id} label={`Categorias: ${group.name}`}>
+                  {gCats.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.icon ? `${c.icon} ` : ''}
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </Select>
+          </Field>
+
+          {generalCategoryId === '__missing__' && (
+            <p className="text-xs text-text-dim">
+              Categoria original preservada. Para alterá-la, selecione uma categoria geral acima.
+            </p>
+          )}
+
+          {generalCategoryId && generalCategoryId !== '__missing__' && (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-text-muted">Categoria específica</label>
+                {canCreateSpecificInSelectedGeneral && (
+                  <button
+                    type="button"
+                    onClick={() => setAddingSpecific((prev) => !prev)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-violet/15 px-2.5 py-1 text-xs font-medium text-violet-hover hover:bg-violet/25 transition cursor-pointer select-none"
+                  >
+                    <Plus className="size-3.5" />
+                    {addingSpecific ? 'Fechar' : 'Nova específica'}
+                  </button>
+                )}
+              </div>
+
+              <Select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                placeholder={
+                  specificCategories.length === 0 && !missingSpecificFallback
+                    ? 'Nenhuma específica neste grupo — crie uma acima'
+                    : 'Selecione uma categoria específica…'
+                }
+              >
+                <option value="">
+                  {specificCategories.length === 0 && !missingSpecificFallback
+                    ? 'Selecione ou crie uma específica…'
+                    : 'Selecione uma categoria específica…'}
+                </option>
+                {missingSpecificFallback && (
+                  <option value={missingSpecificFallback.id}>{missingSpecificFallback.label}</option>
+                )}
+                {specificCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.icon ? `${c.icon} ` : ''}
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+
+              {addingSpecific && canCreateSpecificInSelectedGeneral && selectedGeneralCategory && (
+                <div className="space-y-2.5 rounded-2xl border border-violet/35 bg-surface-2/60 p-3">
+                  <p className="text-xs font-medium text-white">
+                    Nova específica em{' '}
+                    <span className="text-lime">
+                      {selectedGeneralCategory.icon ? `${selectedGeneralCategory.icon} ` : ''}
+                      {selectedGeneralCategory.name}
+                    </span>
+                  </p>
+                  <div className="grid grid-cols-[1fr_5.5rem] gap-2">
+                    <Input
+                      value={newSpecificName}
+                      onChange={(e) => setNewSpecificName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleCreateSpecific()
+                        }
+                      }}
+                      placeholder="Nome (ex.: Aluguel, Uber…)"
+                      className="h-9 text-xs"
+                    />
+                    <Input
+                      value={newSpecificIcon}
+                      maxLength={4}
+                      onChange={(e) => setNewSpecificIcon(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleCreateSpecific()
+                        }
+                      }}
+                      placeholder="🏷️"
+                      className="h-9 text-center text-xs"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setAddingSpecific(false)
+                        setNewSpecificName('')
+                        setNewSpecificIcon('')
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      loading={createSpecific.isPending}
+                      onClick={handleCreateSpecific}
+                    >
+                      Criar e selecionar
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {sourceMode === 'ACCOUNT' && !transaction?.creditCardId && (
           <div className="rounded-xl bg-surface-2 p-3 border border-border">

@@ -202,6 +202,22 @@ export function useAction<V, R = unknown>(
   })
 }
 
+export function useSeedDefaultCategories(groupId?: string) {
+  return useAction<string | undefined | void, T.Category[]>(
+    (overrideGroupId) => {
+      const targetGroupId = typeof overrideGroupId === 'string' ? overrideGroupId : groupId
+      const path = targetGroupId
+        ? `/categories/group/${targetGroupId}/seed-defaults`
+        : '/categories/me/seed-defaults'
+      return api.post<T.Category[]>(path).then((r) => r.data)
+    },
+    {
+      invalidate: [['categories']],
+      success: groupId ? 'Categorias padrão do grupo geradas!' : 'Categorias padrão restauradas!',
+    },
+  )
+}
+
 export const ALL_MONEY = [
   ['accounts'],
   ['total-balance'],

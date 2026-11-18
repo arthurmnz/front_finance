@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
 import { SlidersHorizontal, X, Settings2 } from 'lucide-react'
 import clsx from 'clsx'
+import { buildGroupedCategoryFilterOptions } from '@/lib/categories'
 import type { Account, Category, CreditCard, GroupMember } from '@/lib/types'
 import { formatMoney } from '@/lib/format'
 import { Button, Card, Field, Select } from '@/components/ui'
@@ -42,6 +44,17 @@ export default function ReportFilters({
   const set = <K extends keyof ReportFiltersState>(k: K, v: ReportFiltersState[K]) => {
     onChange({ ...filters, [k]: v })
   }
+
+  const categoryOptions = useMemo(
+    () =>
+      buildGroupedCategoryFilterOptions(categories, {
+        includeAll: true,
+        allLabel: 'Todas as categorias',
+        includeNone: true,
+        noneLabel: 'Sem categoria',
+      }),
+    [categories],
+  )
 
   const activeCount = [
     filters.accountId,
@@ -184,15 +197,11 @@ export default function ReportFilters({
             </Field>
 
             <Field label="Categoria">
-              <Select value={filters.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
-                <option value="">Todas as categorias</option>
-                <option value="none">Sem categoria</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+              <Select
+                value={filters.categoryId}
+                onChange={(e) => set('categoryId', e.target.value)}
+                options={categoryOptions}
+              />
             </Field>
           </div>
         </Card>

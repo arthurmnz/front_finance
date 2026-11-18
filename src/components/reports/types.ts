@@ -1,4 +1,4 @@
-import type { Transaction } from '@/lib/types'
+import type { CategoryLevel, Transaction } from '@/lib/types'
 
 export interface ReportPeriod {
   month: number
@@ -54,12 +54,17 @@ export interface MonthlyCashFlow {
 export interface CategoryComparison {
   id?: string
   name: string
+  icon?: string | null
   color: string
+  level?: CategoryLevel
+  parentId?: string | null
+  parentName?: string
   currentAmount: number
   previousAmount: number
   percentageOfTotal: number
   momVariationPct: number | null
   isNew: boolean
+  children?: CategoryComparison[]
 }
 
 export interface FutureMonthCommitment {

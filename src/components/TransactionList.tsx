@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeftRight, Check, Clock, CreditCard as CardIcon, Pencil, Repeat, Trash2, User } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
+import { resolveTransactionCategory } from '@/lib/categories'
 import { ALL_MONEY, useAction } from '@/lib/hooks'
 import type { Category, Transaction } from '@/lib/types'
 import { formatDate, formatMoney, fullName } from '@/lib/format'
@@ -41,7 +42,7 @@ export default function TransactionList({
   const [editing, setEditing] = useState<Transaction>()
   const [deleting, setDeleting] = useState<Transaction>()
   const [allFuture, setAllFuture] = useState(false)
-  const catMap = new Map(categories.map((c) => [c.id, c]))
+  const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
   const toggle = useAction((id: string) => api.put(`/transactions/${id}/toggle-status`), { invalidate: ALL_MONEY })
   const del = useAction(
@@ -53,7 +54,8 @@ export default function TransactionList({
   const sorted = [...items].sort((a, b) => b.date.localeCompare(a.date))
 
   const renderRow = (t: Transaction) => {
-    const cat = t.categoryId ? catMap.get(t.categoryId) : undefined
+    const resolvedCat = resolveTransactionCategory(t, catMap)
+    const hasResolvedCat = Boolean(resolvedCat.specific || resolvedCat.general)
     const isIncomingTransfer =
       t.type === 'TRANSFER' &&
       (Boolean(accountId && t.destinationAccountId === accountId) ||
@@ -67,7 +69,7 @@ export default function TransactionList({
     const incoming = t.type === 'INCOME' || isIncomingTransfer
     const done = t.status === 'COMPLETED'
     const isCard = !!t.creditCardId
-    const catColor = cat ? normalizeCategoryColor(cat.color) : undefined
+    const catColor = hasResolvedCat ? normalizeCategoryColor(resolvedCat.color) : undefined
 
     return (
       <div key={t.id} className="group flex items-center gap-3 p-3 sm:p-3.5 transition-colors duration-150 hover:bg-surface-2/50">
@@ -118,9 +120,22 @@ export default function TransactionList({
                 {t.type === 'TRANSFER' && t.destinationAccountId ? ` → ${accountNames.get(t.destinationAccountId)}` : ''}
               </span>
             )}
-            {cat && (
+            {hasResolvedCat && (
               <span className="inline-flex items-center gap-1 font-medium" style={{ color: catColor }}>
-                <span>{cat.icon}</span> <span>{cat.name}</span>
+                {resolvedCat.general && resolvedCat.specific ? (
+                  <>
+                    {resolvedCat.general.icon && <span>{resolvedCat.general.icon}</span>}
+                    <span>{resolvedCat.general.name}</span>
+                    <span className="opacity-60">›</span>
+                    {resolvedCat.specific.icon && <span>{resolvedCat.specific.icon}</span>}
+                    <span>{resolvedCat.specific.name}</span>
+                  </>
+                ) : (
+                  <>
+                    {resolvedCat.icon && <span>{resolvedCat.icon}</span>}
+                    <span>{resolvedCat.label}</span>
+                  </>
+                )}
               </span>
             )}
             {showResponsible && t.responsible && (

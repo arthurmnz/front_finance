@@ -1,5 +1,16 @@
+import { useMemo, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { PieChart as PieIcon, ArrowDown, ArrowUp, Sparkles } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  CornerDownRight,
+  PieChart as PieIcon,
+  Sparkles,
+} from 'lucide-react'
+import clsx from 'clsx'
+import type { CategoryLevel } from '@/lib/types'
 import { formatMoney } from '@/lib/format'
 import { Badge, Card, Empty, InfoTooltip } from '@/components/ui'
 import type { CategoryComparison } from './types'
@@ -8,32 +19,125 @@ interface CategoryEvolutionSectionProps {
   categories: CategoryComparison[]
 }
 
+function MomCell({ item }: { item: CategoryComparison }) {
+  if (item.isNew) {
+    return (
+      <Badge tone="primary" className="text-[10px] gap-1 inline-flex items-center">
+        <Sparkles className="size-2.5 text-lime" /> Novo
+      </Badge>
+    )
+  }
+  if (item.momVariationPct !== null) {
+    return (
+      <span
+        className={clsx(
+          'inline-flex items-center gap-0.5 font-medium',
+          item.momVariationPct > 0 ? 'text-expense' : 'text-lime',
+        )}
+      >
+        {item.momVariationPct > 0 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}
+        {Math.abs(item.momVariationPct)}%
+      </span>
+    )
+  }
+  return <span className="text-text-dim">—</span>
+}
+
 export default function CategoryEvolutionSection({ categories }: CategoryEvolutionSectionProps) {
-  const chartData = categories
-    .filter((c) => c.currentAmount > 0)
-    .map((c) => ({
-      name: c.name,
-      value: c.currentAmount,
-      color: c.color,
-    }))
+  const [viewMode, setViewMode] = useState<CategoryLevel>('GENERAL')
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+
+  const displayedCategories = useMemo(() => {
+    if (viewMode === 'GENERAL') return categories
+
+    const flat: CategoryComparison[] = []
+    categories.forEach((c) => {
+      if (c.children && c.children.length > 0) {
+        c.children.forEach((sub) => {
+          flat.push({
+            ...sub,
+            parentName: sub.parentName ?? c.name,
+          })
+        })
+      } else {
+        flat.push(c)
+      }
+    })
+    return flat.sort(
+      (a, b) =>
+        b.currentAmount - a.currentAmount ||
+        b.previousAmount - a.previousAmount ||
+        a.name.localeCompare(b.name, 'pt-BR'),
+    )
+  }, [categories, viewMode])
+
+  const chartData = useMemo(
+    () =>
+      displayedCategories
+        .filter((c) => c.currentAmount > 0)
+        .map((c) => ({
+          name: c.icon ? `${c.icon} ${c.name}` : c.name,
+          value: c.currentAmount,
+          color: c.color,
+        })),
+    [displayedCategories],
+  )
 
   const hasData = chartData.length > 0
 
+  const toggleExpand = (key: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   return (
     <div className="space-y-4 mb-8">
-      <div>
-        <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
-          <PieIcon className="size-4 text-violet" />
-          <span>Evolução por Categoria & Comparativo Mensal (MoM)</span>
-          <InfoTooltip
-            title="Evolução por Categoria"
-            content="Distribuição proporcional dos gastos do mês por categoria e taxa de variação percentual (MoM) comparada às despesas do mês anterior."
-            align="start"
-          />
-        </h2>
-        <p className="text-xs text-text-dim">
-          Distribuição dos gastos no mês e variação percentual em relação ao mês anterior
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
+            <PieIcon className="size-4 text-violet" />
+            <span>Evolução por Categoria & Comparativo Mensal (MoM)</span>
+            <InfoTooltip
+              title="Evolução por Categoria"
+              content="Distribuição proporcional dos gastos do mês por categoria geral ou específica e taxa de variação percentual (MoM) comparada ao mês anterior."
+              align="start"
+            />
+          </h2>
+          <p className="text-xs text-text-dim">
+            Distribuição dos gastos no mês e variação percentual em relação ao mês anterior
+          </p>
+        </div>
+
+        <div className="inline-flex rounded-xl bg-surface-1 p-1 border border-border card-highlight">
+          <button
+            type="button"
+            onClick={() => setViewMode('GENERAL')}
+            className={clsx(
+              'rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
+              viewMode === 'GENERAL'
+                ? 'bg-violet text-white font-semibold shadow-sm shadow-violet/25'
+                : 'text-text-muted hover:text-white',
+            )}
+          >
+            Gerais
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('SPECIFIC')}
+            className={clsx(
+              'rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
+              viewMode === 'SPECIFIC'
+                ? 'bg-violet text-white font-semibold shadow-sm shadow-violet/25'
+                : 'text-text-muted hover:text-white',
+            )}
+          >
+            Específicas
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-12">
@@ -76,7 +180,7 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
         {/* Tabela/Ranking com Comparativo MoM */}
         <Card className="p-4 bg-surface-1 border-border md:col-span-7">
           <div className="mb-3 flex items-center justify-between border-b border-border/60 pb-2 text-xs font-semibold text-text-dim">
-            <span>Categoria</span>
+            <span>{viewMode === 'GENERAL' ? 'Categoria geral' : 'Categoria específica'}</span>
             <div className="flex items-center gap-6">
               <span>Atual (% Total)</span>
               <span className="flex items-center gap-1">
@@ -89,48 +193,99 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
             </div>
           </div>
 
-          {!categories.length ? (
+          {!displayedCategories.length ? (
             <Empty title="Nenhuma categoria para comparar." />
           ) : (
-            <ul className="divide-y divide-border/60 max-h-72 overflow-y-auto pr-1">
-              {categories.map((c, idx) => (
-                <li key={c.id ?? `cat-${idx}`} className="py-2.5 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 min-w-0 pr-2">
-                    <span className="size-2.5 rounded-full shrink-0" style={{ background: c.color }} />
-                    <span className="truncate font-medium text-white">{c.name}</span>
-                  </div>
+            <ul className="divide-y divide-border/60 max-h-96 overflow-y-auto pr-1">
+              {displayedCategories.map((c, idx) => {
+                const rowKey = c.id ?? `cat-${idx}-${c.name}`
+                const hasChildren = viewMode === 'GENERAL' && Boolean(c.children && c.children.length > 0)
+                const isExpanded = hasChildren && expandedIds.has(rowKey)
 
-                  <div className="flex items-center gap-6 shrink-0 tabular-nums">
-                    <div className="text-right">
-                      <p className="font-semibold text-white">{formatMoney(c.currentAmount)}</p>
-                      <p className="text-[10px] text-text-dim">{c.percentageOfTotal}%</p>
-                    </div>
-
-                    <div className="w-20 text-right">
-                      {c.isNew ? (
-                        <Badge tone="primary" className="text-[10px] gap-1 inline-flex items-center">
-                          <Sparkles className="size-2.5 text-lime" /> Novo
-                        </Badge>
-                      ) : c.momVariationPct !== null ? (
-                        <span
-                          className={`inline-flex items-center gap-0.5 font-medium ${
-                            c.momVariationPct > 0 ? 'text-expense' : 'text-lime'
-                          }`}
-                        >
-                          {c.momVariationPct > 0 ? (
-                            <ArrowUp className="size-3" />
+                return (
+                  <li key={rowKey} className="py-1">
+                    <div className="py-1.5 flex items-center justify-between text-xs gap-2">
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        {viewMode === 'GENERAL' && (
+                          hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(rowKey)}
+                              aria-expanded={isExpanded}
+                              aria-label={isExpanded ? `Recolher ${c.name}` : `Expandir ${c.name}`}
+                              className="grid size-5 shrink-0 place-items-center rounded-md text-text-dim hover:bg-surface-2 hover:text-white transition cursor-pointer"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="size-3.5" />
+                              ) : (
+                                <ChevronRight className="size-3.5" />
+                              )}
+                            </button>
                           ) : (
-                            <ArrowDown className="size-3" />
+                            <span className="size-5 shrink-0" aria-hidden="true" />
+                          )
+                        )}
+                        <span className="size-2.5 rounded-full shrink-0" style={{ background: c.color }} />
+                        {c.icon && <span className="shrink-0">{c.icon}</span>}
+                        <div className="min-w-0 truncate">
+                          <span className="font-medium text-white">{c.name}</span>
+                          {viewMode === 'SPECIFIC' && c.parentName && (
+                            <span className="text-text-dim"> · {c.parentName}</span>
                           )}
-                          {Math.abs(c.momVariationPct)}%
-                        </span>
-                      ) : (
-                        <span className="text-text-dim">—</span>
-                      )}
+                          {hasChildren && (
+                            <span className="ml-1.5 text-[10px] text-text-dim tabular-nums">
+                              ({c.children!.length})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-6 shrink-0 tabular-nums">
+                        <div className="text-right">
+                          <p className="font-semibold text-white">{formatMoney(c.currentAmount)}</p>
+                          <p className="text-[10px] text-text-dim">{c.percentageOfTotal}%</p>
+                        </div>
+
+                        <div className="w-20 text-right">
+                          <MomCell item={c} />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
+
+                    {isExpanded && c.children && (
+                      <ul className="mt-1 mb-1.5 space-y-0.5 rounded-xl bg-surface-2/40 py-1.5 px-2">
+                        {c.children.map((sub, subIdx) => (
+                          <li
+                            key={sub.id ?? `sub-${subIdx}-${sub.name}`}
+                            className="flex items-center justify-between gap-2 py-1 pl-4 pr-1 text-[11px]"
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <CornerDownRight className="size-3 shrink-0 text-text-faint" aria-hidden="true" />
+                              <span
+                                className="size-2 rounded-full shrink-0"
+                                style={{ background: sub.color }}
+                              />
+                              {sub.icon && <span className="shrink-0">{sub.icon}</span>}
+                              <span className="truncate text-text-muted">{sub.name}</span>
+                            </div>
+
+                            <div className="flex items-center gap-6 shrink-0 tabular-nums">
+                              <div className="text-right">
+                                <p className="font-medium text-white">{formatMoney(sub.currentAmount)}</p>
+                                <p className="text-[10px] text-text-dim">{sub.percentageOfTotal}%</p>
+                              </div>
+
+                              <div className="w-20 text-right">
+                                <MomCell item={sub} />
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </Card>

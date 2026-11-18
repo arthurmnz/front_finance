@@ -26,6 +26,12 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
 import {
+  buildGroupedCategoryFilterOptions,
+  matchesCategoryFilter,
+  resolveTransactionCategory,
+  synthesizeGeneralCategory,
+} from '@/lib/categories'
+import {
   useAction,
   useAllCategories,
   useGroup,
@@ -38,7 +44,7 @@ import {
   useGroupUsedCategories,
 } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
-import type { Category, CreditCardInvoice, GroupMember, GroupRole, Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
+import type { Category, CategoryLevel, CreditCardInvoice, GroupMember, GroupRole, Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
 import { accountTypeLabel, formatDate, formatMoney, fullName, initials, monthLabel, roleLabel, txTypeLabel } from '@/lib/format'
 import { normalizeCategoryColor } from '@/lib/palette'
 import {
@@ -112,6 +118,7 @@ export default function GroupDetail() {
   const [txFilters, setTxFilters] = useState<TxFilters>(EMPTY_TX_FILTERS)
   const [showTxFilters, setShowTxFilters] = useState(false)
   const [addingTx, setAddingTx] = useState(false)
+  const [categoryView, setCategoryView] = useState<CategoryLevel>('GENERAL')
   const [settleTarget, setSettleTarget] = useState<{
     creditor: UserSummary
     targetMonth: number
@@ -158,6 +165,15 @@ export default function GroupDetail() {
     allCategories.forEach((c) => map.set(c.id, c))
     groupCategories.forEach((c) => map.set(c.id, c))
     usedCategories.forEach((uc) => {
+      if (uc.parent && !map.has(uc.parent.id)) {
+        map.set(
+          uc.parent.id,
+          synthesizeGeneralCategory(uc.parent, {
+            userId: uc.ownerId,
+            groupId: uc.isPersonal ? null : (id ?? null),
+          }),
+        )
+      }
       if (!map.has(uc.id)) {
         map.set(uc.id, {
           id: uc.id,
@@ -167,7 +183,10 @@ export default function GroupDetail() {
           description: null,
           userId: uc.ownerId,
           groupId: uc.isPersonal ? null : (id ?? null),
-          type: 'EXPENSE',
+          type: uc.type ?? 'EXPENSE',
+          level: uc.level ?? (uc.parentId || uc.parent ? 'SPECIFIC' : 'GENERAL'),
+          parentId: uc.parentId ?? uc.parent?.id ?? null,
+          parent: uc.parent ?? null,
           createdAt: '',
           updatedAt: '',
         })
@@ -175,6 +194,18 @@ export default function GroupDetail() {
     })
     return [...map.values()]
   }, [allCategories, groupCategories, usedCategories, id])
+
+  const displayCatMap = useMemo(() => new Map(displayCategories.map((c) => [c.id, c])), [displayCategories])
+  const categoryFilterOptions = useMemo(
+    () =>
+      buildGroupedCategoryFilterOptions(displayCategories, {
+        includeAll: true,
+        allLabel: 'Todas as categorias',
+        includeNone: true,
+        noneLabel: 'Sem categoria',
+      }),
+    [displayCategories],
+  )
   const groupDebtsQuery = useGroupDebts(tab === 'settlements' || tab === 'overview' ? id : undefined)
   const groupDebts = groupDebtsQuery.data
   const requests = useGroupAccountRequests(id, isAdmin)
@@ -296,33 +327,71 @@ export default function GroupDetail() {
   }, [accounts.data, cards.data, ignored, allGroupTransactions, invStamp])
 
   const byCategory = useMemo(() => {
-    const catMap = new Map<string, { id?: string; name: string; value: number; color: string; isPrivateToOther: boolean }>()
+    const catMap = new Map<
+      string,
+      { id?: string; name: string; subLabel?: string; icon?: string | null; value: number; rawColor?: string | null; isPrivateToOther: boolean }
+    >()
 
     allGroupTransactions
       .filter((t) => t.type === 'EXPENSE')
       .forEach((t) => {
-        const cat = displayCategories.find((c) => c.id === t.categoryId)
-        const name = cat?.name ?? 'Sem categoria'
-        const isPersonal = cat ? ('isPersonal' in cat ? cat.isPersonal : Boolean(cat.userId)) : false
-        const ownerId = cat ? ('ownerId' in cat ? cat.ownerId : cat.userId) : null
-        const isPrivate = Boolean(isPersonal && ownerId !== user?.id)
-        const existing = catMap.get(name)
+        const resolved = resolveTransactionCategory(t, displayCatMap)
+        const isUncategorized = !resolved.general && !resolved.specific
+
+        let key: string
+        let name: string
+        let subLabel: string | undefined
+        let icon: string | null | undefined
+        let rawColor: string | null | undefined
+        let targetId: string | undefined
+
+        if (isUncategorized) {
+          key = 'none'
+          name = 'Sem categoria'
+        } else if (categoryView === 'GENERAL') {
+          const target = resolved.general ?? resolved.specific
+          targetId = target?.id
+          key = targetId ?? 'none'
+          name = target?.name ?? 'Sem categoria'
+          icon = target?.icon ?? resolved.icon
+          rawColor = target?.color ?? resolved.color
+        } else {
+          const target = resolved.specific ?? resolved.general
+          targetId = target?.id
+          key = targetId ?? 'none'
+          name = target?.name ?? resolved.shortLabel
+          subLabel = resolved.specific && resolved.general ? resolved.general.name : undefined
+          icon = resolved.icon
+          rawColor = resolved.color
+        }
+
+        const catForPrivacy = (targetId ? displayCatMap.get(targetId) : undefined) ?? (t.categoryId ? displayCatMap.get(t.categoryId) : undefined)
+        const isPrivate = Boolean(catForPrivacy?.userId && catForPrivacy.userId !== user?.id)
+
+        const existing = catMap.get(key)
         if (existing) {
           existing.value += t.amount
           if (isPrivate) existing.isPrivateToOther = true
         } else {
-          catMap.set(name, {
-            id: cat?.id,
+          catMap.set(key, {
+            id: targetId,
             name,
+            subLabel,
+            icon,
             value: t.amount,
-            color: normalizeCategoryColor(cat?.color),
+            rawColor,
             isPrivateToOther: isPrivate,
           })
         }
       })
 
-    return [...catMap.values()].sort((a, b) => b.value - a.value)
-  }, [allGroupTransactions, displayCategories, user?.id])
+    return [...catMap.values()]
+      .map((item, idx) => ({
+        ...item,
+        color: item.name === 'Sem categoria' && !item.rawColor ? '#8E8EA0' : normalizeCategoryColor(item.rawColor, idx),
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [allGroupTransactions, displayCatMap, categoryView, user?.id])
 
   const upcoming = useMemo(
     () =>
@@ -361,14 +430,13 @@ export default function GroupDetail() {
         (txFilters.hideCreditCards || txFilters.creditCardId === 'none'
           ? !t.creditCardId
           : !txFilters.creditCardId || t.creditCardId === txFilters.creditCardId) &&
-        (!txFilters.categoryId ||
-          (txFilters.categoryId === 'none' ? !t.categoryId : t.categoryId === txFilters.categoryId)) &&
+        matchesCategoryFilter(t.categoryId, txFilters.categoryId, displayCategories, t.category) &&
         (!txFilters.responsibleId || t.responsibleId === txFilters.responsibleId) &&
         (!txFilters.type || t.type === txFilters.type) &&
         (!txFilters.status || t.status === txFilters.status) &&
         (!txFilters.recurring || !!t.recurrenceGroupId),
     )
-  }, [allGroupTransactions, txFilters])
+  }, [allGroupTransactions, txFilters, displayCategories])
 
   const txIncome = filteredTransactions.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
   const txExpense = filteredTransactions.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
@@ -640,7 +708,31 @@ export default function GroupDetail() {
                 </Card>
 
                 <Card className="p-4">
-                  <h2 className="mb-3 font-semibold text-white">Despesas por categoria</h2>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-semibold text-white">Despesas por categoria</h2>
+                    <div className="inline-flex rounded-lg bg-surface-2 p-0.5 border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setCategoryView('GENERAL')}
+                        className={clsx(
+                          'rounded-md px-2.5 py-1 text-[11px] font-medium transition cursor-pointer select-none',
+                          categoryView === 'GENERAL' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                        )}
+                      >
+                        Geral
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryView('SPECIFIC')}
+                        className={clsx(
+                          'rounded-md px-2.5 py-1 text-[11px] font-medium transition cursor-pointer select-none',
+                          categoryView === 'SPECIFIC' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                        )}
+                      >
+                        Específica
+                      </button>
+                    </div>
+                  </div>
                   {txLoading ? (
                     <Spinner />
                   ) : !byCategory.length ? (
@@ -672,7 +764,11 @@ export default function GroupDetail() {
                         {byCategory.slice(0, 5).map((c, i) => (
                           <li key={i} className="flex items-center gap-2 text-xs text-text-muted">
                             <span className="size-2 rounded-full shrink-0" style={{ background: c.color }} />
-                            <span className="truncate">{c.name}</span>
+                            <span className="truncate">
+                              {c.icon ? `${c.icon} ` : ''}
+                              {c.name}
+                              {c.subLabel ? <span className="text-text-dim"> · {c.subLabel}</span> : null}
+                            </span>
                             {c.isPrivateToOther && (
                               <span className="rounded bg-surface-2 px-1 text-[10px] text-text-dim">
                                 privada
@@ -888,15 +984,11 @@ export default function GroupDetail() {
                       </Select>
                     </Field>
                     <Field label="Categoria">
-                      <Select value={txFilters.categoryId} onChange={(e) => setTxF('categoryId', e.target.value)}>
-                        <option value="">Todas as categorias</option>
-                        <option value="none">Sem categoria</option>
-                        {displayCategories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.icon ? `${c.icon} ` : ''}{c.name}
-                          </option>
-                        ))}
-                      </Select>
+                      <Select
+                        value={txFilters.categoryId}
+                        onChange={(e) => setTxF('categoryId', e.target.value)}
+                        options={categoryFilterOptions}
+                      />
                     </Field>
                     <Field label="Responsável">
                       <Select value={txFilters.responsibleId} onChange={(e) => setTxF('responsibleId', e.target.value)}>

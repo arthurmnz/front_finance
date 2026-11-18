@@ -3,6 +3,7 @@ import { useQueries } from '@tanstack/react-query'
 import { Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
+import { buildGroupedCategoryFilterOptions, matchesCategoryFilter } from '@/lib/categories'
 import { useAuth } from '@/lib/auth'
 import { useAccessibleAccounts, useAllCategories, useCreditCards, useResponsibleTransactions } from '@/lib/hooks'
 import type { Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
@@ -52,6 +53,16 @@ export default function Transactions() {
   const accounts = useAccessibleAccounts()
   const creditCards = useCreditCards().data ?? []
   const categories = useAllCategories().data ?? []
+  const categoryFilterOptions = useMemo(
+    () =>
+      buildGroupedCategoryFilterOptions(categories, {
+        includeAll: true,
+        allLabel: 'Todas as categorias',
+        includeNone: true,
+        noneLabel: 'Sem categoria',
+      }),
+    [categories],
+  )
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF((p) => ({ ...p, [k]: v }))
 
   const queries = useQueries({
@@ -110,13 +121,13 @@ export default function Transactions() {
         (f.hideCreditCards || f.creditCardId === 'none'
           ? !t.creditCardId
           : !f.creditCardId || t.creditCardId === f.creditCardId) &&
-        (!f.categoryId || (f.categoryId === 'none' ? !t.categoryId : t.categoryId === f.categoryId)) &&
+        matchesCategoryFilter(t.categoryId, f.categoryId, categories, t.category) &&
         (!f.responsibleId || t.responsibleId === f.responsibleId) &&
         (!f.type || t.type === f.type) &&
         (!f.status || t.status === f.status) &&
         (!f.recurring || !!t.recurrenceGroupId),
     )
-  }, [all, f])
+  }, [all, f, categories])
 
   const income = filtered.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
   const expense = filtered.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
@@ -228,15 +239,11 @@ export default function Transactions() {
             </Field>
 
             <Field label="Categoria">
-              <Select value={f.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
-                <option value="">Todas as categorias</option>
-                <option value="none">Sem categoria</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+              <Select
+                value={f.categoryId}
+                onChange={(e) => set('categoryId', e.target.value)}
+                options={categoryFilterOptions}
+              />
             </Field>
 
             <Field label="Responsável">

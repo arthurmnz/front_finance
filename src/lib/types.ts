@@ -1,5 +1,6 @@
 export type AccountType = 'CHECKING' | 'WALLET' | 'SAVINGS' | 'INVESTMENTS'
 export type CategoryType = 'EXPENSE' | 'INCOME' | 'BOTH'
+export type CategoryLevel = 'GENERAL' | 'SPECIFIC'
 export type TransactionType = 'EXPENSE' | 'INCOME' | 'TRANSFER'
 export type TransactionStatus = 'PENDING' | 'COMPLETED'
 export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
@@ -48,15 +49,39 @@ export interface CreditCardGroupRequest {
   status: string; createdAt: string; updatedAt: string
 }
 
+export interface CategoryParentSummary {
+  id: string
+  name: string
+  color?: string | null
+  icon?: string | null
+  type: CategoryType
+}
+
+export interface CategorySummary {
+  id: string
+  name: string
+  color?: string | null
+  icon?: string | null
+  type: CategoryType
+  level?: CategoryLevel
+  parentId?: string | null
+  parent?: CategoryParentSummary | null
+}
+
 export interface Category {
   id: string; name: string; description: string | null; userId: string | null; groupId: string | null
-  type: CategoryType; color: string | null; icon: string | null; createdAt: string; updatedAt: string
+  type: CategoryType; level: CategoryLevel; parentId?: string | null; parent?: CategoryParentSummary | null
+  isDefault?: boolean; color: string | null; icon: string | null; createdAt: string; updatedAt: string
 }
-export interface CategoryInput { name: string; description?: string | null; type: CategoryType; color?: string | null; icon?: string | null; groupId?: string | null }
+export interface CategoryInput {
+  name: string; description?: string | null; type: CategoryType; level?: CategoryLevel; parentId?: string | null
+  color?: string | null; icon?: string | null; groupId?: string | null
+}
 
 export interface Transaction {
   id: string; title: string; amount: number; date: string; responsibleId: string; responsible?: UserSummary | null
   accountId: string; type: TransactionType; destinationAccountId: string | null; categoryId: string | null
+  category?: CategorySummary | null
   status: TransactionStatus; recurrenceGroupId: string | null; recurrenceFrequency: RecurrenceFrequency | null
   recurrenceInterval: number | null; isInfinite: boolean
   creditCardId?: string | null; creditCardInvoiceId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
@@ -96,6 +121,10 @@ export interface GroupUsedCategory {
   name: string
   color: string | null
   icon: string | null
+  type?: CategoryType
+  level?: CategoryLevel
+  parentId?: string | null
+  parent?: CategoryParentSummary | null
   isPersonal: boolean
   ownerId: string | null
 }
