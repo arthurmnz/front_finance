@@ -94,7 +94,13 @@ export function useAccessibleAccounts() {
     ;(own.data ?? []).forEach((a) => map.set(a.id, a))
     groupAccQueries.forEach((q) =>
       (q.data ?? []).forEach((ga) => {
-        map.set(ga.id, { ...ga, ownerId: ga.owner.id, owner: ga.owner })
+        map.set(ga.id, {
+          ...ga,
+          ownerId: ga.owner?.id ?? null,
+          owner: ga.owner ?? null,
+          isJoint: Boolean(ga.isJoint),
+          allowedMembers: ga.allowedMembers,
+        })
       }),
     )
     return [...map.values()]
@@ -116,6 +122,28 @@ export const useGroups = () => useQuery({ queryKey: ['groups'], queryFn: () => g
 export const useGroup = (id: string | undefined) => useQuery({ queryKey: ['groups', id], enabled: !!id, queryFn: () => get<T.Group>(`/groups/${id}`) })
 export const useGroupInvitations = () => useQuery({ queryKey: ['group-invitations'], queryFn: () => get<T.GroupInvitation[]>('/groups/invitations/pending') })
 export const useGroupAccounts = (id: string | undefined) => useQuery({ queryKey: ['groups', id, 'accounts'], enabled: !!id, queryFn: () => get<T.GroupAccount[]>(`/groups/${id}/accounts`) })
+export const useGroupJointAccounts = (groupId?: string, enabled = true) =>
+  useQuery({
+    queryKey: ['groups', groupId, 'joint-accounts'],
+    enabled: !!groupId && enabled,
+    queryFn: () => get<T.GroupAccount[]>(`/groups/${groupId}/joint-accounts`),
+  })
+export const useJointAccountSummary = (
+  groupId?: string,
+  accountId?: string,
+  month?: number,
+  year?: number,
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['groups', groupId, 'joint-accounts', accountId, 'summary', month, year],
+    enabled: !!groupId && !!accountId && enabled,
+    queryFn: () =>
+      get<T.JointAccountSummary>(`/groups/${groupId}/joint-accounts/${accountId}/summary`, {
+        month,
+        year,
+      }),
+  })
 export const useGroupAccountRequests = (id: string | undefined, enabled = true) =>
   useQuery({ queryKey: ['groups', id, 'account-requests'], enabled: !!id && enabled, queryFn: () => get<T.AccountGroupRequest[]>(`/groups/${id}/account-requests`) })
 export const useGroupCreditCards = (id: string | undefined) => useQuery({ queryKey: ['groups', id, 'credit-cards'], enabled: !!id, queryFn: () => get<T.CreditCard[]>(`/groups/${id}/credit-cards`) })

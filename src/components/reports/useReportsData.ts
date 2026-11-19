@@ -20,6 +20,7 @@ import {
   resolveTransactionCategory,
   synthesizeGeneralCategory,
 } from '@/lib/categories'
+import { normalizeGroupAccount } from '@/lib/jointAccounts'
 import type {
   Account,
   Category,
@@ -2214,14 +2215,9 @@ export function useGroupReportsData(
   const group = groupQuery.data
   const members = useMemo(() => group?.members ?? [], [group?.members])
 
-  // Normaliza GroupAccount para Account
+  // Normaliza GroupAccount para Account (tratando contas conjuntas com owner nulo)
   const allGroupAccounts: Account[] = useMemo(
-    () =>
-      (groupAccountsQuery.data ?? []).map((ga) => ({
-        ...ga,
-        ownerId: ga.owner.id,
-        owner: ga.owner,
-      })),
+    () => (groupAccountsQuery.data ?? []).map(normalizeGroupAccount),
     [groupAccountsQuery.data],
   )
 

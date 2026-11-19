@@ -11,13 +11,49 @@ export interface User { id: string; firstName: string; lastName: string; email: 
 export interface AuthResponse { accessToken: string; tokenType: string; expiresIn: number; user: User }
 
 export interface Account {
-  id: string; ownerId: string; owner?: UserSummary; name: string; startBalance: number; balance: number
-  type: AccountType; tax: number | null; groupId: string | null; includeInTotal: boolean; createdAt: string; updatedAt: string
+  id: string; ownerId: string | null; owner?: UserSummary | null; name: string; startBalance: number; balance: number
+  type: AccountType; tax: number | null; groupId: string | null; includeInTotal: boolean
+  isJoint?: boolean; allowedMembers?: UserSummary[]; createdAt: string; updatedAt: string
 }
 export interface UserSummary { id: string; firstName: string; lastName: string; email: string }
-export interface GroupAccount extends Omit<Account, 'ownerId'> { owner: UserSummary }
+export interface GroupAccount extends Omit<Account, 'ownerId'> {
+  owner: UserSummary | null
+  isJoint: boolean
+  allowedMembers?: UserSummary[]
+}
 export interface TotalBalance { total: number; monthlyIncome: number; monthlyExpense: number }
 export interface AccountInput { name: string; startBalance: number; type: AccountType; tax?: number | null; includeInTotal?: boolean }
+export interface JointAccountInput {
+  name: string
+  startBalance: number
+  balance?: number | null
+  type: AccountType
+  tax?: number | null
+  includeInTotal?: boolean
+  memberIds: string[]
+}
+export interface JointAccountMemberShare {
+  user: UserSummary
+  shareAmount: number
+  contributedAmount: number
+  launchedExpensesAmount: number
+  netBalance: number
+}
+export interface JointAccountSummary {
+  accountId: string
+  accountName: string
+  groupId: string
+  currentBalance: number
+  month: number
+  year: number
+  totalExpenses: number
+  completedExpenses: number
+  pendingExpenses: number
+  totalIncome: number
+  totalContributions: number
+  memberCount: number
+  memberShares: JointAccountMemberShare[]
+}
 export interface AccountGroupRequest {
   id: string; account: { id: string; name: string }; requester: UserSummary
   status: string; createdAt: string; updatedAt: string

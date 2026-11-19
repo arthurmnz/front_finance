@@ -169,35 +169,42 @@ export default function CategoryDetail() {
   const displayCategories = useMemo(() => [...catMap.values()], [catMap])
 
   return (
-    <>
+    <div className="min-w-0">
       <PageHeader
         back={
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-text-dim">
-            <Link to="/categorias" className="inline-flex items-center gap-1 hover:text-white transition">
-              <ArrowLeft className="size-3" /> Categorias
+          <nav
+            aria-label="Navegação estrutural"
+            className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-text-dim"
+          >
+            <Link
+              to="/categorias"
+              className="-ml-1 inline-flex min-h-8 items-center gap-1 rounded-lg px-1 py-1 hover:bg-surface-2 hover:text-white transition"
+            >
+              <ArrowLeft className="size-3.5 shrink-0" />
+              <span>Categorias</span>
             </Link>
             {parentCat && (
               <>
-                <ChevronRight className="size-3 text-text-faint" />
+                <ChevronRight className="size-3 shrink-0 text-text-faint" aria-hidden="true" />
                 <Link
                   to={`/categorias/${parentCat.id}`}
-                  className="inline-flex items-center gap-1 text-text-muted hover:text-lime transition"
+                  className="inline-flex min-h-8 max-w-full min-w-0 items-center gap-1 rounded-lg px-1 py-1 text-text-muted hover:bg-surface-2 hover:text-lime transition"
                 >
-                  {parentCat.icon && <span>{parentCat.icon}</span>}
-                  <span>{parentCat.name}</span>
+                  {parentCat.icon && <span className="shrink-0">{parentCat.icon}</span>}
+                  <span className="truncate">{parentCat.name}</span>
                 </Link>
               </>
             )}
             {cat && (
               <>
-                <ChevronRight className="size-3 text-text-faint" />
-                <span className="text-white font-medium truncate max-w-48">
+                <ChevronRight className="size-3 shrink-0 text-text-faint" aria-hidden="true" />
+                <span className="min-w-0 max-w-full truncate font-medium text-white sm:max-w-xs">
                   {cat.icon ? `${cat.icon} ` : ''}
                   {cat.name}
                 </span>
               </>
             )}
-          </div>
+          </nav>
         }
         title={cat ? `${cat.icon ? `${cat.icon} ` : ''}${cat.name}` : 'Categoria'}
         subtitle={description}
@@ -217,25 +224,25 @@ export default function CategoryDetail() {
       />
 
       {!isGeneral && parentCat && (
-        <div className="mb-4 flex items-center gap-2 text-xs text-text-muted">
-          <span>Pertence à categoria geral:</span>
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+          <span className="shrink-0">Pertence à categoria geral:</span>
           <Link
             to={`/categorias/${parentCat.id}`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-1 px-2.5 py-1 font-medium text-white hover:border-violet/50 hover:text-lime transition"
+            className="inline-flex min-h-9 max-w-full min-w-0 items-center gap-1.5 rounded-xl border border-border bg-surface-1 px-3 py-1.5 font-medium text-white hover:border-violet/50 hover:text-lime transition"
           >
-            {parentCat.icon && <span>{parentCat.icon}</span>}
-            <span>{parentCat.name}</span>
+            {parentCat.icon && <span className="shrink-0">{parentCat.icon}</span>}
+            <span className="truncate">{parentCat.name}</span>
           </Link>
         </div>
       )}
 
       <Card className="mb-4 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+        <div className="flex items-start justify-between gap-3 sm:items-center">
+          <div className="min-w-0 flex-1">
             <p className="text-xs text-text-dim">
               {isGeneral ? 'Total consolidado no período' : 'Total no período'}
             </p>
-            <p className="mt-0.5 text-2xl font-bold tracking-tight text-white tabular-nums">
+            <p className="mt-0.5 break-words text-2xl font-bold tracking-tight text-white tabular-nums sm:text-3xl">
               {formatMoney(total)}
             </p>
             <p className="mt-1 text-xs text-text-dim tabular-nums">
@@ -256,7 +263,7 @@ export default function CategoryDetail() {
         </div>
       </Card>
 
-      <div className="mb-4">
+      <div className="mb-4 flex justify-center sm:justify-start">
         <MonthPicker value={period} onChange={setPeriod} />
       </div>
 
@@ -264,8 +271,8 @@ export default function CategoryDetail() {
         <div className="mb-5 space-y-2.5">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-dim">
-              <FolderTree className="size-3.5 text-violet" />
-              Distribuição por categoria específica
+              <FolderTree className="size-3.5 shrink-0 text-violet" />
+              <span>Distribuição por categoria específica</span>
             </h2>
           </div>
 
@@ -274,19 +281,19 @@ export default function CategoryDetail() {
               <Empty title="Nenhuma categoria específica vinculada a esta categoria geral." />
             </Card>
           ) : (
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {subcategoryBreakdown.map((sub) => {
                 const content = (
                   <>
                     <div className="flex items-center justify-between gap-2.5">
-                      <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
                         <div
                           className="grid size-8 shrink-0 place-items-center rounded-xl text-sm"
                           style={{ background: `${sub.color}25` }}
                         >
                           {sub.icon || <span className="size-2.5 rounded-full" style={{ background: sub.color }} />}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p
                             className={
                               sub.isDirectGeneral
@@ -348,6 +355,6 @@ export default function CategoryDetail() {
       <QueryState isLoading={tx.isLoading} error={tx.error}>
         <TransactionList items={txList} categories={displayCategories} />
       </QueryState>
-    </>
+    </div>
   )
 }

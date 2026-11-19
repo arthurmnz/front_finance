@@ -7,7 +7,7 @@ import { matchesCategoryFilters } from '@/lib/categories'
 import { useAuth } from '@/lib/auth'
 import { useAccessibleAccounts, useAllCategories, useCreditCards, useResponsibleTransactions } from '@/lib/hooks'
 import type { Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
-import { formatMoney, fullName, txTypeLabel } from '@/lib/format'
+import { formatAccountLabel, formatMoney, formatShortAccountLabel, fullName, txTypeLabel } from '@/lib/format'
 import { Button, Card, Empty, Field, Input, PageHeader, Select, Spinner } from '@/components/ui'
 import CategoryFilterPair from '@/components/CategoryFilterPair'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
@@ -141,7 +141,10 @@ export default function Transactions() {
     f.status,
     f.recurring,
   ].filter(Boolean).length
-  const accountNames = useMemo(() => new Map((accounts.data ?? []).map((a) => [a.id, a.name])), [accounts.data])
+  const accountNames = useMemo(
+    () => new Map((accounts.data ?? []).map((a) => [a.id, formatShortAccountLabel(a)])),
+    [accounts.data],
+  )
   const cardNames = useMemo(() => new Map(creditCards.map((c) => [c.id, c.name])), [creditCards])
 
   return (
@@ -218,8 +221,7 @@ export default function Transactions() {
                 <option value="">Todas as contas</option>
                 {accounts.data?.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
-                    {a.owner ? ` (${fullName(a.owner)})` : ''}
+                    {formatAccountLabel(a)}
                   </option>
                 ))}
               </Select>

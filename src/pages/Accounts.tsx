@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Landmark, Link2, Pencil, PiggyBank, Plus, Trash2, TrendingUp, Unlink, Wallet } from 'lucide-react'
+import { ChevronRight, Landmark, Link2, Pencil, PiggyBank, Plus, Trash2, TrendingUp, Unlink, Users, Wallet } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
-import { useAccounts, useAction, useGroups } from '@/lib/hooks'
+import { useAccessibleAccounts, useAccounts, useAction, useGroups } from '@/lib/hooks'
 import type { Account } from '@/lib/types'
-import { accountTypeLabel, formatMoney } from '@/lib/format'
+import { accountTypeLabel, formatMoney, fullName, initials } from '@/lib/format'
 import { Badge, Button, Card, CardGridSkeleton, ConfirmDialog, Empty, Modal, PageHeader, QueryState, Select } from '@/components/ui'
 import AccountFormModal from '@/components/AccountFormModal'
 import { toast } from 'sonner'
@@ -14,11 +14,17 @@ const typeIcon = { CHECKING: Landmark, WALLET: Wallet, SAVINGS: PiggyBank, INVES
 
 export default function Accounts() {
   const q = useAccounts()
+  const accessibleAccounts = useAccessibleAccounts()
   const groups = useGroups().data ?? []
   const [form, setForm] = useState<{ open: boolean; account?: Account }>({ open: false })
   const [linking, setLinking] = useState<Account>()
   const [groupId, setGroupId] = useState('')
   const [deleting, setDeleting] = useState<Account>()
+
+  const jointAccounts = useMemo(
+    () => (accessibleAccounts.data ?? []).filter((a) => a.isJoint),
+    [accessibleAccounts.data],
+  )
 
   const link = useAction(
     ({ id, gid }: { id: string; gid: string }) => api.post(`/accounts/${id}/group/${gid}`),
@@ -126,6 +132,76 @@ export default function Accounts() {
           </div>
         )}
       </QueryState>
+
+      {jointAccounts.length > 0 && (
+        <section className="mt-8 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Users className="size-4 text-violet-hover" />
+              <h2 className="text-base font-semibold text-white">Contas Conjuntas de Grupos</h2>
+            </div>
+            <Badge tone="primary">{jointAccounts.length}</Badge>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {jointAccounts.map((a) => {
+              const Icon = typeIcon[a.type]
+              const allowed = a.allowedMembers ?? []
+              return (
+                <Card key={a.id} className="p-4 border-violet/30 hover:border-violet/50 transition">
+                  <Link to={`/contas/${a.id}`} className="flex items-center gap-3 group">
+                    <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-violet/15 border border-violet/30 text-violet-hover">
+                      <Icon className="size-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="truncate font-semibold text-white group-hover:text-lime transition">
+                          {a.name}
+                        </p>
+                      </div>
+                      <p className="text-xs text-text-dim">{accountTypeLabel[a.type]}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <p
+                        className={clsx(
+                          'text-lg font-bold tabular-nums',
+                          a.balance < 0 ? 'text-expense' : 'text-white',
+                        )}
+                      >
+                        {formatMoney(a.balance)}
+                      </p>
+                      <ChevronRight className="size-4 text-text-dim group-hover:text-lime transition" />
+                    </div>
+                  </Link>
+
+                  <div className="mt-3 space-y-2 border-t border-border pt-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone="primary">Conjunta</Badge>
+                      {a.groupId && <Badge tone="neutral">{groupName(a.groupId)}</Badge>}
+                      {a.includeInTotal === false && <Badge tone="neutral">Fora do total</Badge>}
+                    </div>
+                    {allowed.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-text-dim">
+                        <span className="shrink-0">Acesso:</span>
+                        {allowed.map((m) => (
+                          <span
+                            key={m.id}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-xs text-text-muted"
+                          >
+                            <span className="grid size-4 place-items-center rounded-full bg-violet/20 text-[9px] font-bold text-violet-hover">
+                              {initials(m)}
+                            </span>
+                            {fullName(m)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       <AccountFormModal open={form.open} account={form.account} onClose={() => setForm({ open: false })} />
       <ConfirmDialog

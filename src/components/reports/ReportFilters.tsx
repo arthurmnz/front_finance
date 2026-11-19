@@ -1,7 +1,7 @@
 import { SlidersHorizontal, X, Settings2 } from 'lucide-react'
 import clsx from 'clsx'
 import type { Account, Category, CreditCard, GroupMember } from '@/lib/types'
-import { formatMoney } from '@/lib/format'
+import { formatMoney, formatShortAccountLabel } from '@/lib/format'
 import { Button, Card, Field, Select } from '@/components/ui'
 import CategoryFilterPair from '@/components/CategoryFilterPair'
 import { MonthPicker } from '@/components/MonthPicker'
@@ -165,7 +165,7 @@ export default function ReportFilters({
                 <option value="">Todas as contas</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {formatShortAccountLabel(a)}
                   </option>
                 ))}
               </Select>

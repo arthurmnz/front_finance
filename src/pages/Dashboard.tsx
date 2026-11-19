@@ -6,6 +6,7 @@ import { ArrowDownCircle, ArrowUpCircle, ChevronRight, Eye, EyeOff, Plus, Users 
 import { api } from '@/lib/api'
 import { addMissingTransactionCategories, aggregateExpensesByCategory } from '@/lib/categories'
 import { useAccounts, useAction, useAllCategories, useCreditCards, useResponsibleTransactions, useTotalBalance, useUserDebtsSummary } from '@/lib/hooks'
+import { filterDashboardResponsibleExpenses } from '@/lib/jointAccounts'
 import { useAuth } from '@/lib/auth'
 import type { Account, Category, CategoryLevel, CreditCardInvoice, Transaction } from '@/lib/types'
 import { formatDate, formatMoney } from '@/lib/format'
@@ -121,16 +122,19 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts.data, balance.data, allTx, invStamp])
 
+  const ownAccountIds = useMemo(
+    () => new Set((accounts.data ?? []).map((a) => a.id)),
+    [accounts.data],
+  )
+
   const combinedExpenses = useMemo(() => {
     const map = new Map<string, Transaction>()
     allTx.filter((t) => t.type === 'EXPENSE').forEach((t) => map.set(t.id, t))
-    ;(responsibleTxs.data ?? [])
-      .filter((t) => t.type === 'EXPENSE' && t.responsibleId === user?.id)
-      .forEach((t) => {
-        if (!map.has(t.id)) map.set(t.id, t)
-      })
+    filterDashboardResponsibleExpenses(responsibleTxs.data ?? [], user?.id, ownAccountIds).forEach((t) => {
+      if (!map.has(t.id)) map.set(t.id, t)
+    })
     return [...map.values()]
-  }, [allTx, responsibleTxs.data, user?.id])
+  }, [allTx, responsibleTxs.data, user?.id, ownAccountIds])
 
   const catMap = useMemo(() => {
     const map = new Map<string, Category>((cats ?? []).map((c) => [c.id, c]))

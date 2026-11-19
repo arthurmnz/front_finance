@@ -14,12 +14,14 @@ import {
   Eye,
   EyeOff,
   LogOut,
+  Pencil,
   Plus,
   Receipt,
   Search,
   SlidersHorizontal,
   Trash2,
   UserPlus,
+  Users,
   X,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -40,11 +42,13 @@ import {
   useGroupCreditCardRequests,
   useGroupCreditCards,
   useGroupDebts,
+  useGroupJointAccounts,
   useGroupUsedCategories,
 } from '@/lib/hooks'
+import { hasJointAccountAccess, mergeGroupJointAccounts } from '@/lib/jointAccounts'
 import { useAuth } from '@/lib/auth'
-import type { Category, CategoryLevel, CreditCardInvoice, GroupMember, GroupRole, Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
-import { accountTypeLabel, formatDate, formatMoney, fullName, initials, monthLabel, roleLabel, txTypeLabel } from '@/lib/format'
+import type { Category, CategoryLevel, CreditCardInvoice, GroupAccount, GroupMember, GroupRole, Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
+import { accountTypeLabel, formatAccountLabel, formatDate, formatMoney, fullName, initials, monthLabel, roleLabel, txTypeLabel } from '@/lib/format'
 import {
   Badge,
   Button,
@@ -69,6 +73,7 @@ import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
 import SettleDebtModal from '@/components/SettleDebtModal'
 import ForgiveDebtModal from '@/components/ForgiveDebtModal'
+import JointAccountFormModal from '@/components/JointAccountFormModal'
 import GroupReportsView from '@/components/reports/GroupReportsView'
 
 type Tab = 'overview' | 'transactions' | 'reports' | 'settlements' | 'members' | 'accounts' | 'cards' | 'categories' | 'requests' | 'settings'
@@ -154,6 +159,7 @@ export default function GroupDetail() {
   const isAdmin = isOwner || g?.myRole === 'ADMIN'
   const needsEcosystemData = tab === 'overview' || tab === 'transactions' || tab === 'settlements'
   const accounts = useGroupAccounts(tab === 'accounts' || needsEcosystemData ? id : undefined)
+  const jointAccountsQuery = useGroupJointAccounts(id, isAdmin)
   const cards = useGroupCreditCards(tab === 'cards' || needsEcosystemData ? id : undefined)
   const categories = useGroupCategories(tab === 'categories' || needsEcosystemData ? id : undefined)
   const groupCategories = categories.data ?? []
@@ -269,7 +275,9 @@ export default function GroupDetail() {
   const displayCatMap = useMemo(() => new Map(displayCategories.map((c) => [c.id, c])), [displayCategories])
 
   const groupSummary = useMemo(() => {
-    const activeAccounts = (accounts.data ?? []).filter((a) => !ignored.includes(a.id))
+    const activeAccounts = (accounts.data ?? []).filter(
+      (a) => !ignored.includes(a.id) && !(a.isJoint && a.includeInTotal === false),
+    )
     const activeIds = new Set(activeAccounts.map((a) => a.id))
     const currentBalance = activeAccounts.reduce((s, a) => s + a.balance, 0)
 
@@ -300,6 +308,8 @@ export default function GroupDetail() {
       const card = cardList[idx]
       if (!inv || !card) return
       if (ignored.includes(card.accountId)) return
+      const cardAccount = (accounts.data ?? []).find((a) => a.id === card.accountId)
+      if (cardAccount?.isJoint && cardAccount.includeInTotal === false) return
       const groupInvoiceTotal = (inv.transactions ?? [])
         .reduce((s, t) => s + t.amount, 0)
       unpaidCardInvoices += Math.min(Math.max(0, inv.remainingAmount ?? 0), groupInvoiceTotal)
@@ -398,7 +408,23 @@ export default function GroupDetail() {
   ].filter(Boolean).length
 
   const accountNames = useMemo(
-    () => new Map((accounts.data ?? []).map((a) => [a.id, `${a.name} (${fullName(a.owner)})`])),
+    () => new Map((accounts.data ?? []).map((a) => [a.id, formatAccountLabel(a)])),
+    [accounts.data],
+  )
+  const accessibleAccountIds = useMemo(
+    () => new Set((accounts.data ?? []).map((a) => a.id)),
+    [accounts.data],
+  )
+  const jointAccounts = useMemo(
+    () => mergeGroupJointAccounts(accounts.data ?? [], jointAccountsQuery.data ?? [], isAdmin),
+    [accounts.data, jointAccountsQuery.data, isAdmin],
+  )
+  const jointAccountIds = useMemo(
+    () => new Set((accounts.data ?? []).filter((a) => a.isJoint).map((a) => a.id)),
+    [accounts.data],
+  )
+  const individualAccounts = useMemo(
+    () => (accounts.data ?? []).filter((a) => !a.isJoint),
     [accounts.data],
   )
   const cardNames = useMemo(() => new Map((cards.data ?? []).map((c) => [c.id, c.name])), [cards.data])
@@ -409,6 +435,8 @@ export default function GroupDetail() {
   const [confirm, setConfirm] = useState<'leave' | 'delete'>()
   const [renameTo, setRenameTo] = useState<string>()
   const [transferTo, setTransferTo] = useState('')
+  const [jointModal, setJointModal] = useState<{ open: boolean; account?: GroupAccount }>({ open: false })
+  const [deletingJoint, setDeletingJoint] = useState<GroupAccount>()
 
   const inv = [['groups'], ['groups', id]]
   const invite = useAction((e: string) => api.post(`/groups/${id}/invitations`, { inviteeEmail: e }), {
@@ -442,6 +470,17 @@ export default function GroupDetail() {
     invalidate: [['groups']],
     success: 'Grupo excluído',
     onSuccess: () => nav('/grupos'),
+  })
+  const deleteJoint = useAction((accountId: string) => api.delete(`/groups/${id}/joint-accounts/${accountId}`), {
+    invalidate: [
+      ['groups', id, 'accounts'],
+      ['groups', id, 'joint-accounts'],
+      ['accounts'],
+      ['transactions'],
+      ['groups'],
+    ],
+    success: 'Conta conjunta excluída',
+    onSuccess: () => setDeletingJoint(undefined),
   })
 
   const decideAccount = (verb: 'accept' | 'reject') =>
@@ -634,8 +673,24 @@ export default function GroupDetail() {
                             className={`flex flex-1 items-center justify-between hover:text-lime transition ${ignored.includes(a.id) ? 'opacity-40' : ''}`}
                           >
                             <div className="min-w-0">
-                              <span className="block truncate text-sm text-white">{a.name}</span>
-                              <span className="block truncate text-xs text-text-dim">{fullName(a.owner)}</span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="truncate text-sm text-white">{a.name}</span>
+                                {a.isJoint && (
+                                  <Badge tone="primary" className="shrink-0 !px-2 !py-0">
+                                    Conjunta
+                                  </Badge>
+                                )}
+                                {a.isJoint && a.includeInTotal === false && (
+                                  <Badge tone="default" className="shrink-0 !px-2 !py-0">
+                                    Fora do total
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="block truncate text-xs text-text-dim">
+                                {a.isJoint
+                                  ? `${accountTypeLabel[a.type]} · Conta conjunta`
+                                  : fullName(a.owner)}
+                              </span>
                             </div>
                             <span
                               className={clsx(
@@ -844,7 +899,7 @@ export default function GroupDetail() {
                         <option value="">Todas as contas</option>
                         {accounts.data?.map((a) => (
                           <option key={a.id} value={a.id}>
-                            {a.name} ({fullName(a.owner)})
+                            {formatAccountLabel(a)}
                           </option>
                         ))}
                       </Select>
@@ -930,6 +985,7 @@ export default function GroupDetail() {
                   accountNames={accountNames}
                   cardNames={cardNames}
                   accountId={txFilters.accountId || undefined}
+                  jointAccountIds={jointAccountIds}
                 />
               )}
             </div>
@@ -1234,29 +1290,204 @@ export default function GroupDetail() {
           )}
 
           {tab === 'accounts' && (
-            <QueryState isLoading={accounts.isLoading} error={accounts.error}>
-              {!accounts.data?.length ? (
-                <Empty title="Nenhuma conta vinculada. Vincule pela tela de Contas." />
-              ) : (
-                <Card className="divide-y divide-border">
-                  {accounts.data.map((a) => (
-                    <Link
-                      key={a.id}
-                      to={`/contas/${a.id}`}
-                      className="flex items-center justify-between gap-3 p-3.5 hover:bg-surface-2/50 transition"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{a.name}</p>
-                        <p className="truncate text-xs text-text-dim">
-                          {accountTypeLabel[a.type]} · {fullName(a.owner)}
-                        </p>
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-semibold text-white">Contas do grupo</h2>
+                  <p className="text-xs text-text-dim">
+                    Contas conjuntas pertencem ao grupo; contas individuais pertencem a cada integrante.
+                  </p>
+                </div>
+                {isAdmin && (
+                  <Button size="sm" onClick={() => setJointModal({ open: true })}>
+                    <Plus className="size-4" /> Nova conta conjunta
+                  </Button>
+                )}
+              </div>
+
+              <QueryState
+                isLoading={accounts.isLoading || (isAdmin && jointAccountsQuery.isLoading)}
+                error={accounts.error || (isAdmin ? jointAccountsQuery.error : undefined)}
+              >
+                {!jointAccounts.length && !individualAccounts.length ? (
+                  <Empty title="Nenhuma conta vinculada ao grupo." icon={<Users className="size-10" />}>
+                    <p className="mb-3">
+                      {isAdmin
+                        ? 'Crie uma conta conjunta para despesas compartilhadas ou aguarde membros vincularem contas individuais.'
+                        : 'Vincule uma conta pela tela de Contas ou peça a um administrador para criar uma conta conjunta.'}
+                    </p>
+                    {isAdmin && (
+                      <Button size="sm" onClick={() => setJointModal({ open: true })}>
+                        <Plus className="size-4" /> Nova conta conjunta
+                      </Button>
+                    )}
+                  </Empty>
+                ) : (
+                  <div className="space-y-5">
+                    {jointAccounts.length > 0 && (
+                      <section className="space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                            <Users className="size-4 text-violet-hover" /> Contas Conjuntas do Grupo
+                          </h3>
+                          <Badge tone="primary">{jointAccounts.length}</Badge>
+                        </div>
+
+                        <Card className="divide-y divide-border border-violet/35 overflow-hidden">
+                          {jointAccounts.map((a) => {
+                            const hasAccess = hasJointAccountAccess(a, accessibleAccountIds, user?.id)
+                            const allowed = a.allowedMembers ?? []
+                            const infoContent = (
+                              <div className="min-w-0 flex-1 space-y-1.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={clsx(
+                                      'truncate text-sm font-semibold text-white',
+                                      hasAccess && 'group-hover:text-lime transition',
+                                    )}
+                                  >
+                                    {a.name}
+                                  </span>
+                                  <Badge tone="primary">Conta Conjunta</Badge>
+                                  {!hasAccess && isAdmin && (
+                                    <Badge tone="neutral">Sem acesso de movimentação</Badge>
+                                  )}
+                                  {a.includeInTotal === false && <Badge tone="neutral">Fora do total</Badge>}
+                                </div>
+                                <p className="text-xs text-text-dim">{accountTypeLabel[a.type]}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                  <span className="text-xs text-text-dim">Membros com acesso:</span>
+                                  {allowed.length > 0 ? (
+                                    allowed.map((m) => (
+                                      <span
+                                        key={m.id}
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-xs text-text-muted"
+                                      >
+                                        <span className="grid size-4 place-items-center rounded-full bg-violet/20 text-[9px] font-bold text-violet-hover">
+                                          {initials(m)}
+                                        </span>
+                                        {fullName(m)}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-text-dim">Nenhum membro selecionado</span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+
+                            return (
+                              <div
+                                key={a.id}
+                                className={clsx(
+                                  'flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between',
+                                  hasAccess && 'hover:bg-surface-2/40 transition',
+                                )}
+                              >
+                                {hasAccess ? (
+                                  <Link
+                                    to={`/contas/${a.id}`}
+                                    className="group flex min-w-0 flex-1 items-center gap-3"
+                                  >
+                                    {infoContent}
+                                  </Link>
+                                ) : (
+                                  <div className="flex min-w-0 flex-1 items-center gap-3 opacity-85">
+                                    {infoContent}
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end shrink-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <p
+                                      className={clsx(
+                                        'text-base font-bold tabular-nums',
+                                        a.balance < 0 ? 'text-expense' : 'text-white',
+                                      )}
+                                    >
+                                      {formatMoney(a.balance)}
+                                    </p>
+                                    {hasAccess && (
+                                      <Link
+                                        to={`/contas/${a.id}`}
+                                        aria-label={`Abrir ${a.name}`}
+                                        className="p-1 text-text-dim hover:text-lime transition"
+                                      >
+                                        <ChevronRight className="size-4" />
+                                      </Link>
+                                    )}
+                                  </div>
+
+                                  {isAdmin && (
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setJointModal({ open: true, account: a })}
+                                      >
+                                        <Pencil className="size-3.5" /> Editar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setDeletingJoint(a)}
+                                        aria-label="Excluir conta conjunta"
+                                      >
+                                        <Trash2 className="size-3.5 text-expense" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </Card>
+                      </section>
+                    )}
+
+                    <section className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-white">Contas Individuais Vinculadas</h3>
+                        {individualAccounts.length > 0 && (
+                          <Badge tone="default">{individualAccounts.length}</Badge>
+                        )}
                       </div>
-                      <p className="text-sm font-semibold text-white tabular-nums">{formatMoney(a.balance)}</p>
-                    </Link>
-                  ))}
-                </Card>
-              )}
-            </QueryState>
+                      {!individualAccounts.length ? (
+                        <Card className="p-4 text-xs text-text-dim">
+                          Nenhuma conta individual vinculada ao grupo. Membros podem vincular pela tela de Contas.
+                        </Card>
+                      ) : (
+                        <Card className="divide-y divide-border">
+                          {individualAccounts.map((a) => (
+                            <Link
+                              key={a.id}
+                              to={`/contas/${a.id}`}
+                              className="flex items-center justify-between gap-3 p-3.5 hover:bg-surface-2/50 transition"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-white">{a.name}</p>
+                                <p className="truncate text-xs text-text-dim">
+                                  {accountTypeLabel[a.type]}
+                                  {a.owner ? ` · ${fullName(a.owner)}` : ''}
+                                </p>
+                              </div>
+                              <p
+                                className={clsx(
+                                  'text-sm font-semibold tabular-nums',
+                                  a.balance < 0 ? 'text-expense' : 'text-white',
+                                )}
+                              >
+                                {formatMoney(a.balance)}
+                              </p>
+                            </Link>
+                          ))}
+                        </Card>
+                      )}
+                    </section>
+                  </div>
+                )}
+              </QueryState>
+            </div>
           )}
 
           {tab === 'cards' && (
@@ -1481,6 +1712,22 @@ export default function GroupDetail() {
               maxAmount={forgiveTarget.maxAmount}
             />
           )}
+          <JointAccountFormModal
+            open={jointModal.open}
+            onClose={() => setJointModal({ open: false })}
+            groupId={id!}
+            members={g.members}
+            account={jointModal.account}
+          />
+          <ConfirmDialog
+            open={!!deletingJoint}
+            onClose={() => setDeletingJoint(undefined)}
+            title="Excluir conta conjunta"
+            confirmLabel="Excluir"
+            loading={deleteJoint.isPending}
+            message={`Excluir a conta conjunta "${deletingJoint?.name}"? Todas as transações associadas serão removidas e essa ação não pode ser desfeita.`}
+            onConfirm={() => deletingJoint && deleteJoint.mutate(deletingJoint.id)}
+          />
         </>
       )}
     </QueryState>

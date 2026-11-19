@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAccounts, useSettleDebt } from '@/lib/hooks'
+import { filterCreditorAccountsForSettlement } from '@/lib/jointAccounts'
 import type { CreditCard, GroupAccount, UserSummary } from '@/lib/types'
 import { formatMoney, fullName } from '@/lib/format'
 import { Button, ConfirmDialog, Field, Modal, MoneyInput, Select } from '@/components/ui'
@@ -41,22 +42,20 @@ export default function SettleDebtModal({
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   // Contas disponíveis do devedor (usuário logado)
-  const myAccounts = useMemo(() => accounts.data ?? [], [accounts.data])
+  const myAccounts = useMemo(() => (accounts.data ?? []).filter((a) => !a.isJoint), [accounts.data])
 
-  // Contas pertencentes ao credor
+  // Contas pertencentes ao credor (exclui contas conjuntas de quitações 1-para-1)
   const creditorAccounts = useMemo(() => {
     const list: { id: string; name: string }[] = []
     const seen = new Set<string>()
 
-    // Contas de grupo do credor
-    groupAccounts
-      .filter((a) => a.owner.id === creditor.id)
-      .forEach((a) => {
-        if (!seen.has(a.id)) {
-          seen.add(a.id)
-          list.push({ id: a.id, name: a.name })
-        }
-      })
+    // Contas individuais de grupo do credor
+    filterCreditorAccountsForSettlement(groupAccounts, creditor.id).forEach((a) => {
+      if (!seen.has(a.id)) {
+        seen.add(a.id)
+        list.push({ id: a.id, name: a.name })
+      }
+    })
 
     // Contas vinculadas a cartões do credor no grupo
     groupCards

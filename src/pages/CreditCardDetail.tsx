@@ -7,7 +7,7 @@ import { addMissingTransactionCategories, matchesCategoryFilters } from '@/lib/c
 import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCardInvoice, useCreditCards } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import type { Category, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
-import { formatDate, formatMoney, fullName, initials, toISODate, txTypeLabel } from '@/lib/format'
+import { formatAccountLabel, formatDate, formatMoney, formatShortAccountLabel, fullName, initials, toISODate, txTypeLabel } from '@/lib/format'
 import {
   Badge,
   Button,
@@ -174,7 +174,10 @@ export default function CreditCardDetail() {
     () => filteredTransactions.reduce((s, t) => s + t.amount, 0),
     [filteredTransactions],
   )
-  const accountNameMap = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
+  const accountNameMap = useMemo(
+    () => new Map(accounts.map((a) => [a.id, formatShortAccountLabel(a)])),
+    [accounts],
+  )
 
   const del = useAction(() => api.delete(`/credit-cards/${id}`), {
     invalidate: ALL_MONEY,
@@ -454,8 +457,7 @@ export default function CreditCardDetail() {
                       <option value="">Todas as contas</option>
                       {accounts.map((a) => (
                         <option key={a.id} value={a.id}>
-                          {a.name}
-                          {a.owner ? ` (${fullName(a.owner)})` : ''}
+                          {formatAccountLabel(a)}
                         </option>
                       ))}
                     </Select>
@@ -540,7 +542,7 @@ export default function CreditCardDetail() {
               <Select value={payAccountId} onChange={(e) => setPayAccountId(e.target.value)} required>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} ({formatMoney(a.balance)})
+                    {formatShortAccountLabel(a)} ({formatMoney(a.balance)})
                   </option>
                 ))}
               </Select>

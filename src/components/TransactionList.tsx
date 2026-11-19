@@ -4,6 +4,7 @@ import clsx from 'clsx'
 import { api } from '@/lib/api'
 import { resolveTransactionCategory } from '@/lib/categories'
 import { ALL_MONEY, useAction } from '@/lib/hooks'
+import { useAuth } from '@/lib/auth'
 import type { Category, Transaction } from '@/lib/types'
 import { formatDate, formatMoney, fullName } from '@/lib/format'
 import { normalizeCategoryColor } from '@/lib/palette'
@@ -28,6 +29,7 @@ interface Props {
   accountNames?: Map<string, string>
   cardNames?: Map<string, string>
   showResponsible?: boolean
+  jointAccountIds?: Set<string>
 }
 
 export default function TransactionList({
@@ -38,7 +40,9 @@ export default function TransactionList({
   accountNames,
   cardNames,
   showResponsible = true,
+  jointAccountIds,
 }: Props) {
+  const { user } = useAuth()
   const [editing, setEditing] = useState<Transaction>()
   const [deleting, setDeleting] = useState<Transaction>()
   const [allFuture, setAllFuture] = useState(false)
@@ -68,6 +72,14 @@ export default function TransactionList({
         ))
     const incoming = t.type === 'INCOME' || isIncomingTransfer
     const done = t.status === 'COMPLETED'
+    const readOnly =
+      t.type === 'TRANSFER' &&
+      t.responsibleId !== user?.id &&
+      Boolean(
+        jointAccountIds &&
+          (jointAccountIds.has(t.accountId) ||
+            (t.destinationAccountId && jointAccountIds.has(t.destinationAccountId))),
+      )
     const isCard = !!t.creditCardId
     const generalColor = hasResolvedCat
       ? normalizeCategoryColor(resolvedCat.general?.color ?? resolvedCat.color)
@@ -84,6 +96,18 @@ export default function TransactionList({
             title="Compra no cartão"
           >
             <CardIcon className="size-4" />
+          </div>
+        ) : readOnly ? (
+          <div
+            className={clsx(
+              'grid size-9 shrink-0 place-items-center rounded-xl border',
+              done
+                ? 'bg-lime-subtle text-lime border-lime/30'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+            )}
+            title={done ? 'Concluído' : 'Pendente'}
+          >
+            {done ? <Check className="size-4 stroke-[2.5]" /> : <Clock className="size-4" />}
           </div>
         ) : (
           <button
@@ -200,6 +224,7 @@ export default function TransactionList({
             {incoming ? '+' : t.type === 'TRANSFER' ? '' : '−'}
             {formatMoney(t.amount)}
           </p>
+          {!readOnly && (
           <div className="flex justify-end gap-1 mt-0.5 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button
               type="button"
@@ -221,6 +246,7 @@ export default function TransactionList({
               <Trash2 className="size-3.5" />
             </button>
           </div>
+          )}
         </div>
       </div>
     )

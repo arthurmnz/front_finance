@@ -5,7 +5,9 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { isGeneralCategory, isTypeCompatibleWithTransaction, resolveTransactionCategory } from '@/lib/categories'
 import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCards } from '@/lib/hooks'
+import { canTransferGenerateDebt, filterTransferSourceAccounts, pickTransferSourceAccountId } from '@/lib/jointAccounts'
 import type {
+  Account,
   Category,
   CategoryInput,
   CategoryType,
@@ -16,7 +18,7 @@ import type {
   TransactionType,
   UpdateTransactionInput,
 } from '@/lib/types'
-import { defaultInvoicePeriod, formatMoney, freqLabel, fullName, monthLabel, toISODate, txTypeLabel } from '@/lib/format'
+import { defaultInvoicePeriod, formatAccountLabel, formatMoney, freqLabel, fullName, monthLabel, toISODate, txTypeLabel } from '@/lib/format'
 import { Button, Checkbox, DatePicker, Field, Input, Modal, MoneyInput, NumberInput, Select } from './ui'
 import clsx from 'clsx'
 
@@ -27,6 +29,9 @@ interface Props {
   defaultAccountId?: string
   defaultCreditCardId?: string
   defaultInvoicePeriod?: { month: number; year: number }
+  defaultType?: TransactionType
+  defaultDestinationAccountId?: string
+  defaultAmount?: number
 }
 
 function inferTransactionCategorySelection(
@@ -69,6 +74,43 @@ function inferTransactionCategorySelection(
   }
 }
 
+function resolveDefaultSourceAccountId(params: {
+  accounts: Account[]
+  transferSourceAccounts: Account[]
+  type: TransactionType
+  defaultAccountId?: string
+  defaultDestinationAccountId?: string
+  destId?: string
+  userId?: string
+}): string {
+  const {
+    accounts,
+    transferSourceAccounts,
+    type,
+    defaultAccountId,
+    defaultDestinationAccountId,
+    destId = '',
+    userId,
+  } = params
+  const allowedAccounts = type === 'TRANSFER' ? transferSourceAccounts : accounts
+  const excludedDestId = defaultDestinationAccountId || destId
+  const validDefaultAccountId =
+    defaultAccountId &&
+    (!excludedDestId || type !== 'TRANSFER' || defaultAccountId !== excludedDestId) &&
+    allowedAccounts.some((a) => a.id === defaultAccountId)
+      ? defaultAccountId
+      : undefined
+
+  if (validDefaultAccountId) return validDefaultAccountId
+  if (defaultDestinationAccountId) {
+    return pickTransferSourceAccountId(accounts, defaultDestinationAccountId, userId) ?? ''
+  }
+  if (type === 'TRANSFER') {
+    return pickTransferSourceAccountId(accounts, destId, userId) ?? ''
+  }
+  return allowedAccounts[0]?.id ?? ''
+}
+
 export default function TransactionFormModal({
   open,
   onClose,
@@ -76,10 +118,18 @@ export default function TransactionFormModal({
   defaultAccountId,
   defaultCreditCardId,
   defaultInvoicePeriod: initialInvoicePeriod,
+  defaultType,
+  defaultDestinationAccountId,
+  defaultAmount,
 }: Props) {
   const { user } = useAuth()
   const editing = !!transaction
-  const accounts = useAccessibleAccounts().data ?? []
+  const accountsQuery = useAccessibleAccounts()
+  const accounts = accountsQuery.data ?? []
+  const transferSourceAccounts = useMemo(
+    () => filterTransferSourceAccounts(accounts, user?.id),
+    [accounts, user?.id],
+  )
   const creditCards = useCreditCards().data ?? []
   const { data: allCategories = [], myCategories = [], groupsCategories = [] } = useAllCategories()
 
@@ -113,6 +163,7 @@ export default function TransactionFormModal({
   const [splitUnit, setSplitUnit] = useState<'AMOUNT' | 'PERCENT'>('AMOUNT')
   const [splits, setSplits] = useState<{ accountId: string; amount: number; percentage: number }[]>([])
 
+  const sourceAccounts = type === 'TRANSFER' ? transferSourceAccounts : accounts
   const canSplit = !editing && sourceMode === 'ACCOUNT' && type !== 'TRANSFER' && accounts.length >= 2
   const activeSplit = canSplit && splitMode
   const splitsSum = useMemo(() => splits.reduce((s, item) => s + item.amount, 0), [splits])
@@ -137,26 +188,23 @@ export default function TransactionFormModal({
   )
   const canGenerateDebt =
     !editing &&
-    sourceMode === 'ACCOUNT' &&
-    type === 'TRANSFER' &&
-    Boolean(
-      selectedAccount &&
-        destAccount &&
-        selectedAccount.ownerId !== destAccount.ownerId &&
-        selectedAccount.ownerId === user?.id &&
-        (selectedAccount.groupId || destAccount.groupId),
-    )
+    canTransferGenerateDebt({
+      sourceMode,
+      type,
+      sourceAccount: selectedAccount,
+      destAccount,
+      userId: user?.id,
+    })
   const canEditGeneratesDebt =
     editing &&
-    transaction?.type === 'TRANSFER' &&
-    !transaction?.creditCardId &&
-    Boolean(
-      selectedAccount &&
-        editDestAccount &&
-        selectedAccount.ownerId !== editDestAccount.ownerId &&
-        selectedAccount.ownerId === user?.id &&
-        (selectedAccount.groupId || editDestAccount.groupId),
-    )
+    canTransferGenerateDebt({
+      sourceMode: 'ACCOUNT',
+      type: transaction?.type,
+      isCreditCardTx: Boolean(transaction?.creditCardId),
+      sourceAccount: selectedAccount,
+      destAccount: editDestAccount,
+      userId: user?.id,
+    })
   const debtRecipientOwner = !editing ? destAccount?.owner : editDestAccount?.owner
   const debtRecipientName = debtRecipientOwner ? fullName(debtRecipientOwner) : 'o destinatário'
   const effectiveGroupId = useMemo(() => {
@@ -176,16 +224,26 @@ export default function TransactionFormModal({
     if (!open) return
     const t = transaction
     const isCard = !!(t?.creditCardId || defaultCreditCardId)
+    const nextType: TransactionType = isCard ? 'EXPENSE' : (t?.type ?? defaultType ?? 'EXPENSE')
     setSourceMode(isCard ? 'CARD' : 'ACCOUNT')
-    setType(isCard ? 'EXPENSE' : (t?.type ?? 'EXPENSE'))
+    setType(nextType)
     setTitle(t?.title ?? '')
-    setAmount(t?.amount ?? 0)
+    setAmount(t?.amount ?? defaultAmount ?? 0)
     const dt = t?.date.slice(0, 10) ?? toISODate(new Date())
     setDate(dt)
-    setAccountId(t?.accountId ?? defaultAccountId ?? accounts[0]?.id ?? '')
+    const initialSourceAccount = resolveDefaultSourceAccountId({
+      accounts,
+      transferSourceAccounts,
+      type: nextType,
+      defaultAccountId,
+      defaultDestinationAccountId,
+      destId: defaultDestinationAccountId ?? '',
+      userId: user?.id,
+    })
+    setAccountId(t?.accountId ?? initialSourceAccount)
     const cid = t?.creditCardId ?? defaultCreditCardId ?? creditCards[0]?.id ?? ''
     setCreditCardId(cid)
-    setDestId(t?.destinationAccountId ?? '')
+    setDestId(t?.destinationAccountId ?? defaultDestinationAccountId ?? '')
     setGeneratesDebt(Boolean(t?.generatesDebt))
     const allCatsMap = new Map(allCategories.map((c) => [c.id, c]))
     const initialCatSelection = inferTransactionCategorySelection(t, allCatsMap)
@@ -226,13 +284,58 @@ export default function TransactionFormModal({
     }
     // Inicializa apenas quando o modal abre ou a transação alvo muda
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction?.id, defaultAccountId, defaultCreditCardId, initialInvoicePeriod?.month, initialInvoicePeriod?.year])
+  }, [
+    open,
+    transaction?.id,
+    defaultAccountId,
+    defaultCreditCardId,
+    initialInvoicePeriod?.month,
+    initialInvoicePeriod?.year,
+    defaultType,
+    defaultDestinationAccountId,
+    defaultAmount,
+  ])
 
   useEffect(() => {
     if (!open || editing) return
-    if (!accountId && accounts[0]?.id) setAccountId(defaultAccountId ?? accounts[0].id)
+    const allowedAccounts = type === 'TRANSFER' ? transferSourceAccounts : accounts
+    const isCurrentValid = Boolean(accountId && allowedAccounts.some((a) => a.id === accountId))
+    if (!isCurrentValid) {
+      const fallbackId = resolveDefaultSourceAccountId({
+        accounts,
+        transferSourceAccounts,
+        type,
+        defaultAccountId,
+        defaultDestinationAccountId,
+        destId,
+        userId: user?.id,
+      })
+      if (fallbackId !== accountId) {
+        setAccountId(fallbackId)
+      }
+    }
     if (!creditCardId && creditCards[0]?.id) setCreditCardId(defaultCreditCardId ?? creditCards[0].id)
-  }, [open, editing, accountId, creditCardId, accounts, creditCards, defaultAccountId, defaultCreditCardId])
+  }, [
+    open,
+    editing,
+    type,
+    accountId,
+    destId,
+    creditCardId,
+    accounts,
+    transferSourceAccounts,
+    creditCards,
+    defaultAccountId,
+    defaultCreditCardId,
+    defaultDestinationAccountId,
+    user?.id,
+  ])
+
+  useEffect(() => {
+    if (!editing && !canGenerateDebt && generatesDebt) {
+      setGeneratesDebt(false)
+    }
+  }, [editing, canGenerateDebt, generatesDebt])
 
   // Recalcula automaticamente a fatura quando a data ou cartão mudam (se o usuário não editou manualmente a fatura)
   useEffect(() => {
@@ -501,6 +604,18 @@ export default function TransactionFormModal({
   const handleTypeChange = (newType: TransactionType) => {
     if (newType === type) return
     setType(newType)
+    if (newType === 'TRANSFER') {
+      const isValidSource = Boolean(accountId && transferSourceAccounts.some((a) => a.id === accountId))
+      if (!isValidSource) {
+        const nextSourceId = pickTransferSourceAccountId(accounts, destId, user?.id) ?? ''
+        setAccountId(nextSourceId)
+        if (nextSourceId && nextSourceId === destId) {
+          setDestId('')
+        }
+      } else if (accountId === destId) {
+        setDestId('')
+      }
+    }
     if (generalCategoryId && generalCategoryId !== '__missing__') {
       const genCat = mergedCatMap.get(generalCategoryId)
       if (genCat && !isTypeCompatibleWithTransaction(genCat.type, newType)) {
@@ -789,7 +904,28 @@ export default function TransactionFormModal({
         })),
       })
     } else {
-      if (!accountId || (type === 'TRANSFER' && !destId)) return
+      if (!accountId) {
+        toast.error(
+          type === 'TRANSFER'
+            ? 'Selecione uma conta própria ou conjunta com acesso como origem.'
+            : 'Selecione uma conta para a transação.',
+        )
+        return
+      }
+      if (type === 'TRANSFER') {
+        if (!transferSourceAccounts.some((a) => a.id === accountId)) {
+          toast.error('Selecione uma conta própria ou conjunta com acesso como origem da transferência.')
+          return
+        }
+        if (!destId) {
+          toast.error('Selecione a conta de destino da transferência.')
+          return
+        }
+        if (accountId === destId) {
+          toast.error('A conta de destino deve ser diferente da conta de origem.')
+          return
+        }
+      }
       save.mutate({
         title: title.trim(),
         amount,
@@ -1033,8 +1169,7 @@ export default function TransactionFormModal({
                             <option value="">Selecione a conta…</option>
                             {availableAccounts.map((a) => (
                               <option key={a.id} value={a.id}>
-                                {a.name}
-                                {a.owner ? ` (${fullName(a.owner)})` : ''}
+                                {formatAccountLabel(a)}
                               </option>
                             ))}
                           </Select>
@@ -1115,13 +1250,29 @@ export default function TransactionFormModal({
                 </div>
               </div>
             ) : (
-              <Field label={type === 'TRANSFER' ? 'Conta de origem' : canSplit ? undefined : 'Conta'}>
-                <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+              <Field
+                label={type === 'TRANSFER' ? 'Conta de origem' : canSplit ? undefined : 'Conta'}
+                hint={
+                  type === 'TRANSFER' && !accountsQuery.isLoading && transferSourceAccounts.length === 0
+                    ? 'Você precisa de uma conta própria ou conjunta com acesso para realizar transferências.'
+                    : undefined
+                }
+              >
+                <Select
+                  value={accountId}
+                  onChange={(e) => {
+                    const nextId = e.target.value
+                    setAccountId(nextId)
+                    if (type === 'TRANSFER' && nextId === destId) {
+                      setDestId('')
+                    }
+                  }}
+                  required
+                >
                   <option value="">Selecione…</option>
-                  {accounts.map((a) => (
+                  {sourceAccounts.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name}
-                      {a.owner ? ` (${fullName(a.owner)})` : ''}
+                      {formatAccountLabel(a)}
                     </option>
                   ))}
                 </Select>
@@ -1138,8 +1289,7 @@ export default function TransactionFormModal({
                 .filter((a) => a.id !== accountId)
                 .map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
-                    {a.owner ? ` (${fullName(a.owner)})` : ''}
+                    {formatAccountLabel(a)}
                   </option>
                 ))}
             </Select>

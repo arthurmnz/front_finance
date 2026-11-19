@@ -25,6 +25,15 @@ export const monthLabel = (month: number, year: number) => {
 export const fullName = (u?: { firstName?: string; lastName?: string } | null) => `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim()
 export const initials = (u?: { firstName?: string; lastName?: string } | null) => `${u?.firstName?.[0] ?? ''}${u?.lastName?.[0] ?? ''}`.toUpperCase()
 
+export const formatAccountLabel = (a: {
+  name: string
+  isJoint?: boolean
+  owner?: { firstName?: string; lastName?: string } | null
+}) => (a.isJoint ? `${a.name} (Conjunta)` : a.owner ? `${a.name} (${fullName(a.owner)})` : a.name)
+
+export const formatShortAccountLabel = (a: { name: string; isJoint?: boolean }) =>
+  a.isJoint ? `${a.name} (Conjunta)` : a.name
+
 export const accountTypeLabel: Record<string, string> = { CHECKING: 'Conta corrente', WALLET: 'Carteira', SAVINGS: 'Reservas', INVESTMENTS: 'Investimentos' }
 export const categoryTypeLabel: Record<string, string> = { EXPENSE: 'Despesa', INCOME: 'Receita', BOTH: 'Ambos' }
 export const txTypeLabel: Record<string, string> = { EXPENSE: 'Despesa', INCOME: 'Receita', TRANSFER: 'Transferência' }
