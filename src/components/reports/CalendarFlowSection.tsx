@@ -385,12 +385,12 @@ export default function CalendarFlowSection({
 
       {/* Grid do Calendário */}
       <Card
-        className="p-3 sm:p-4 bg-surface-1 border-border"
+        className="p-1.5 sm:p-2 bg-surface-1 border-border"
         aria-busy={loading || undefined}
       >
-        <div className="mb-2 grid grid-cols-7 text-center text-[10px] font-semibold uppercase tracking-wider text-text-dim">
+        <div className="mb-1 grid grid-cols-7 text-center text-[10px] font-semibold uppercase tracking-wider text-text-dim">
           {WEEKDAYS.map((d) => (
-            <div key={d} className="py-1">
+            <div key={d} className="py-0.5">
               {d}
             </div>
           ))}
@@ -405,7 +405,7 @@ export default function CalendarFlowSection({
               type="button"
               onClick={() => setSelected(d.date === selected ? undefined : d.date)}
               className={clsx(
-                'flex min-h-16 flex-col items-center justify-between rounded-xl border p-1 text-center transition cursor-pointer select-none sm:min-h-20 sm:p-1.5 relative',
+                'flex min-h-[52px] flex-col items-center justify-between rounded-lg border p-1 text-center transition cursor-pointer select-none sm:min-h-0 sm:aspect-[10/9] sm:p-1.5 relative',
                 levelCell[levelOf(d.balance, threshold)],
                 d.date === selected && '!border-lime ring-2 ring-lime/60',
                 d.date === today && 'outline outline-1 outline-lime',
@@ -495,7 +495,7 @@ export default function CalendarFlowSection({
         </div>
 
         {/* Legenda */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-border pt-3 px-1 text-xs text-text-dim">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-border pt-2.5 px-1.5 sm:px-2 text-xs text-text-dim">
           <span className="flex items-center gap-1.5">
             <i className="size-2 rounded-full bg-lime shrink-0" /> Positivo (≥ {formatMoney(threshold)})
           </span>
@@ -515,7 +515,7 @@ export default function CalendarFlowSection({
             <Sparkles className="size-3 text-violet shrink-0" /> Lançamento simulado
           </span>
         </div>
-        <p className="mt-1 px-1 text-[11px] text-text-dim">
+        <p className="mt-1 px-1.5 sm:px-2 pb-0.5 text-[11px] text-text-dim">
           Toque em qualquer dia para inspecionar movimentações, faturas ou simular cenários futuros de caixa.
         </p>
       </Card>
