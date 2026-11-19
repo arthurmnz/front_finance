@@ -15,7 +15,8 @@ import {
 } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import {
-  matchesCategoryFilter,
+  addMissingTransactionCategories,
+  matchesCategoryFilters,
   resolveTransactionCategory,
   synthesizeGeneralCategory,
 } from '@/lib/categories'
@@ -1148,6 +1149,8 @@ export function buildCategoryEvolution(
     level?: 'GENERAL' | 'SPECIFIC'
     currentAmount: number
     previousAmount: number
+    directCurrentAmount: number
+    directPreviousAmount: number
     children: Map<string, ChildAccumulator>
   }
 
@@ -1200,6 +1203,8 @@ export function buildCategoryEvolution(
         level,
         currentAmount: 0,
         previousAmount: 0,
+        directCurrentAmount: 0,
+        directPreviousAmount: 0,
         children: new Map(),
       }
       buckets.set(key, bucket)
@@ -1226,6 +1231,9 @@ export function buildCategoryEvolution(
       }
       if (periodKind === 'current') child.currentAmount += t.amount
       else child.previousAmount += t.amount
+    } else if (resolved.general && !resolved.specific) {
+      if (periodKind === 'current') bucket.directCurrentAmount += t.amount
+      else bucket.directPreviousAmount += t.amount
     }
   }
 
@@ -1257,6 +1265,8 @@ export function buildCategoryEvolution(
         const chColor = normalizeCategoryColor(ch.rawColor ?? bucket.rawColor, childColorIdx++)
         const chPct =
           totalCurrentExpense > 0 ? Math.round((ch.currentAmount / totalCurrentExpense) * 100) : 0
+        const chPctOfParent =
+          bucket.currentAmount > 0 ? Math.round((ch.currentAmount / bucket.currentAmount) * 100) : 0
         const chIsNew = ch.previousAmount === 0 && ch.currentAmount > 0
         const chMom =
           ch.previousAmount > 0
@@ -1270,19 +1280,56 @@ export function buildCategoryEvolution(
           level: 'SPECIFIC' as const,
           parentId: ch.parentId,
           parentName: ch.parentName,
+          parentIcon: bucket.icon ?? null,
+          parentColor: color,
+          isDirectGeneral: false,
           currentAmount: ch.currentAmount,
           previousAmount: ch.previousAmount,
           percentageOfTotal: chPct,
+          percentageOfParent: chPctOfParent,
           momVariationPct: chMom,
           isNew: chIsNew,
         }
       })
-      .sort(
-        (a, b) =>
-          b.currentAmount - a.currentAmount ||
-          b.previousAmount - a.previousAmount ||
-          a.name.localeCompare(b.name, 'pt-BR'),
-      )
+
+    if (bucket.level === 'GENERAL' && bucket.id && (bucket.directCurrentAmount > 0 || bucket.directPreviousAmount > 0)) {
+      const dirPctTotal =
+        totalCurrentExpense > 0 ? Math.round((bucket.directCurrentAmount / totalCurrentExpense) * 100) : 0
+      const dirPctParent =
+        bucket.currentAmount > 0 ? Math.round((bucket.directCurrentAmount / bucket.currentAmount) * 100) : 0
+      const dirMom =
+        bucket.directPreviousAmount > 0
+          ? Math.round(
+              ((bucket.directCurrentAmount - bucket.directPreviousAmount) / bucket.directPreviousAmount) * 100,
+            )
+          : null
+
+      children.push({
+        id: `${bucket.id}__direct`,
+        name: `Sem específica (direto em ${bucket.name})`,
+        icon: bucket.icon ?? null,
+        color,
+        level: 'SPECIFIC' as const,
+        parentId: bucket.id,
+        parentName: bucket.name,
+        parentIcon: bucket.icon ?? null,
+        parentColor: color,
+        isDirectGeneral: true,
+        currentAmount: bucket.directCurrentAmount,
+        previousAmount: bucket.directPreviousAmount,
+        percentageOfTotal: dirPctTotal,
+        percentageOfParent: dirPctParent,
+        momVariationPct: dirMom,
+        isNew: bucket.directPreviousAmount === 0 && bucket.directCurrentAmount > 0,
+      })
+    }
+
+    children.sort(
+      (a, b) =>
+        b.currentAmount - a.currentAmount ||
+        b.previousAmount - a.previousAmount ||
+        a.name.localeCompare(b.name, 'pt-BR'),
+    )
 
     comparisons.push({
       id: bucket.id,
@@ -1290,6 +1337,7 @@ export function buildCategoryEvolution(
       icon: bucket.icon,
       color,
       level: bucket.level,
+      isUncategorized: bucket.key === 'none',
       currentAmount: bucket.currentAmount,
       previousAmount: bucket.previousAmount,
       percentageOfTotal: pctOfTotal,
@@ -1940,6 +1988,14 @@ export function useIndividualReportsData(
     }
   }, [allRawTransactions, ownCardIds, allOwnAccountIds, operationalAccountIds, user?.id])
 
+  const individualCatMap = useMemo(() => {
+    const map = new Map(categories.map((c) => [c.id, c]))
+    addMissingTransactionCategories(map, personalTxs)
+    return map
+  }, [categories, personalTxs])
+
+  const effectiveCategories = useMemo(() => [...individualCatMap.values()], [individualCatMap])
+
   // Aplica filtros globais do usuário
   const filteredPersonalTxs = useMemo(() => {
     return personalTxs.filter((t) => {
@@ -1947,11 +2003,19 @@ export function useIndividualReportsData(
       if (filters.creditCardId === 'none' && t.creditCardId) return false
       if (filters.creditCardId && filters.creditCardId !== 'none' && t.creditCardId !== filters.creditCardId) return false
       if (filters.accountId && t.accountId !== filters.accountId && t.destinationAccountId !== filters.accountId) return false
-      if (!matchesCategoryFilter(t.categoryId, filters.categoryId, categories, t.category)) return false
+      if (
+        !matchesCategoryFilters(
+          t,
+          { generalCategoryId: filters.generalCategoryId, specificCategoryId: filters.specificCategoryId },
+          individualCatMap,
+        )
+      ) {
+        return false
+      }
       if (filters.status && t.status !== filters.status) return false
       return true
     })
-  }, [personalTxs, filters, categories])
+  }, [personalTxs, filters, individualCatMap])
 
   const { month: selMonth, year: selYear } = filters.period
   const prevDate = new Date(selYear, selMonth - 2, 1)
@@ -2049,8 +2113,8 @@ export function useIndividualReportsData(
     [filteredPersonalTxs, filters.period, hasCardsIncluded],
   )
   const categoryEvolution = useMemo(
-    () => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded),
-    [currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded],
+    () => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, effectiveCategories, hasCardsIncluded),
+    [currentMonthTxs, prevMonthTxs, effectiveCategories, hasCardsIncluded],
   )
   const futureCommitments = useMemo(
     () => buildFutureCommitments(personalTxs, cardList, filters.period, filters.hideCreditCards),
@@ -2117,7 +2181,7 @@ export function useIndividualReportsData(
     investmentAccounts,
     financialPlanning,
     creditCards: cardList,
-    categories,
+    categories: effectiveCategories,
     projection,
     kpis,
     cashFlowHistory,
@@ -2283,6 +2347,14 @@ export function useGroupReportsData(
     })
   }, [allGroupTransactions, operationalGroupAccountIds])
 
+  const groupCatMap = useMemo(() => {
+    const map = new Map<string, Category>(categories.map((c) => [c.id, c]))
+    addMissingTransactionCategories(map, allGroupTransactions)
+    return map
+  }, [categories, allGroupTransactions])
+
+  const effectiveGroupCategories = useMemo(() => [...groupCatMap.values()], [groupCatMap])
+
   // Aplica filtros no contexto do grupo com base nas transações operacionais
   const filteredGroupTxs = useMemo(() => {
     return operationalGroupTransactions.filter((t) => {
@@ -2290,12 +2362,20 @@ export function useGroupReportsData(
       if (filters.creditCardId === 'none' && t.creditCardId) return false
       if (filters.creditCardId && filters.creditCardId !== 'none' && t.creditCardId !== filters.creditCardId) return false
       if (filters.accountId && t.accountId !== filters.accountId && t.destinationAccountId !== filters.accountId) return false
-      if (!matchesCategoryFilter(t.categoryId, filters.categoryId, categories, t.category)) return false
+      if (
+        !matchesCategoryFilters(
+          t,
+          { generalCategoryId: filters.generalCategoryId, specificCategoryId: filters.specificCategoryId },
+          groupCatMap,
+        )
+      ) {
+        return false
+      }
       if (filters.status && t.status !== filters.status) return false
       if (filters.responsibleId && t.responsibleId !== filters.responsibleId) return false
       return true
     })
-  }, [operationalGroupTransactions, filters, categories])
+  }, [operationalGroupTransactions, filters, groupCatMap])
 
   const { month: selMonth, year: selYear } = filters.period
   const prevDate = new Date(selYear, selMonth - 2, 1)
@@ -2388,8 +2468,8 @@ export function useGroupReportsData(
     [filteredGroupTxs, filters.period, hasCardsIncluded],
   )
   const categoryEvolution = useMemo(
-    () => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded),
-    [currentMonthTxs, prevMonthTxs, categories, hasCardsIncluded],
+    () => buildCategoryEvolution(currentMonthTxs, prevMonthTxs, effectiveGroupCategories, hasCardsIncluded),
+    [currentMonthTxs, prevMonthTxs, effectiveGroupCategories, hasCardsIncluded],
   )
   const futureCommitments = useMemo(
     () => buildFutureCommitments(operationalGroupTransactions, cardList, filters.period, filters.hideCreditCards),
@@ -2438,7 +2518,7 @@ export function useGroupReportsData(
     investmentAccounts,
     financialPlanning,
     creditCards: cardList,
-    categories,
+    categories: effectiveGroupCategories,
     projection,
     kpis,
     cashFlowHistory,

@@ -80,8 +80,12 @@ export interface CategoryInput {
 
 export interface Transaction {
   id: string; title: string; amount: number; date: string; responsibleId: string; responsible?: UserSummary | null
-  accountId: string; type: TransactionType; destinationAccountId: string | null; categoryId: string | null
+  accountId: string; type: TransactionType; destinationAccountId: string | null; categoryId?: string | null
+  generalCategoryId?: string | null
+  specificCategoryId?: string | null
   category?: CategorySummary | null
+  generalCategory?: CategorySummary | null
+  specificCategory?: CategorySummary | null
   status: TransactionStatus; recurrenceGroupId: string | null; recurrenceFrequency: RecurrenceFrequency | null
   recurrenceInterval: number | null; isInfinite: boolean
   creditCardId?: string | null; creditCardInvoiceId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
@@ -95,7 +99,8 @@ export interface AccountSplitInput {
 }
 export interface CreateTransactionInput {
   title: string; amount: number; date: string; accountId: string; type: TransactionType
-  destinationAccountId?: string | null; categoryId?: string | null; status: TransactionStatus
+  destinationAccountId?: string | null; categoryId?: string | null
+  generalCategoryId?: string | null; specificCategoryId?: string | null; status: TransactionStatus
   isRecurring: boolean; recurrenceFrequency?: RecurrenceFrequency | null
   recurrenceInterval: number; recurrenceInstallments: number; isInfinite: boolean
   creditCardId?: string | null; creditCardInvoiceId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
@@ -104,7 +109,8 @@ export interface CreateTransactionInput {
   generatesDebt?: boolean
 }
 export interface UpdateTransactionInput {
-  title: string; amount: number; date: string; categoryId?: string | null; status: TransactionStatus
+  title: string; amount: number; date: string; categoryId?: string | null
+  generalCategoryId?: string | null; specificCategoryId?: string | null; status: TransactionStatus
   updateAllFuture: boolean; invoiceMonth?: number | null; invoiceYear?: number | null
   generatesDebt?: boolean | null
 }

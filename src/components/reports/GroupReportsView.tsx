@@ -31,7 +31,8 @@ export default function GroupReportsView({ groupId }: GroupReportsViewProps) {
     accountId: '',
     creditCardId: '',
     hideCreditCards: false,
-    categoryId: '',
+    generalCategoryId: '',
+    specificCategoryId: '',
     responsibleId: '',
     status: '',
   })

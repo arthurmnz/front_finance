@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Percent, Plus, Search, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
-import { buildGroupedCategoryFilterOptions, matchesCategoryFilter, synthesizeGeneralCategory } from '@/lib/categories'
+import { addMissingTransactionCategories, matchesCategoryFilters } from '@/lib/categories'
 import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCardInvoice, useCreditCards } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import type { Category, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
@@ -25,6 +25,7 @@ import {
   QueryState,
   Select,
 } from '@/components/ui'
+import CategoryFilterPair from '@/components/CategoryFilterPair'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
@@ -33,7 +34,8 @@ import NotFound from './NotFound'
 interface Filters {
   search: string
   accountId: string
-  categoryId: string
+  generalCategoryId: string
+  specificCategoryId: string
   responsibleId: string
   type: '' | TransactionType
   status: '' | TransactionStatus
@@ -42,7 +44,8 @@ interface Filters {
 const EMPTY_FILTERS: Filters = {
   search: '',
   accountId: '',
-  categoryId: '',
+  generalCategoryId: '',
+  specificCategoryId: '',
   responsibleId: '',
   type: '',
   status: '',
@@ -115,41 +118,11 @@ export default function CreditCardDetail() {
   const displayCats = useMemo(() => {
     const map = new Map<string, Category>()
     cats.forEach((c) => map.set(c.id, c))
-    allTransactions.forEach((t) => {
-      if (t.category?.parent && !map.has(t.category.parent.id)) {
-        map.set(t.category.parent.id, synthesizeGeneralCategory(t.category.parent))
-      }
-      if (t.category && !map.has(t.category.id)) {
-        map.set(t.category.id, {
-          id: t.category.id,
-          name: t.category.name,
-          description: null,
-          userId: null,
-          groupId: null,
-          type: t.category.type,
-          level: t.category.level ?? (t.category.parentId || t.category.parent ? 'SPECIFIC' : 'GENERAL'),
-          parentId: t.category.parentId ?? t.category.parent?.id ?? null,
-          parent: t.category.parent ?? null,
-          color: t.category.color ?? null,
-          icon: t.category.icon ?? null,
-          createdAt: '',
-          updatedAt: '',
-        })
-      }
-    })
+    addMissingTransactionCategories(map, [...allTransactions, ...(inv?.payments ?? [])])
     return [...map.values()]
-  }, [cats, allTransactions])
+  }, [cats, allTransactions, inv?.payments])
 
-  const categoryFilterOptions = useMemo(
-    () =>
-      buildGroupedCategoryFilterOptions(displayCats, {
-        includeAll: true,
-        allLabel: 'Todas as categorias',
-        includeNone: true,
-        noneLabel: 'Sem categoria',
-      }),
-    [displayCats],
-  )
+  const displayCatMap = useMemo(() => new Map(displayCats.map((c) => [c.id, c])), [displayCats])
 
   const responsibles = useMemo(() => {
     const map = new Map<string, UserSummary>()
@@ -176,15 +149,27 @@ export default function CreditCardDetail() {
       (t) =>
         (!term || t.title.toLowerCase().includes(term)) &&
         (!f.accountId || t.accountId === f.accountId || t.destinationAccountId === f.accountId) &&
-        matchesCategoryFilter(t.categoryId, f.categoryId, displayCats, t.category) &&
+        matchesCategoryFilters(
+          t,
+          { generalCategoryId: f.generalCategoryId, specificCategoryId: f.specificCategoryId },
+          displayCatMap,
+        ) &&
         (!f.responsibleId || t.responsibleId === f.responsibleId) &&
         (!f.type || t.type === f.type) &&
         (!f.status || t.status === f.status) &&
         (!f.recurring || !!t.recurrenceGroupId),
     )
-  }, [allTransactions, f, displayCats])
+  }, [allTransactions, f, displayCatMap])
 
-  const activeCount = [f.accountId, f.categoryId, f.responsibleId, f.type, f.status, f.recurring].filter(Boolean).length
+  const activeCount = [
+    f.accountId,
+    f.generalCategoryId,
+    f.specificCategoryId,
+    f.responsibleId,
+    f.type,
+    f.status,
+    f.recurring,
+  ].filter(Boolean).length
   const filteredTotal = useMemo(
     () => filteredTransactions.reduce((s, t) => s + t.amount, 0),
     [filteredTransactions],
@@ -475,13 +460,6 @@ export default function CreditCardDetail() {
                       ))}
                     </Select>
                   </Field>
-                  <Field label="Categoria">
-                    <Select
-                      value={f.categoryId}
-                      onChange={(e) => set('categoryId', e.target.value)}
-                      options={categoryFilterOptions}
-                    />
-                  </Field>
                   <Field label="Responsável">
                     <Select value={f.responsibleId} onChange={(e) => set('responsibleId', e.target.value)}>
                       <option value="">Todos os responsáveis</option>
@@ -493,6 +471,14 @@ export default function CreditCardDetail() {
                       ))}
                     </Select>
                   </Field>
+                  <CategoryFilterPair
+                    categories={displayCats}
+                    generalCategoryId={f.generalCategoryId}
+                    specificCategoryId={f.specificCategoryId}
+                    onChange={({ generalCategoryId, specificCategoryId }) =>
+                      setF((p) => ({ ...p, generalCategoryId, specificCategoryId }))
+                    }
+                  />
                 </div>
                 {activeCount > 0 && (
                   <Button variant="ghost" size="sm" onClick={() => setF((p) => ({ ...EMPTY_FILTERS, search: p.search }))}>

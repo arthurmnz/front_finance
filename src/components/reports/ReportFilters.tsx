@@ -1,10 +1,9 @@
-import { useMemo } from 'react'
 import { SlidersHorizontal, X, Settings2 } from 'lucide-react'
 import clsx from 'clsx'
-import { buildGroupedCategoryFilterOptions } from '@/lib/categories'
 import type { Account, Category, CreditCard, GroupMember } from '@/lib/types'
 import { formatMoney } from '@/lib/format'
 import { Button, Card, Field, Select } from '@/components/ui'
+import CategoryFilterPair from '@/components/CategoryFilterPair'
 import { MonthPicker } from '@/components/MonthPicker'
 import type { ReportFiltersState } from './types'
 
@@ -45,22 +44,12 @@ export default function ReportFilters({
     onChange({ ...filters, [k]: v })
   }
 
-  const categoryOptions = useMemo(
-    () =>
-      buildGroupedCategoryFilterOptions(categories, {
-        includeAll: true,
-        allLabel: 'Todas as categorias',
-        includeNone: true,
-        noneLabel: 'Sem categoria',
-      }),
-    [categories],
-  )
-
   const activeCount = [
     filters.accountId,
     filters.creditCardId,
     filters.hideCreditCards,
-    filters.categoryId,
+    filters.generalCategoryId,
+    filters.specificCategoryId,
     filters.status,
     filters.responsibleId,
   ].filter(Boolean).length
@@ -71,7 +60,8 @@ export default function ReportFilters({
       accountId: '',
       creditCardId: '',
       hideCreditCards: false,
-      categoryId: '',
+      generalCategoryId: '',
+      specificCategoryId: '',
       status: '',
       responsibleId: '',
     })
@@ -153,7 +143,7 @@ export default function ReportFilters({
             </div>
           </div>
 
-          <div className={clsx('grid gap-3', members && members.length > 0 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3')}>
+          <div className={clsx('grid gap-3', members && members.length > 0 ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2')}>
             {members && members.length > 0 && (
               <Field label="Membro / Responsável">
                 <Select
@@ -196,13 +186,15 @@ export default function ReportFilters({
               </Select>
             </Field>
 
-            <Field label="Categoria">
-              <Select
-                value={filters.categoryId}
-                onChange={(e) => set('categoryId', e.target.value)}
-                options={categoryOptions}
-              />
-            </Field>
+            <CategoryFilterPair
+              categories={categories}
+              generalCategoryId={filters.generalCategoryId}
+              specificCategoryId={filters.specificCategoryId}
+              onChange={({ generalCategoryId, specificCategoryId }) =>
+                onChange({ ...filters, generalCategoryId, specificCategoryId })
+              }
+              className={members && members.length > 0 ? 'sm:col-span-2 lg:col-span-3' : 'sm:col-span-2'}
+            />
           </div>
         </Card>
       )}

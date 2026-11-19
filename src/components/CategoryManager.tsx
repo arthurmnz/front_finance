@@ -887,7 +887,16 @@ export default function CategoryManager({
           open={!!deleting}
           onClose={() => setDeleting(undefined)}
           title="Excluir categoria"
-          message={`Excluir "${deleting?.category.name}"?`}
+          message={
+            deleting && !isGeneralCategory(deleting.category)
+              ? (() => {
+                  const parentName =
+                    deleting.category.parent?.name ??
+                    scopedCategories.find((c) => c.id === deleting.category.parentId)?.name
+                  return `Excluir "${deleting.category.name}"? As transações vinculadas manterão a categoria geral${parentName ? ` "${parentName}"` : ' pai'}.`
+                })()
+              : `Excluir "${deleting?.category.name}"?`
+          }
           confirmLabel="Excluir"
           loading={del.isPending}
           onConfirm={() => deleting && del.mutate(deleting.category.id)}

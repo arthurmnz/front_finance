@@ -69,7 +69,12 @@ export default function TransactionList({
     const incoming = t.type === 'INCOME' || isIncomingTransfer
     const done = t.status === 'COMPLETED'
     const isCard = !!t.creditCardId
-    const catColor = hasResolvedCat ? normalizeCategoryColor(resolvedCat.color) : undefined
+    const generalColor = hasResolvedCat
+      ? normalizeCategoryColor(resolvedCat.general?.color ?? resolvedCat.color)
+      : undefined
+    const specColor = hasResolvedCat
+      ? normalizeCategoryColor(resolvedCat.specific?.color ?? resolvedCat.color)
+      : undefined
 
     return (
       <div key={t.id} className="group flex items-center gap-3 p-3 sm:p-3.5 transition-colors duration-150 hover:bg-surface-2/50">
@@ -121,20 +126,49 @@ export default function TransactionList({
               </span>
             )}
             {hasResolvedCat && (
-              <span className="inline-flex items-center gap-1 font-medium" style={{ color: catColor }}>
-                {resolvedCat.general && resolvedCat.specific ? (
-                  <>
-                    {resolvedCat.general.icon && <span>{resolvedCat.general.icon}</span>}
+              <span
+                className="inline-flex flex-wrap items-center gap-1"
+                title={
+                  resolvedCat.general && resolvedCat.specific
+                    ? `Categoria geral: ${resolvedCat.general.name} · Categoria específica: ${resolvedCat.specific.name}`
+                    : resolvedCat.general
+                      ? `Categoria geral: ${resolvedCat.general.name}`
+                      : `Categoria específica: ${resolvedCat.specific?.name}`
+                }
+              >
+                {resolvedCat.general && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-text-muted"
+                    style={
+                      !resolvedCat.specific && generalColor
+                        ? { borderColor: `${generalColor}50`, backgroundColor: `${generalColor}16`, color: '#ffffff' }
+                        : undefined
+                    }
+                  >
+                    {resolvedCat.general.icon ? (
+                      <span aria-hidden="true">{resolvedCat.general.icon}</span>
+                    ) : (
+                      generalColor && <span className="size-1.5 rounded-full shrink-0" style={{ background: generalColor }} />
+                    )}
                     <span>{resolvedCat.general.name}</span>
-                    <span className="opacity-60">›</span>
-                    {resolvedCat.specific.icon && <span>{resolvedCat.specific.icon}</span>}
+                  </span>
+                )}
+                {resolvedCat.specific && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium text-white"
+                    style={
+                      specColor
+                        ? { borderColor: `${specColor}55`, backgroundColor: `${specColor}1A` }
+                        : undefined
+                    }
+                  >
+                    {resolvedCat.specific.icon ? (
+                      <span aria-hidden="true">{resolvedCat.specific.icon}</span>
+                    ) : (
+                      specColor && <span className="size-1.5 rounded-full shrink-0" style={{ background: specColor }} />
+                    )}
                     <span>{resolvedCat.specific.name}</span>
-                  </>
-                ) : (
-                  <>
-                    {resolvedCat.icon && <span>{resolvedCat.icon}</span>}
-                    <span>{resolvedCat.label}</span>
-                  </>
+                  </span>
                 )}
               </span>
             )}

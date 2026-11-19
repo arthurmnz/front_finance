@@ -6,14 +6,17 @@ import {
   ChevronDown,
   ChevronRight,
   CornerDownRight,
+  FolderTree,
   PieChart as PieIcon,
   Sparkles,
+  Tags,
 } from 'lucide-react'
 import clsx from 'clsx'
-import type { CategoryLevel } from '@/lib/types'
 import { formatMoney } from '@/lib/format'
 import { Badge, Card, Empty, InfoTooltip } from '@/components/ui'
 import type { CategoryComparison } from './types'
+
+type CategoryReportMode = 'BOTH' | 'GENERAL' | 'SPECIFIC'
 
 interface CategoryEvolutionSectionProps {
   categories: CategoryComparison[]
@@ -31,7 +34,7 @@ function MomCell({ item }: { item: CategoryComparison }) {
     return (
       <span
         className={clsx(
-          'inline-flex items-center gap-0.5 font-medium',
+          'inline-flex items-center gap-0.5 font-medium tabular-nums',
           item.momVariationPct > 0 ? 'text-expense' : 'text-lime',
         )}
       >
@@ -43,100 +46,58 @@ function MomCell({ item }: { item: CategoryComparison }) {
   return <span className="text-text-dim">—</span>
 }
 
-export default function CategoryEvolutionSection({ categories }: CategoryEvolutionSectionProps) {
-  const [viewMode, setViewMode] = useState<CategoryLevel>('GENERAL')
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+interface BreakdownBlockProps {
+  title: string
+  subtitle: string
+  icon: typeof FolderTree
+  columnLabel: string
+  items: CategoryComparison[]
+  expandable?: boolean
+  showParentBadge?: boolean
+  expandedIds?: Set<string>
+  onToggleExpand?: (key: string) => void
+}
 
-  const displayedCategories = useMemo(() => {
-    if (viewMode === 'GENERAL') return categories
-
-    const flat: CategoryComparison[] = []
-    categories.forEach((c) => {
-      if (c.children && c.children.length > 0) {
-        c.children.forEach((sub) => {
-          flat.push({
-            ...sub,
-            parentName: sub.parentName ?? c.name,
-          })
-        })
-      } else {
-        flat.push(c)
-      }
-    })
-    return flat.sort(
-      (a, b) =>
-        b.currentAmount - a.currentAmount ||
-        b.previousAmount - a.previousAmount ||
-        a.name.localeCompare(b.name, 'pt-BR'),
-    )
-  }, [categories, viewMode])
-
+function CategoryBreakdownBlock({
+  title,
+  subtitle,
+  icon: HeaderIcon,
+  columnLabel,
+  items,
+  expandable = false,
+  showParentBadge = false,
+  expandedIds,
+  onToggleExpand,
+}: BreakdownBlockProps) {
   const chartData = useMemo(
     () =>
-      displayedCategories
+      items
         .filter((c) => c.currentAmount > 0)
         .map((c) => ({
-          name: c.icon ? `${c.icon} ${c.name}` : c.name,
+          name: c.isDirectGeneral
+            ? `Sem específica · ${c.parentName ?? 'Geral'}`
+            : showParentBadge && c.parentName
+              ? `${c.icon ? `${c.icon} ` : ''}${c.name} · ${c.parentName}`
+              : c.icon
+                ? `${c.icon} ${c.name}`
+                : c.name,
           value: c.currentAmount,
           color: c.color,
         })),
-    [displayedCategories],
+    [items, showParentBadge],
   )
 
   const hasData = chartData.length > 0
 
-  const toggleExpand = (key: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
   return (
-    <div className="space-y-4 mb-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
-            <PieIcon className="size-4 text-violet" />
-            <span>Evolução por Categoria & Comparativo Mensal (MoM)</span>
-            <InfoTooltip
-              title="Evolução por Categoria"
-              content="Distribuição proporcional dos gastos do mês por categoria geral ou específica e taxa de variação percentual (MoM) comparada ao mês anterior."
-              align="start"
-            />
-          </h2>
-          <p className="text-xs text-text-dim">
-            Distribuição dos gastos no mês e variação percentual em relação ao mês anterior
-          </p>
-        </div>
-
-        <div className="inline-flex rounded-xl bg-surface-1 p-1 border border-border card-highlight">
-          <button
-            type="button"
-            onClick={() => setViewMode('GENERAL')}
-            className={clsx(
-              'rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
-              viewMode === 'GENERAL'
-                ? 'bg-violet text-white font-semibold shadow-sm shadow-violet/25'
-                : 'text-text-muted hover:text-white',
-            )}
-          >
-            Gerais
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('SPECIFIC')}
-            className={clsx(
-              'rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
-              viewMode === 'SPECIFIC'
-                ? 'bg-violet text-white font-semibold shadow-sm shadow-violet/25'
-                : 'text-text-muted hover:text-white',
-            )}
-          >
-            Específicas
-          </button>
+          <h3 className="text-sm font-semibold text-white tracking-tight flex items-center gap-2">
+            <HeaderIcon className="size-4 text-violet shrink-0" />
+            <span>{title}</span>
+          </h3>
+          <p className="text-xs text-text-dim">{subtitle}</p>
         </div>
       </div>
 
@@ -180,8 +141,8 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
         {/* Tabela/Ranking com Comparativo MoM */}
         <Card className="p-4 bg-surface-1 border-border md:col-span-7">
           <div className="mb-3 flex items-center justify-between border-b border-border/60 pb-2 text-xs font-semibold text-text-dim">
-            <span>{viewMode === 'GENERAL' ? 'Categoria geral' : 'Categoria específica'}</span>
-            <div className="flex items-center gap-6">
+            <span>{columnLabel}</span>
+            <div className="flex items-center gap-3 sm:gap-6">
               <span>Atual (% Total)</span>
               <span className="flex items-center gap-1">
                 Variação MoM
@@ -193,24 +154,24 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
             </div>
           </div>
 
-          {!displayedCategories.length ? (
+          {!items.length ? (
             <Empty title="Nenhuma categoria para comparar." />
           ) : (
             <ul className="divide-y divide-border/60 max-h-96 overflow-y-auto pr-1">
-              {displayedCategories.map((c, idx) => {
+              {items.map((c, idx) => {
                 const rowKey = c.id ?? `cat-${idx}-${c.name}`
-                const hasChildren = viewMode === 'GENERAL' && Boolean(c.children && c.children.length > 0)
-                const isExpanded = hasChildren && expandedIds.has(rowKey)
+                const hasChildren = expandable && Boolean(c.children && c.children.length > 0)
+                const isExpanded = Boolean(hasChildren && expandedIds?.has(rowKey))
 
                 return (
                   <li key={rowKey} className="py-1">
                     <div className="py-1.5 flex items-center justify-between text-xs gap-2">
-                      <div className="flex items-center gap-2 min-w-0 pr-2">
-                        {viewMode === 'GENERAL' && (
+                      <div className="flex items-center gap-2 min-w-0 pr-1 flex-1">
+                        {expandable && (
                           hasChildren ? (
                             <button
                               type="button"
-                              onClick={() => toggleExpand(rowKey)}
+                              onClick={() => onToggleExpand?.(rowKey)}
                               aria-expanded={isExpanded}
                               aria-label={isExpanded ? `Recolher ${c.name}` : `Expandir ${c.name}`}
                               className="grid size-5 shrink-0 place-items-center rounded-md text-text-dim hover:bg-surface-2 hover:text-white transition cursor-pointer"
@@ -226,27 +187,44 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
                           )
                         )}
                         <span className="size-2.5 rounded-full shrink-0" style={{ background: c.color }} />
-                        {c.icon && <span className="shrink-0">{c.icon}</span>}
-                        <div className="min-w-0 truncate">
-                          <span className="font-medium text-white">{c.name}</span>
-                          {viewMode === 'SPECIFIC' && c.parentName && (
-                            <span className="text-text-dim"> · {c.parentName}</span>
+                        {!c.isDirectGeneral && c.icon && <span className="shrink-0">{c.icon}</span>}
+                        <div className="min-w-0 flex flex-wrap items-center gap-1.5">
+                          {c.isDirectGeneral ? (
+                            <span className="font-medium italic text-text-muted">Sem específica</span>
+                          ) : (
+                            <span className={clsx('font-medium truncate', c.isUncategorized ? 'text-text-dim' : 'text-white')}>
+                              {c.name}
+                            </span>
                           )}
+
+                          {showParentBadge && c.parentName && (
+                            <Badge tone="default" className="text-[10px] px-2 py-0 inline-flex items-center gap-1">
+                              {c.parentIcon && <span aria-hidden="true">{c.parentIcon}</span>}
+                              <span>{c.parentName}</span>
+                            </Badge>
+                          )}
+
+                          {showParentBadge && c.isUncategorized && (
+                            <Badge tone="neutral" className="text-[10px] px-2 py-0">
+                              Não categorizada
+                            </Badge>
+                          )}
+
                           {hasChildren && (
-                            <span className="ml-1.5 text-[10px] text-text-dim tabular-nums">
+                            <span className="text-[10px] text-text-dim tabular-nums">
                               ({c.children!.length})
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-6 shrink-0 tabular-nums">
+                      <div className="flex items-center gap-3 sm:gap-6 shrink-0 tabular-nums">
                         <div className="text-right">
                           <p className="font-semibold text-white">{formatMoney(c.currentAmount)}</p>
                           <p className="text-[10px] text-text-dim">{c.percentageOfTotal}%</p>
                         </div>
 
-                        <div className="w-20 text-right">
+                        <div className="w-16 sm:w-20 text-right">
                           <MomCell item={c} />
                         </div>
                       </div>
@@ -257,7 +235,7 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
                         {c.children.map((sub, subIdx) => (
                           <li
                             key={sub.id ?? `sub-${subIdx}-${sub.name}`}
-                            className="flex items-center justify-between gap-2 py-1 pl-4 pr-1 text-[11px]"
+                            className="flex items-center justify-between gap-2 py-1 pl-3 sm:pl-4 pr-1 text-[11px]"
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <CornerDownRight className="size-3 shrink-0 text-text-faint" aria-hidden="true" />
@@ -265,17 +243,29 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
                                 className="size-2 rounded-full shrink-0"
                                 style={{ background: sub.color }}
                               />
-                              {sub.icon && <span className="shrink-0">{sub.icon}</span>}
-                              <span className="truncate text-text-muted">{sub.name}</span>
+                              {!sub.isDirectGeneral && sub.icon && <span className="shrink-0">{sub.icon}</span>}
+                              {sub.isDirectGeneral ? (
+                                <span className="truncate italic text-text-muted">Sem específica</span>
+                              ) : (
+                                <span className="truncate text-text-muted">{sub.name}</span>
+                              )}
+                              {sub.isDirectGeneral && (
+                                <Badge tone="default" className="text-[11px] px-1.5 py-0 shrink-0">
+                                  Direto na geral
+                                </Badge>
+                              )}
                             </div>
 
-                            <div className="flex items-center gap-6 shrink-0 tabular-nums">
+                            <div className="flex items-center gap-3 sm:gap-6 shrink-0 tabular-nums">
                               <div className="text-right">
                                 <p className="font-medium text-white">{formatMoney(sub.currentAmount)}</p>
-                                <p className="text-[10px] text-text-dim">{sub.percentageOfTotal}%</p>
+                                <p className="text-[10px] text-text-dim">
+                                  {sub.percentageOfTotal}%
+                                  {sub.percentageOfParent !== undefined ? ` (${sub.percentageOfParent}% da geral)` : ''}
+                                </p>
                               </div>
 
-                              <div className="w-20 text-right">
+                              <div className="w-16 sm:w-20 text-right">
                                 <MomCell item={sub} />
                               </div>
                             </div>
@@ -290,6 +280,117 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
           )}
         </Card>
       </div>
+    </div>
+  )
+}
+
+export default function CategoryEvolutionSection({ categories }: CategoryEvolutionSectionProps) {
+  const [viewMode, setViewMode] = useState<CategoryReportMode>('BOTH')
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+
+  const specificItems = useMemo(() => {
+    const flat: CategoryComparison[] = []
+    categories.forEach((c) => {
+      if (c.isUncategorized || (c.name === 'Sem categoria' && (!c.children || c.children.length === 0))) {
+        flat.push({ ...c, isUncategorized: true })
+        return
+      }
+      if (c.children && c.children.length > 0) {
+        c.children.forEach((sub) => {
+          flat.push({
+            ...sub,
+            parentName: sub.parentName ?? c.name,
+            parentIcon: sub.parentIcon ?? c.icon ?? null,
+            parentColor: sub.parentColor ?? c.color,
+          })
+        })
+      } else {
+        flat.push(c)
+      }
+    })
+    return flat.sort(
+      (a, b) =>
+        b.currentAmount - a.currentAmount ||
+        b.previousAmount - a.previousAmount ||
+        a.name.localeCompare(b.name, 'pt-BR'),
+    )
+  }, [categories])
+
+  const toggleExpand = (key: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  return (
+    <div className="space-y-6 mb-8">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
+            <PieIcon className="size-4 text-violet" />
+            <span>Evolução por Categoria & Comparativo Mensal (MoM)</span>
+            <InfoTooltip
+              title="Evolução por Categoria"
+              content="Distinção entre Categorias Gerais (visão consolidada) e Categorias Específicas (subcategorias e lançamentos diretos na geral), com variação percentual MoM."
+              align="start"
+            />
+          </h2>
+          <p className="text-xs text-text-dim">
+            Distribuição dos gastos no mês com distinção entre categorias gerais e específicas
+          </p>
+        </div>
+
+        <div className="inline-flex flex-wrap gap-1 rounded-xl bg-surface-1 p-1 border border-border card-highlight">
+          {(
+            [
+              { key: 'BOTH', label: 'Ambas (Gerais e Específicas)' },
+              { key: 'GENERAL', label: 'Apenas Gerais' },
+              { key: 'SPECIFIC', label: 'Apenas Específicas' },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setViewMode(opt.key)}
+              className={clsx(
+                'rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
+                viewMode === opt.key
+                  ? 'bg-violet text-white font-semibold shadow-sm shadow-violet/25'
+                  : 'text-text-muted hover:text-white',
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {(viewMode === 'BOTH' || viewMode === 'GENERAL') && (
+        <CategoryBreakdownBlock
+          title="Categorias Gerais"
+          subtitle="Visão macro consolidada (inclui transações diretas na geral e suas subcategorias)"
+          icon={FolderTree}
+          columnLabel="Categoria geral"
+          items={categories}
+          expandable
+          expandedIds={expandedIds}
+          onToggleExpand={toggleExpand}
+        />
+      )}
+
+      {(viewMode === 'BOTH' || viewMode === 'SPECIFIC') && (
+        <CategoryBreakdownBlock
+          title="Categorias Específicas"
+          subtitle="Visão detalhada por subcategoria, identificando a categoria geral pai"
+          icon={Tags}
+          columnLabel="Categoria específica"
+          items={specificItems}
+          showParentBadge
+        />
+      )}
     </div>
   )
 }

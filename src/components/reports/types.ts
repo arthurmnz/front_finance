@@ -10,7 +10,8 @@ export interface ReportFiltersState {
   accountId: string
   creditCardId: string
   hideCreditCards: boolean
-  categoryId: string
+  generalCategoryId: string
+  specificCategoryId: string
   responsibleId?: string
   status: '' | 'COMPLETED' | 'PENDING'
 }
@@ -59,9 +60,14 @@ export interface CategoryComparison {
   level?: CategoryLevel
   parentId?: string | null
   parentName?: string
+  parentIcon?: string | null
+  parentColor?: string | null
+  isDirectGeneral?: boolean
+  isUncategorized?: boolean
   currentAmount: number
   previousAmount: number
   percentageOfTotal: number
+  percentageOfParent?: number
   momVariationPct: number | null
   isNew: boolean
   children?: CategoryComparison[]

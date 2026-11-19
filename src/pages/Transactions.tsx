@@ -3,12 +3,13 @@ import { useQueries } from '@tanstack/react-query'
 import { Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import clsx from 'clsx'
 import { api } from '@/lib/api'
-import { buildGroupedCategoryFilterOptions, matchesCategoryFilter } from '@/lib/categories'
+import { matchesCategoryFilters } from '@/lib/categories'
 import { useAuth } from '@/lib/auth'
 import { useAccessibleAccounts, useAllCategories, useCreditCards, useResponsibleTransactions } from '@/lib/hooks'
 import type { Transaction, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
 import { formatMoney, fullName, txTypeLabel } from '@/lib/format'
 import { Button, Card, Empty, Field, Input, PageHeader, Select, Spinner } from '@/components/ui'
+import CategoryFilterPair from '@/components/CategoryFilterPair'
 import { MonthPicker, currentPeriod } from '@/components/MonthPicker'
 import TransactionList from '@/components/TransactionList'
 import TransactionFormModal from '@/components/TransactionFormModal'
@@ -18,7 +19,8 @@ interface Filters {
   accountId: string
   creditCardId: string
   hideCreditCards: boolean
-  categoryId: string
+  generalCategoryId: string
+  specificCategoryId: string
   responsibleId: string
   type: '' | TransactionType
   status: '' | TransactionStatus
@@ -29,7 +31,8 @@ const EMPTY: Filters = {
   accountId: '',
   creditCardId: '',
   hideCreditCards: false,
-  categoryId: '',
+  generalCategoryId: '',
+  specificCategoryId: '',
   responsibleId: '',
   type: '',
   status: '',
@@ -53,16 +56,7 @@ export default function Transactions() {
   const accounts = useAccessibleAccounts()
   const creditCards = useCreditCards().data ?? []
   const categories = useAllCategories().data ?? []
-  const categoryFilterOptions = useMemo(
-    () =>
-      buildGroupedCategoryFilterOptions(categories, {
-        includeAll: true,
-        allLabel: 'Todas as categorias',
-        includeNone: true,
-        noneLabel: 'Sem categoria',
-      }),
-    [categories],
-  )
+  const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF((p) => ({ ...p, [k]: v }))
 
   const queries = useQueries({
@@ -121,13 +115,17 @@ export default function Transactions() {
         (f.hideCreditCards || f.creditCardId === 'none'
           ? !t.creditCardId
           : !f.creditCardId || t.creditCardId === f.creditCardId) &&
-        matchesCategoryFilter(t.categoryId, f.categoryId, categories, t.category) &&
+        matchesCategoryFilters(
+          t,
+          { generalCategoryId: f.generalCategoryId, specificCategoryId: f.specificCategoryId },
+          catMap,
+        ) &&
         (!f.responsibleId || t.responsibleId === f.responsibleId) &&
         (!f.type || t.type === f.type) &&
         (!f.status || t.status === f.status) &&
         (!f.recurring || !!t.recurrenceGroupId),
     )
-  }, [all, f, categories])
+  }, [all, f, catMap])
 
   const income = filtered.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0)
   const expense = filtered.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0)
@@ -136,7 +134,8 @@ export default function Transactions() {
     f.accountId,
     f.creditCardId,
     f.hideCreditCards,
-    f.categoryId,
+    f.generalCategoryId,
+    f.specificCategoryId,
     f.responsibleId,
     f.type,
     f.status,
@@ -238,13 +237,14 @@ export default function Transactions() {
               </Select>
             </Field>
 
-            <Field label="Categoria">
-              <Select
-                value={f.categoryId}
-                onChange={(e) => set('categoryId', e.target.value)}
-                options={categoryFilterOptions}
-              />
-            </Field>
+            <CategoryFilterPair
+              categories={categories}
+              generalCategoryId={f.generalCategoryId}
+              specificCategoryId={f.specificCategoryId}
+              onChange={({ generalCategoryId, specificCategoryId }) =>
+                setF((p) => ({ ...p, generalCategoryId, specificCategoryId }))
+              }
+            />
 
             <Field label="Responsável">
               <Select value={f.responsibleId} onChange={(e) => set('responsibleId', e.target.value)}>

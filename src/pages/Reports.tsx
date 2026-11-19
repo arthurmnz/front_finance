@@ -42,7 +42,8 @@ export default function Reports() {
     accountId: '',
     creditCardId: '',
     hideCreditCards: false,
-    categoryId: '',
+    generalCategoryId: '',
+    specificCategoryId: '',
     status: '',
   })
   const [calendarPeriod, setCalendarPeriod] = useState<ReportPeriod>(filters.period)

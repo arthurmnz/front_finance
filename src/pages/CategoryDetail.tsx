@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, ChevronRight, FolderTree } from 'lucide-react'
 import { useAllCategories, useCategoryTransactions } from '@/lib/hooks'
-import { isGeneralCategory } from '@/lib/categories'
+import { addMissingTransactionCategories, isGeneralCategory, resolveTransactionCategory } from '@/lib/categories'
 import { categoryTypeLabel, formatMoney } from '@/lib/format'
 import { normalizeCategoryColor } from '@/lib/palette'
 import type { Category, CategoryParentSummary, CategorySummary } from '@/lib/types'
@@ -18,6 +18,7 @@ interface SubcategoryBreakdownItem {
   amount: number
   percentage: number
   count: number
+  isDirectGeneral?: boolean
 }
 
 export default function CategoryDetail() {
@@ -29,18 +30,36 @@ export default function CategoryDetail() {
 
   const txList = useMemo(() => tx.data ?? [], [tx.data])
 
+  const catMap = useMemo(() => {
+    const map = new Map(cats.map((c) => [c.id, c]))
+    addMissingTransactionCategories(map, txList)
+    return map
+  }, [cats, txList])
+
   const cat: Category | CategorySummary | undefined = useMemo(() => {
     const found = cats.find((c) => c.id === id)
     if (found) return found
-    const fromTx = txList.find((t) => t.category?.id === id)?.category
-    if (fromTx) return fromTx
-    const parentFromTx = txList.find((t) => t.category?.parent?.id === id)?.category?.parent
-    if (parentFromTx) {
-      return {
-        ...parentFromTx,
-        level: 'GENERAL' as const,
-        parentId: null,
-        parent: null,
+    for (const t of txList) {
+      if (t.generalCategory && t.generalCategory.id === id) return t.generalCategory
+      if (t.specificCategory && t.specificCategory.id === id) return t.specificCategory
+      if (t.category && t.category.id === id) return t.category
+    }
+    for (const t of txList) {
+      const specParent = t.specificCategory?.parent
+      const catParent = t.category?.parent
+      const parentSummary =
+        specParent && specParent.id === id
+          ? specParent
+          : catParent && catParent.id === id
+            ? catParent
+            : undefined
+      if (parentSummary) {
+        return {
+          ...parentSummary,
+          level: 'GENERAL' as const,
+          parentId: null,
+          parent: null,
+        }
       }
     }
     return undefined
@@ -56,11 +75,11 @@ export default function CategoryDetail() {
     if (!cat || isGeneral) return undefined
     const pid = cat.parentId ?? cat.parent?.id
     if (pid) {
-      const fromList = cats.find((c) => c.id === pid)
+      const fromList = catMap.get(pid)
       if (fromList) return fromList
     }
     return cat.parent ?? undefined
-  }, [cat, isGeneral, cats])
+  }, [cat, isGeneral, catMap])
 
   const total = useMemo(() => txList.reduce((s, t) => s + t.amount, 0), [txList])
 
@@ -86,44 +105,68 @@ export default function CategoryDetail() {
         })
       })
 
-    // Soma transações do período (inclusive eventuais subcategorias vindas via tx.category)
+    let directAmount = 0
+    let directCount = 0
+
+    // Soma transações do período separando específicas de lançamentos diretos na Geral
     txList.forEach((t) => {
-      if (!t.categoryId) return
-      const existing = subMap.get(t.categoryId)
-      if (existing) {
-        existing.amount += t.amount
-        existing.count += 1
-        return
-      }
-      if (t.categoryId !== cat.id) {
-        const subMeta = cats.find((c) => c.id === t.categoryId) ?? t.category
-        subMap.set(t.categoryId, {
-          id: t.categoryId,
-          name: subMeta?.name ?? 'Subcategoria',
-          icon: subMeta?.icon ?? null,
-          color: subMeta?.color ?? cat.color,
-          amount: t.amount,
-          count: 1,
-        })
+      const resolved = resolveTransactionCategory(t, catMap)
+      if (resolved.specific) {
+        const spec = resolved.specific
+        const existing = subMap.get(spec.id)
+        if (existing) {
+          existing.amount += t.amount
+          existing.count += 1
+          return
+        }
+        if (spec.id !== cat.id) {
+          subMap.set(spec.id, {
+            id: spec.id,
+            name: spec.name,
+            icon: spec.icon ?? null,
+            color: spec.color ?? cat.color,
+            amount: t.amount,
+            count: 1,
+          })
+        }
+      } else {
+        directAmount += t.amount
+        directCount += 1
       }
     })
 
-    return [...subMap.values()]
-      .map((item, idx) => ({
-        id: item.id,
-        name: item.name,
-        icon: item.icon,
-        color: normalizeCategoryColor(item.color, idx),
-        amount: item.amount,
-        percentage: total > 0 ? Math.round((item.amount / total) * 100) : 0,
-        count: item.count,
-      }))
-      .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, 'pt-BR'))
-  }, [cat, isGeneral, cats, txList, total])
+    const items: SubcategoryBreakdownItem[] = [...subMap.values()].map((item, idx) => ({
+      id: item.id,
+      name: item.name,
+      icon: item.icon,
+      color: normalizeCategoryColor(item.color, idx),
+      amount: item.amount,
+      percentage: total > 0 ? Math.round((item.amount / total) * 100) : 0,
+      count: item.count,
+      isDirectGeneral: false,
+    }))
+
+    if (directCount > 0) {
+      items.push({
+        id: `${cat.id}__direct`,
+        name: `Direto em ${cat.name} (sem específica)`,
+        icon: cat.icon ?? null,
+        color: normalizeCategoryColor(cat.color),
+        amount: directAmount,
+        percentage: total > 0 ? Math.round((directAmount / total) * 100) : 0,
+        count: directCount,
+        isDirectGeneral: true,
+      })
+    }
+
+    return items.sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, 'pt-BR'))
+  }, [cat, isGeneral, cats, txList, catMap, total])
 
   const catColor = cat ? normalizeCategoryColor(cat.color) : undefined
   const description = cat && 'description' in cat && typeof cat.description === 'string' ? cat.description : undefined
   const isDefault = cat && 'isDefault' in cat ? Boolean(cat.isDefault) : false
+  const specificSubcategoriesCount = subcategoryBreakdown.filter((s) => !s.isDirectGeneral).length
+  const displayCategories = useMemo(() => [...catMap.values()], [catMap])
 
   return (
     <>
@@ -197,8 +240,8 @@ export default function CategoryDetail() {
             </p>
             <p className="mt-1 text-xs text-text-dim tabular-nums">
               {txList.length} {txList.length === 1 ? 'lançamento' : 'lançamentos'}
-              {isGeneral && subcategoryBreakdown.length > 0
-                ? ` · ${subcategoryBreakdown.length} ${subcategoryBreakdown.length === 1 ? 'específica' : 'específicas'}`
+              {isGeneral && specificSubcategoriesCount > 0
+                ? ` · ${specificSubcategoriesCount} ${specificSubcategoriesCount === 1 ? 'específica' : 'específicas'}`
                 : ''}
             </p>
           </div>
@@ -232,52 +275,78 @@ export default function CategoryDetail() {
             </Card>
           ) : (
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {subcategoryBreakdown.map((sub) => (
-                <Link
-                  key={sub.id}
-                  to={`/categorias/${sub.id}`}
-                  className="group block rounded-2xl border border-border bg-surface-1 p-3.5 card-highlight transition-colors hover:border-violet/45 hover:bg-surface-2/50"
-                >
-                  <div className="flex items-center justify-between gap-2.5">
-                    <div className="flex min-w-0 items-center gap-2.5">
+              {subcategoryBreakdown.map((sub) => {
+                const content = (
+                  <>
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div
+                          className="grid size-8 shrink-0 place-items-center rounded-xl text-sm"
+                          style={{ background: `${sub.color}25` }}
+                        >
+                          {sub.icon || <span className="size-2.5 rounded-full" style={{ background: sub.color }} />}
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className={
+                              sub.isDirectGeneral
+                                ? 'truncate text-sm font-medium text-white'
+                                : 'truncate text-sm font-medium text-white group-hover:text-lime transition-colors'
+                            }
+                          >
+                            {sub.name}
+                          </p>
+                          <p className="text-[11px] text-text-dim tabular-nums">
+                            {sub.count} {sub.count === 1 ? 'lançamento' : 'lançamentos'}
+                            {sub.isDirectGeneral && ' · Apenas geral'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 tabular-nums">
+                        <p className="text-sm font-semibold text-white">{formatMoney(sub.amount)}</p>
+                        <p className="text-[11px] text-text-dim">{sub.percentage}%</p>
+                      </div>
+                    </div>
+                    <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
                       <div
-                        className="grid size-8 shrink-0 place-items-center rounded-xl text-sm"
-                        style={{ background: `${sub.color}25` }}
-                      >
-                        {sub.icon || <span className="size-2.5 rounded-full" style={{ background: sub.color }} />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white group-hover:text-lime transition-colors">
-                          {sub.name}
-                        </p>
-                        <p className="text-[11px] text-text-dim tabular-nums">
-                          {sub.count} {sub.count === 1 ? 'lançamento' : 'lançamentos'}
-                        </p>
-                      </div>
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: `${Math.min(100, sub.percentage)}%`,
+                          background: sub.color,
+                        }}
+                      />
                     </div>
-                    <div className="text-right shrink-0 tabular-nums">
-                      <p className="text-sm font-semibold text-white">{formatMoney(sub.amount)}</p>
-                      <p className="text-[11px] text-text-dim">{sub.percentage}%</p>
-                    </div>
-                  </div>
-                  <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+                  </>
+                )
+
+                if (sub.isDirectGeneral) {
+                  return (
                     <div
-                      className="h-full rounded-full transition-all duration-300"
-                      style={{
-                        width: `${Math.min(100, sub.percentage)}%`,
-                        background: sub.color,
-                      }}
-                    />
-                  </div>
-                </Link>
-              ))}
+                      key={sub.id}
+                      className="rounded-2xl border border-border bg-surface-1 p-3.5 card-highlight"
+                    >
+                      {content}
+                    </div>
+                  )
+                }
+
+                return (
+                  <Link
+                    key={sub.id}
+                    to={`/categorias/${sub.id}`}
+                    className="group block rounded-2xl border border-border bg-surface-1 p-3.5 card-highlight transition-colors hover:border-violet/45 hover:bg-surface-2/50"
+                  >
+                    {content}
+                  </Link>
+                )
+              })}
             </div>
           )}
         </div>
       )}
 
       <QueryState isLoading={tx.isLoading} error={tx.error}>
-        <TransactionList items={txList} categories={cats} />
+        <TransactionList items={txList} categories={displayCategories} />
       </QueryState>
     </>
   )
