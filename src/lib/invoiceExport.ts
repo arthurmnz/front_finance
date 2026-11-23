@@ -395,7 +395,7 @@ function getStatusPdfColor(status: CreditCardInvoice['status']): [number, number
     case 'PAID':
       return [21, 128, 61]
     case 'OPEN':
-      return [125, 57, 235]
+      return [180, 118, 9]
     case 'PARTIALLY_PAID':
       return [180, 83, 9]
     case 'CLOSED':
@@ -429,7 +429,7 @@ export function buildInvoicePdfDocument(payload: InvoiceExportPayload, generated
   const statusStr = INVOICE_STATUS_LABELS[invoice.status] ?? invoice.status
 
   // Barra superior de identidade
-  doc.setFillColor(125, 57, 235)
+  doc.setFillColor(251, 191, 36)
   doc.rect(margin, 10, contentWidth, 1.2, 'F')
 
   // Cabeçalho

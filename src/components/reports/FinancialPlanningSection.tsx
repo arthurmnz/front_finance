@@ -143,15 +143,15 @@ export default function FinancialPlanningSection({
               </span>
 
               {/* Seletor de Janela: 6 meses vs 12 meses */}
-              <div className="inline-flex rounded-lg bg-surface-2 p-0.5 border border-border">
+              <div className="inline-flex rounded-lg bg-surface-elevated p-0.5 border border-border-subtle">
                 <button
                   type="button"
                   onClick={() => onWindowChange(6)}
                   className={clsx(
-                    'px-2 py-0.5 text-[11px] font-semibold rounded-md transition select-none',
+                    'px-2 py-0.5 text-[11px] font-mono font-semibold rounded-md transition select-none',
                     windowMonths === 6
-                      ? 'bg-violet text-white shadow-sm'
-                      : 'text-text-dim hover:text-white',
+                      ? 'bg-accent text-canvas shadow-sm'
+                      : 'text-ink-secondary hover:text-ink-primary',
                   )}
                   title="Calcular média variável dos últimos 6 meses"
                 >
@@ -161,10 +161,10 @@ export default function FinancialPlanningSection({
                   type="button"
                   onClick={() => onWindowChange(12)}
                   className={clsx(
-                    'px-2 py-0.5 text-[11px] font-semibold rounded-md transition select-none',
+                    'px-2 py-0.5 text-[11px] font-mono font-semibold rounded-md transition select-none',
                     windowMonths === 12
-                      ? 'bg-violet text-white shadow-sm'
-                      : 'text-text-dim hover:text-white',
+                      ? 'bg-accent text-canvas shadow-sm'
+                      : 'text-ink-secondary hover:text-ink-primary',
                   )}
                   title="Calcular média variável dos últimos 12 meses"
                 >

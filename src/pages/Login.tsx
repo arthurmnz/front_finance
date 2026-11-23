@@ -24,12 +24,15 @@ export default function Login() {
   } = useForm<Form>({ resolver: zodResolver(schema) })
 
   return (
-    <div className="grid min-h-dvh place-items-center p-5 bg-black text-white">
+    <div className="grid min-h-dvh place-items-center p-5 bg-canvas text-ink-primary">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <BrandLogo className="mx-auto mb-3 size-16 drop-shadow-[0_0_24px_rgba(125,57,235,0.45)]" />
-          <h1 className="text-2xl font-bold tracking-tight text-white">Bem-vindo de volta</h1>
-          <p className="mt-1 text-xs text-text-muted">Entre para controlar suas finanças</p>
+          <Link to="/" className="inline-flex flex-col items-center gap-2 transition hover:opacity-90">
+            <BrandLogo className="mx-auto size-16 drop-shadow-[0_0_24px_rgba(251,191,36,0.35)]" />
+            <span className="font-display text-sm tracking-wider text-ink-primary">Finance</span>
+          </Link>
+          <h1 className="mt-3 text-2xl font-bold tracking-tight text-ink-primary">Bem-vindo de volta</h1>
+          <p className="mt-1 text-xs text-ink-secondary">Entre para controlar suas finanças</p>
         </div>
 
         <Card className="p-5">
@@ -58,7 +61,7 @@ export default function Login() {
                 />
               </Field>
               <div className="mt-1.5 flex justify-end">
-                <Link to="/esqueci-senha" className="text-xs text-text-muted hover:text-lime transition">
+                <Link to="/esqueci-senha" className="text-xs text-ink-secondary hover:text-accent transition">
                   Esqueceu a senha?
                 </Link>
               </div>
@@ -77,12 +80,19 @@ export default function Login() {
           </form>
         </Card>
 
-        <p className="text-center text-xs text-text-muted">
-          Não tem conta?{' '}
-          <Link to="/cadastro" className="text-lime font-medium hover:underline">
-            Cadastre-se
-          </Link>
-        </p>
+        <div className="space-y-2 text-center text-xs text-ink-secondary">
+          <p>
+            Não tem conta?{' '}
+            <Link to="/cadastro" className="text-accent font-medium hover:underline">
+              Cadastre-se
+            </Link>
+          </p>
+          <p>
+            <Link to="/" className="text-ink-secondary hover:text-ink-primary transition">
+              ← Voltar para a página inicial
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )

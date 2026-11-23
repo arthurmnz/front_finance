@@ -49,14 +49,14 @@ export default function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="grid min-h-dvh place-items-center p-5 bg-black text-white">
+      <div className="grid min-h-dvh place-items-center p-5 bg-canvas text-ink-primary">
         <div className="w-full max-w-sm space-y-6">
           <Card className="p-6 text-center space-y-4">
-            <div className="mx-auto grid size-12 place-items-center rounded-full bg-surface-2 text-text-muted">
+            <div className="mx-auto grid size-12 place-items-center rounded-full bg-surface-elevated text-ink-secondary">
               <ShieldAlert className="size-6" />
             </div>
-            <h1 className="text-xl font-bold text-white">Link inválido ou ausente</h1>
-            <p className="text-xs text-text-muted leading-relaxed">
+            <h1 className="text-xl font-bold text-ink-primary">Link inválido ou ausente</h1>
+            <p className="text-xs text-ink-secondary leading-relaxed">
               O link de redefinição de senha está incompleto ou expirou. Por favor, solicite um novo link de recuperação.
             </p>
             <div className="pt-2">
@@ -65,7 +65,7 @@ export default function ResetPassword() {
               </Link>
             </div>
             <div>
-              <Link to="/login" className="text-xs text-text-dim hover:text-white transition">
+              <Link to="/login" className="text-xs text-ink-secondary hover:text-ink-primary transition">
                 Voltar para o login
               </Link>
             </div>
@@ -76,14 +76,14 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="grid min-h-dvh place-items-center p-5 bg-black text-white">
+    <div className="grid min-h-dvh place-items-center p-5 bg-canvas text-ink-primary">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-violet/20 border border-violet/30 text-lime shadow-[0_0_24px_rgba(125,57,235,0.35)]">
+          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-accent/15 border border-accent/30 text-accent shadow-[0_0_24px_rgba(251,191,36,0.28)]">
             <KeyRound className="size-7" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Criar nova senha</h1>
-          <p className="mt-1 text-xs text-text-muted">
+          <h1 className="text-2xl font-bold tracking-tight text-ink-primary">Criar nova senha</h1>
+          <p className="mt-1 text-xs text-ink-secondary">
             Defina uma nova senha segura para a sua conta
           </p>
         </div>
@@ -140,9 +140,9 @@ export default function ResetPassword() {
           </form>
         </Card>
 
-        <p className="text-center text-xs text-text-muted">
+        <p className="text-center text-xs text-ink-secondary">
           Lembrou sua senha antiga?{' '}
-          <Link to="/login" className="text-lime font-medium hover:underline">
+          <Link to="/login" className="text-accent font-medium hover:underline">
             Voltar para o login
           </Link>
         </p>

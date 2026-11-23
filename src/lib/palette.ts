@@ -1,93 +1,87 @@
 /**
- * Paleta de cores exclusiva do sistema:
- * #000000 Black
- * #7D39EB Violet
- * #C6FF33 Lime
- * #FFFFFF White
+ * Paleta de cores oficial do sistema Finance:
+ * --color-canvas: #09090b
+ * --color-surface: #111114
+ * --color-surface-elevated: #18181b
+ * --color-border-subtle: rgba(255, 255, 255, 0.1)
+ * --color-border-strong: rgba(255, 255, 255, 0.22)
+ * --color-ink-primary: #f4f4f5
+ * --color-ink-secondary: #a1a1aa
+ * --color-accent: #fbbf24
+ * --color-accent-soft: #fcd34d
  */
 
 export const THEME_COLORS = {
-  black: '#000000',
-  surface: '#070709',
-  surface1: '#0e0e13',
-  surface2: '#16161f',
-  surface3: '#1e1e2b',
-  border: '#20202d',
-  borderStrong: '#323247',
-  text: '#ffffff',
-  textMuted: 'rgba(255, 255, 255, 0.72)',
-  textDim: 'rgba(255, 255, 255, 0.64)',
-  textFaint: 'rgba(255, 255, 255, 0.25)',
-  violet: '#7D39EB',
-  violetHover: '#9253f5',
-  violetActive: '#6626d0',
-  violetSubtle: 'rgba(125, 57, 235, 0.15)',
-  lime: '#C6FF33',
-  limeHover: '#d5ff5c',
-  limeActive: '#b1eb21',
-  limeSubtle: 'rgba(198, 255, 51, 0.12)',
+  canvas: '#09090b',
+  surface: '#111114',
+  surfaceElevated: '#18181b',
+  borderSubtle: 'rgba(255, 255, 255, 0.1)',
+  borderStrong: 'rgba(255, 255, 255, 0.22)',
+  inkPrimary: '#f4f4f5',
+  inkSecondary: '#a1a1aa',
+  accent: '#fbbf24',
+  accentSoft: '#fcd34d',
+  // Aliases legados
+  black: '#09090b',
+  surface1: '#111114',
+  surface2: '#18181b',
+  surface3: '#18181b',
+  border: 'rgba(255, 255, 255, 0.1)',
+  text: '#f4f4f5',
+  textMuted: '#a1a1aa',
+  textDim: '#a1a1aa',
+  textFaint: 'rgba(161, 161, 170, 0.45)',
+  violet: '#fbbf24',
+  violetHover: '#fcd34d',
+  violetActive: '#f59e0b',
+  violetSubtle: 'rgba(251, 191, 36, 0.15)',
+  lime: '#fbbf24',
+  limeHover: '#fcd34d',
+  limeActive: '#f59e0b',
+  limeSubtle: 'rgba(251, 191, 36, 0.12)',
 } as const
 
 /**
- * 8 tons derivados da paleta exclusiva para gráficos (Dashboard, GroupDetail) e categorias:
- * 1. Lime (#C6FF33)
- * 2. Lime pastel (#E4FF8F)
- * 3. Violet (#7D39EB)
- * 4. Lavanda (#B285FF)
- * 5. Violet escuro (#4A159D)
- * 6. Branco gelo (#F4F4F6)
- * 7. Cinza titânio (#8E8EA0)
- * 8. Grafite (#38384A)
+ * Sugestões rápidas de cores para categorias e gráficos:
  */
 export const PALETTE = [
-  '#C6FF33', // Lime
-  '#E4FF8F', // Lime pastel
-  '#7D39EB', // Violet
-  '#B285FF', // Lavanda
-  '#4A159D', // Violet escuro
-  '#F4F4F6', // Branco gelo
-  '#8E8EA0', // Cinza titânio
-  '#38384A', // Grafite
+  '#fbbf24', // Amber (Accent)
+  '#fcd34d', // Amber Soft
+  '#f59e0b', // Amber Deep
+  '#34d399', // Emerald
+  '#38bdf8', // Sky
+  '#f4f4f5', // Ink Primary
+  '#a1a1aa', // Ink Secondary
+  '#f43f5e', // Rose
+  '#a855f7', // Purple
+  '#fb923c', // Orange
 ] as const
 
-const LEGACY_COLOR_MAP: Record<string, string> = {
-  '#6366f1': '#7D39EB', // indigo -> violet
-  '#7c7ff5': '#B285FF', // indigo hover -> lavanda
-  '#4f46e5': '#4A159D', // indigo dark -> violet escuro
-  '#f87171': '#F4F4F6', // red -> branco gelo
-  '#ef4444': '#F4F4F6',
-  '#dc2626': '#8E8EA0',
-  '#34d399': '#C6FF33', // emerald -> lime
-  '#10b981': '#C6FF33',
-  '#059669': '#E4FF8F',
-  '#a3e635': '#C6FF33', // lime antigo -> lime
-  '#84cc16': '#C6FF33',
-  '#fbbf24': '#E4FF8F', // amber -> lime pastel
-  '#f59e0b': '#B285FF',
-  '#38bdf8': '#8E8EA0', // sky -> cinza titanio
-  '#0284c7': '#7D39EB',
-  '#e879f9': '#B285FF', // fuchsia -> lavanda
-  '#c084fc': '#B285FF',
-  '#fb923c': '#F4F4F6', // orange -> branco gelo
-  '#ea580c': '#8E8EA0',
-  '#0b0f17': '#000000',
-  '#121826': '#0e0e13',
-  '#1a2233': '#16161f',
-  '#263047': '#20202d',
-  '#8b95a9': '#8E8EA0',
-  '#e6eaf2': '#F4F4F6',
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
+
+/**
+ * Expansão de #RGB para #RRGGBB ou validação de código hexadecimal.
+ */
+export function isValidHexColor(value?: string | null): boolean {
+  if (!value) return false
+  return HEX_COLOR_RE.test(value.trim())
 }
 
 /**
- * Normaliza cores legadas salvas no banco de dados para os 8 tons oficiais da paleta.
+ * Normaliza qualquer cor hexadecimal escolhida pelo usuário (ou usa um fallback da paleta quando vazia).
+ * Preserva cores livres customizadas selecionadas pelo seletor de cores.
  */
 export function normalizeCategoryColor(color?: string | null, fallbackIndex = 0): string {
   if (!color) return PALETTE[fallbackIndex % PALETTE.length]
-  const lower = color.trim().toLowerCase()
-  if (LEGACY_COLOR_MAP[lower]) {
-    return LEGACY_COLOR_MAP[lower]
+  const trimmed = color.trim()
+  if (HEX_COLOR_RE.test(trimmed)) {
+    if (trimmed.length === 4) {
+      const r = trimmed[1]
+      const g = trimmed[2]
+      const b = trimmed[3]
+      return `#${r}${r}${g}${g}${b}${b}`
+    }
+    return trimmed
   }
-  const isApproved = PALETTE.some((p) => p.toLowerCase() === lower)
-  if (isApproved) return color
   return PALETTE[fallbackIndex % PALETTE.length]
 }

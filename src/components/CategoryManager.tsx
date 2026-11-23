@@ -24,7 +24,7 @@ import {
 import { useAction, useSeedDefaultCategories } from '@/lib/hooks'
 import type { Category, CategoryInput, CategoryLevel, CategoryType } from '@/lib/types'
 import { categoryTypeLabel } from '@/lib/format'
-import { PALETTE, normalizeCategoryColor } from '@/lib/palette'
+import { PALETTE, isValidHexColor, normalizeCategoryColor } from '@/lib/palette'
 import {
   Alert,
   Badge,
@@ -51,8 +51,8 @@ const filterChip = (active: boolean) =>
   clsx(
     'inline-flex min-h-10 items-center justify-center rounded-xl border px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none active:scale-[0.98] sm:min-h-8',
     active
-      ? 'border-violet bg-violet text-white font-semibold shadow-sm shadow-violet/25'
-      : 'border-border bg-surface-1/60 text-text-muted hover:bg-surface-2 hover:text-white',
+      ? 'border-accent bg-accent text-canvas font-semibold shadow-sm shadow-accent/25'
+      : 'border-border-subtle bg-surface/60 text-ink-secondary hover:bg-surface-elevated hover:text-ink-primary',
   )
 
 interface CategoryFormProps {
@@ -82,6 +82,7 @@ function CategoryForm({
   const [description, setDescription] = useState('')
   const [type, setType] = useState<CategoryType>('EXPENSE')
   const [color, setColor] = useState<string>(PALETTE[0])
+  const [hexDraft, setHexDraft] = useState<string>(PALETTE[0])
   const [icon, setIcon] = useState('')
   const [colorTouched, setColorTouched] = useState(false)
   const [nameError, setNameError] = useState('')
@@ -129,6 +130,7 @@ function CategoryForm({
         ? normalizeCategoryColor(defaultParent.color)
         : PALETTE[0]
     setColor(initialColor)
+    setHexDraft(initialColor.toUpperCase())
     setIcon(category?.icon ?? '')
     setColorTouched(Boolean(category))
     setNameError('')
@@ -164,7 +166,9 @@ function CategoryForm({
           setType(p.type)
         }
         if (!category && !colorTouched && p.color) {
-          setColor(normalizeCategoryColor(p.color))
+          const norm = normalizeCategoryColor(p.color)
+          setColor(norm)
+          setHexDraft(norm.toUpperCase())
         }
       }
     }
@@ -179,7 +183,9 @@ function CategoryForm({
       setType(p.type)
     }
     if (!category && !colorTouched && p.color) {
-      setColor(normalizeCategoryColor(p.color))
+      const norm = normalizeCategoryColor(p.color)
+      setColor(norm)
+      setHexDraft(norm.toUpperCase())
     }
   }
 
@@ -251,7 +257,7 @@ function CategoryForm({
     >
       <form noValidate className="space-y-4" onSubmit={handleSubmit}>
         <Field label="Nível da categoria">
-          <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-surface-2 p-1 border border-border">
+          <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-surface-elevated p-1 border border-border-subtle">
             <button
               type="button"
               aria-pressed={level === 'GENERAL'}
@@ -259,15 +265,15 @@ function CategoryForm({
               className={clsx(
                 'flex min-h-11 flex-col items-center justify-center rounded-lg px-2 py-1.5 text-center transition-all duration-150 cursor-pointer select-none',
                 level === 'GENERAL'
-                  ? 'bg-violet text-white font-semibold shadow-sm shadow-violet/25'
-                  : 'text-text-muted hover:text-white',
+                  ? 'bg-accent text-canvas font-semibold shadow-sm shadow-accent/25'
+                  : 'text-ink-secondary hover:text-ink-primary',
               )}
             >
               <span className="text-xs font-semibold leading-tight">Geral</span>
               <span
                 className={clsx(
                   'mt-0.5 text-[10px] leading-tight',
-                  level === 'GENERAL' ? 'text-white/80' : 'text-text-dim',
+                  level === 'GENERAL' ? 'text-canvas/80' : 'text-ink-secondary',
                 )}
               >
                 Categoria pai
@@ -280,8 +286,8 @@ function CategoryForm({
               className={clsx(
                 'flex min-h-11 flex-col items-center justify-center rounded-lg px-2 py-1.5 text-center transition-all duration-150 cursor-pointer select-none',
                 level === 'SPECIFIC'
-                  ? 'bg-violet text-white font-semibold shadow-sm shadow-violet/25'
-                  : 'text-text-muted hover:text-white',
+                  ? 'bg-accent text-canvas font-semibold shadow-sm shadow-accent/25'
+                  : 'text-ink-secondary hover:text-ink-primary',
                 editingChildCount > 0 && 'opacity-50',
               )}
             >
@@ -289,7 +295,7 @@ function CategoryForm({
               <span
                 className={clsx(
                   'mt-0.5 text-[10px] leading-tight',
-                  level === 'SPECIFIC' ? 'text-white/80' : 'text-text-dim',
+                  level === 'SPECIFIC' ? 'text-canvas/80' : 'text-ink-secondary',
                 )}
               >
                 Subcategoria
@@ -383,30 +389,94 @@ function CategoryForm({
           </Field>
         </div>
 
-        <Field label="Cor">
-          <div className="grid grid-cols-4 justify-items-start gap-3 pt-1 sm:flex sm:flex-wrap sm:gap-2.5">
-            {PALETTE.map((c) => {
-              const isSelected = color.toLowerCase() === c.toLowerCase()
-              return (
-                <button
-                  type="button"
-                  key={c}
-                  aria-pressed={isSelected}
-                  onClick={() => {
-                    setColor(c)
+        <Field label="Cor" hint="Escolha qualquer cor no seletor livre, digite o código hexadecimal (#RRGGBB) ou use uma opção rápida.">
+          <div className="space-y-3 pt-1">
+            {/* Seletor livre de cor + Input Hexadecimal sincronizado */}
+            <div className="flex items-center gap-3">
+              <label className="relative flex size-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-border-strong bg-surface-elevated shadow-sm transition hover:scale-105">
+                <input
+                  type="color"
+                  aria-label="Selecionar qualquer cor"
+                  value={normalizeCategoryColor(color)}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setColor(next)
+                    setHexDraft(next.toUpperCase())
                     setColorTouched(true)
                   }}
-                  style={{ background: c }}
-                  className={clsx(
-                    'size-10 rounded-full transition-transform cursor-pointer sm:size-8',
-                    isSelected
-                      ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-surface-1'
-                      : 'hover:scale-105',
-                  )}
-                  aria-label={`Cor ${c}`}
+                  className="absolute inset-0 size-16 -translate-x-2 -translate-y-2 cursor-pointer opacity-0"
                 />
-              )
-            })}
+                <span
+                  className="size-7 rounded-lg border border-white/20 shadow-inner"
+                  style={{ backgroundColor: normalizeCategoryColor(color) }}
+                />
+              </label>
+
+              <div className="relative flex-1 sm:max-w-[11rem]">
+                <Input
+                  value={hexDraft}
+                  aria-label="Código hexadecimal da cor"
+                  maxLength={7}
+                  placeholder="#FBBF24"
+                  className="font-mono uppercase tracking-wider"
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    const formatted = raw.startsWith('#') ? raw : `#${raw}`
+                    setHexDraft(formatted.toUpperCase())
+                    if (isValidHexColor(formatted)) {
+                      setColor(normalizeCategoryColor(formatted))
+                      setColorTouched(true)
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!isValidHexColor(hexDraft)) {
+                      setHexDraft(normalizeCategoryColor(color).toUpperCase())
+                    } else {
+                      const norm = normalizeCategoryColor(hexDraft)
+                      setColor(norm)
+                      setHexDraft(norm.toUpperCase())
+                    }
+                  }}
+                />
+              </div>
+
+              <div
+                className="hidden sm:flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-elevated/60 px-3 py-2 text-xs"
+              >
+                <span
+                  className="size-3.5 rounded-full shrink-0"
+                  style={{ backgroundColor: normalizeCategoryColor(color) }}
+                />
+                <span className="font-mono text-ink-secondary">{normalizeCategoryColor(color).toUpperCase()}</span>
+              </div>
+            </div>
+
+            {/* Opções rápidas de cores */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-0.5">
+              {PALETTE.map((c) => {
+                const isSelected = normalizeCategoryColor(color).toLowerCase() === c.toLowerCase()
+                return (
+                  <button
+                    type="button"
+                    key={c}
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      setColor(c)
+                      setHexDraft(c.toUpperCase())
+                      setColorTouched(true)
+                    }}
+                    style={{ background: c }}
+                    className={clsx(
+                      'size-8 rounded-full transition-transform cursor-pointer border border-white/15',
+                      isSelected
+                        ? 'scale-110 ring-2 ring-accent ring-offset-2 ring-offset-surface'
+                        : 'hover:scale-105',
+                    )}
+                    aria-label={`Cor rápida ${c}`}
+                  />
+                )
+              })}
+            </div>
           </div>
         </Field>
 

@@ -1,42 +1,72 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: dark;
+
+  --color-canvas: #09090b;
+  --color-surface: #111114;
+  --color-surface-elevated: #18181b;
+  --color-border-subtle: rgba(255, 255, 255, 0.1);
+  --color-border-strong: rgba(255, 255, 255, 0.22);
+  --color-ink-primary: #f4f4f5;
+  --color-ink-secondary: #a1a1aa;
+  --color-accent: #fbbf24;
+  --color-accent-soft: #fcd34d;
+
+  --font-sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Stalinist One", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 @theme {
-  --color-black: #000000;
-  --color-white: #ffffff;
+  --color-canvas: #09090b;
+  --color-surface: #111114;
+  --color-surface-elevated: #18181b;
+  --color-border-subtle: rgba(255, 255, 255, 0.1);
+  --color-border-strong: rgba(255, 255, 255, 0.22);
+  --color-ink-primary: #f4f4f5;
+  --color-ink-secondary: #a1a1aa;
+  --color-accent: #fbbf24;
+  --color-accent-soft: #fcd34d;
 
-  --color-bg: #000000;
-  --color-surface: #070709;
-  --color-surface-1: #0e0e13;
-  --color-surface-2: #16161f;
-  --color-surface-3: #1e1e2b;
+  --font-sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Stalinist One", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --color-border: #20202d;
-  --color-border-strong: #323247;
+  /* Aliases compatíveis com classes existentes */
+  --color-black: #09090b;
+  --color-white: #f4f4f5;
 
-  --color-text: #ffffff;
-  --color-text-muted: rgba(255, 255, 255, 0.72);
-  --color-text-dim: rgba(255, 255, 255, 0.64);
-  --color-text-faint: rgba(255, 255, 255, 0.25);
+  --color-bg: #09090b;
+  --color-surface-1: #111114;
+  --color-surface-2: #18181b;
+  --color-surface-3: #18181b;
 
-  --color-violet: #7D39EB;
-  --color-violet-hover: #9253f5;
-  --color-violet-active: #6626d0;
-  --color-violet-subtle: rgba(125, 57, 235, 0.15);
+  --color-border: rgba(255, 255, 255, 0.1);
 
-  --color-lime: #C6FF33;
-  --color-lime-hover: #d5ff5c;
-  --color-lime-active: #b1eb21;
-  --color-lime-subtle: rgba(198, 255, 51, 0.12);
+  --color-text: #f4f4f5;
+  --color-text-muted: #a1a1aa;
+  --color-text-dim: #a1a1aa;
+  --color-text-faint: rgba(161, 161, 170, 0.45);
 
-  /* Aliases para marca e status */
-  --color-primary: #7D39EB;
-  --color-primary-hover: #9253f5;
-  --color-primary-active: #6626d0;
-  --color-primary-subtle: rgba(125, 57, 235, 0.15);
+  --color-primary: #fbbf24;
+  --color-primary-hover: #fcd34d;
+  --color-primary-active: #f59e0b;
+  --color-primary-subtle: rgba(251, 191, 36, 0.15);
 
-  --color-income: #C6FF33;
-  --color-income-hover: #d5ff5c;
-  --color-income-subtle: rgba(198, 255, 51, 0.12);
+  --color-violet: #fbbf24;
+  --color-violet-hover: #fcd34d;
+  --color-violet-active: #f59e0b;
+  --color-violet-subtle: rgba(251, 191, 36, 0.15);
+
+  --color-lime: #fbbf24;
+  --color-lime-hover: #fcd34d;
+  --color-lime-active: #f59e0b;
+  --color-lime-subtle: rgba(251, 191, 36, 0.12);
+
+  --color-income: #fbbf24;
+  --color-income-hover: #fcd34d;
+  --color-income-subtle: rgba(251, 191, 36, 0.12);
 
   --color-expense: #FF4D6A;
   --color-expense-hover: #ff6b83;
@@ -47,24 +77,22 @@
   --color-danger-hover: #ff6b83;
   --color-danger-active: #e63956;
   --color-danger-subtle: rgba(255, 77, 106, 0.14);
-
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 html, body, #root {
   height: 100%;
-  background-color: #000000;
-  color: #ffffff;
+  background-color: var(--color-canvas);
+  color: var(--color-ink-primary);
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-text);
+  background-color: var(--color-canvas);
+  color: var(--color-ink-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
-  caret-color: var(--color-lime);
+  caret-color: var(--color-accent);
   text-rendering: optimizeLegibility;
 }
 
@@ -77,30 +105,31 @@ p {
 }
 
 ::selection {
-  background-color: var(--color-violet);
-  color: #ffffff;
+  background-color: var(--color-accent);
+  color: #09090b;
 }
 
-/* Scrollbar fina temática */
+/* Scrollbar temática */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #09090b;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-surface-3);
+  background: rgba(251, 191, 36, 0.35);
   border-radius: 9999px;
-  border: 1px solid var(--color-border);
+  border: 1px solid #09090b;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-strong);
+  background: rgba(251, 191, 36, 0.55);
 }
 
-/* Tabular nums para alinhamento uniforme de dígitos */
+/* Tabular nums e mono para valores e métricas numéricas */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
 }
 
 /* Safe areas para navegação mobile */
@@ -112,24 +141,22 @@ p {
   padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
 }
 
-/* Focus visível com ring lime e offset preto */
+/* Focus visível com ring accent e offset canvas */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #000000, 0 0 0 4px var(--color-lime);
+  box-shadow: 0 0 0 2px #09090b, 0 0 0 4px var(--color-accent);
 }
 
-/* Hairline highlight interno superior para acabamento refinado dark */
+/* Hairline highlight interno superior para acabamento dark */
 .card-highlight {
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 }
 
 /* Brilhos sutis táticos */
-.glow-violet {
-  box-shadow: 0 0 24px -2px rgba(125, 57, 235, 0.35);
-}
-
+.glow-accent,
+.glow-violet,
 .glow-lime {
-  box-shadow: 0 0 24px -2px rgba(198, 255, 51, 0.25);
+  box-shadow: 0 0 24px -2px rgba(251, 191, 36, 0.28);
 }
 
 /* Remove spinners nativos de input number no Chrome/Safari/Firefox */

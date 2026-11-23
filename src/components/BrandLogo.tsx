@@ -9,7 +9,7 @@ export function BrandLogo({ className = 'size-9', alt = 'Finance', ...props }: B
     <img
       src="/icon.svg"
       alt={alt}
-      className={`select-none object-contain ${className}`}
+      className={`select-none object-contain [filter:hue-rotate(-36deg)_saturate(1.1)] ${className}`}
       {...props}
     />
   )

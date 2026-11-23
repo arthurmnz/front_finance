@@ -125,12 +125,12 @@ function CategoryBreakdownBlock({
                   <Tooltip
                     formatter={(v) => formatMoney(Number(v))}
                     contentStyle={{
-                      background: '#0e0e13',
-                      border: '1px solid #20202d',
+                      background: '#111114',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
                       borderRadius: 12,
-                      color: '#ffffff',
+                      color: '#f4f4f5',
                     }}
-                    itemStyle={{ color: '#ffffff' }}
+                    itemStyle={{ color: '#f4f4f5' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -358,8 +358,8 @@ export default function CategoryEvolutionSection({ categories }: CategoryEvoluti
               className={clsx(
                 'rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
                 viewMode === opt.key
-                  ? 'bg-violet text-white font-semibold shadow-sm shadow-violet/25'
-                  : 'text-text-muted hover:text-white',
+                  ? 'bg-accent text-canvas font-semibold shadow-sm shadow-accent/25'
+                  : 'text-ink-secondary hover:text-ink-primary',
               )}
             >
               {opt.label}

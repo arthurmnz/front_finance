@@ -79,12 +79,12 @@ export default function GroupMemberExpensesSection({ memberExpenses }: GroupMemb
                   <Tooltip
                     formatter={(v) => formatMoney(Math.round(Number(v) * 100))}
                     contentStyle={{
-                      background: '#0e0e13',
-                      border: '1px solid #20202d',
+                      background: '#111114',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
                       borderRadius: 12,
-                      color: '#ffffff',
+                      color: '#f4f4f5',
                     }}
-                    itemStyle={{ color: '#ffffff' }}
+                    itemStyle={{ color: '#f4f4f5' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -115,7 +115,7 @@ export default function GroupMemberExpensesSection({ memberExpenses }: GroupMemb
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white shadow-sm"
+                        className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-mono font-bold text-canvas shadow-sm"
                         style={{ backgroundColor: color }}
                       >
                         {initials || <User className="size-4" />}

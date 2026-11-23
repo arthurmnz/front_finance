@@ -62,9 +62,9 @@ export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(
           className={clsx(
             'grid size-5 shrink-0 place-items-center rounded-lg border transition duration-150 outline-none',
             checked
-              ? 'bg-violet border-violet text-white shadow-sm shadow-violet/30'
-              : 'border-border bg-surface-1 hover:border-border-strong text-transparent',
-            'focus-visible:ring-2 focus-visible:ring-lime focus-visible:ring-offset-2 focus-visible:ring-offset-black',
+              ? 'bg-accent border-accent text-canvas shadow-sm shadow-accent/30'
+              : 'border-border-subtle bg-surface hover:border-border-strong text-transparent',
+            'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
           )}
         >
           <Check className={clsx('size-3.5 stroke-[2.5] transition-transform duration-150', checked ? 'scale-100' : 'scale-0')} />

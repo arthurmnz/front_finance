@@ -110,15 +110,15 @@ export default function Reports() {
 
       {/* Seletor de Escopo: Meu Relatório Individual | Relatório por Grupo */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <div className="inline-flex rounded-xl bg-surface-1 border border-border p-1 card-highlight">
+        <div className="inline-flex rounded-xl bg-surface border border-border-subtle p-1 card-highlight">
           <button
             type="button"
             onClick={() => handleScopeChange('individual')}
             className={clsx(
               'flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-[0.98]',
               scope === 'individual'
-                ? 'bg-violet text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2),0_2px_8px_rgba(125,57,235,0.35)]'
-                : 'text-text-muted hover:text-white hover:bg-surface-2',
+                ? 'bg-accent text-canvas shadow-[inset_0_1px_0_0_rgba(255,255,255,0.28),0_2px_8px_rgba(251,191,36,0.28)]'
+                : 'text-ink-secondary hover:text-ink-primary hover:bg-surface-elevated',
             )}
           >
             <User className="size-4" />
@@ -131,14 +131,19 @@ export default function Reports() {
             className={clsx(
               'flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer active:scale-[0.98]',
               scope === 'group'
-                ? 'bg-violet text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2),0_2px_8px_rgba(125,57,235,0.35)]'
-                : 'text-text-muted hover:text-white hover:bg-surface-2',
+                ? 'bg-accent text-canvas shadow-[inset_0_1px_0_0_rgba(255,255,255,0.28),0_2px_8px_rgba(251,191,36,0.28)]'
+                : 'text-ink-secondary hover:text-ink-primary hover:bg-surface-elevated',
             )}
           >
             <Users className="size-4" />
             Relatório por Grupo
             {groups.length > 0 && (
-              <span className="rounded-full bg-white/20 px-1.5 py-0.2 text-[10px] text-white font-bold">
+              <span
+                className={clsx(
+                  'rounded-full px-1.5 py-0.2 text-[10px] font-mono font-bold',
+                  scope === 'group' ? 'bg-canvas/20 text-canvas' : 'bg-white/15 text-ink-primary',
+                )}
+              >
                 {groups.length}
               </span>
             )}
@@ -187,7 +192,7 @@ export default function Reports() {
             </p>
             <Link
               to="/grupos"
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-violet hover:bg-violet-hover rounded-xl transition"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-canvas bg-accent hover:bg-accent-soft rounded-xl transition"
             >
               Ir para Grupos
             </Link>

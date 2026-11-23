@@ -28,12 +28,15 @@ export default function Register() {
   } = useForm<Form>({ resolver: zodResolver(schema) })
 
   return (
-    <div className="grid min-h-dvh place-items-center p-5 bg-black text-white">
+    <div className="grid min-h-dvh place-items-center p-5 bg-canvas text-ink-primary">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <BrandLogo className="mx-auto mb-3 size-16 drop-shadow-[0_0_24px_rgba(125,57,235,0.45)]" />
-          <h1 className="text-2xl font-bold tracking-tight text-white">Criar conta</h1>
-          <p className="mt-1 text-xs text-text-muted">Comece a controlar suas finanças hoje</p>
+          <Link to="/" className="inline-flex flex-col items-center gap-2 transition hover:opacity-90">
+            <BrandLogo className="mx-auto size-16 drop-shadow-[0_0_24px_rgba(251,191,36,0.35)]" />
+            <span className="font-display text-sm tracking-wider text-ink-primary">Finance</span>
+          </Link>
+          <h1 className="mt-3 text-2xl font-bold tracking-tight text-ink-primary">Criar conta</h1>
+          <p className="mt-1 text-xs text-ink-secondary">Comece a controlar suas finanças hoje</p>
         </div>
 
         <Card className="p-5">
@@ -46,7 +49,7 @@ export default function Register() {
                 await api.post('/auth/register', v)
                 toast.success('Conta criada!')
                 await login(v.email, v.password)
-                nav('/')
+                nav('/dashboard')
               } catch (e) {
                 setError(errorMessage(e))
               }
@@ -86,12 +89,19 @@ export default function Register() {
           </form>
         </Card>
 
-        <p className="text-center text-xs text-text-muted">
-          Já tem conta?{' '}
-          <Link to="/login" className="text-lime font-medium hover:underline">
-            Entrar
-          </Link>
-        </p>
+        <div className="space-y-2 text-center text-xs text-ink-secondary">
+          <p>
+            Já tem conta?{' '}
+            <Link to="/login" className="text-accent font-medium hover:underline">
+              Entrar
+            </Link>
+          </p>
+          <p>
+            <Link to="/" className="text-ink-secondary hover:text-ink-primary transition">
+              ← Voltar para a página inicial
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )

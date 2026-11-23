@@ -286,8 +286,8 @@ export default function JointAccountFormModal({
                       className={clsx(
                         'grid size-5 shrink-0 place-items-center rounded-lg border transition',
                         checked
-                          ? 'border-violet bg-violet text-white'
-                          : 'border-border-strong bg-surface-1 text-transparent',
+                          ? 'border-accent bg-accent text-canvas'
+                          : 'border-border-strong bg-surface text-transparent',
                       )}
                     >
                       <Check className="size-3.5 stroke-[2.5]" />

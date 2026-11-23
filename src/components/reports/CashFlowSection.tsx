@@ -37,11 +37,11 @@ export default function CashFlowSection({ data }: CashFlowSectionProps) {
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid stroke="#20202d" strokeDasharray="3 3" vertical={false} />
-              <ReferenceLine y={0} stroke="#323246" strokeWidth={1.5} />
-              <XAxis dataKey="name" stroke="#8E8EA0" fontSize={11} tickLine={false} />
+              <CartesianGrid stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" vertical={false} />
+              <ReferenceLine y={0} stroke="rgba(255, 255, 255, 0.22)" strokeWidth={1.5} />
+              <XAxis dataKey="name" stroke="#a1a1aa" fontSize={11} tickLine={false} />
               <YAxis
-                stroke="#8E8EA0"
+                stroke="#a1a1aa"
                 fontSize={11}
                 tickLine={false}
                 tickFormatter={(v) => {
@@ -53,22 +53,22 @@ export default function CashFlowSection({ data }: CashFlowSectionProps) {
               <Tooltip
                 formatter={(v, name) => [formatMoney(Math.round(Number(v) * 100)), name]}
                 contentStyle={{
-                  background: '#0e0e13',
-                  border: '1px solid #20202d',
+                  background: '#111114',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   borderRadius: 12,
-                  color: '#ffffff',
+                  color: '#f4f4f5',
                 }}
-                itemStyle={{ color: '#ffffff' }}
+                itemStyle={{ color: '#f4f4f5' }}
               />
               <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
-              <Bar dataKey="Receitas" fill="#C6FF33" radius={[4, 4, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="Receitas" fill="#fbbf24" radius={[4, 4, 0, 0]} maxBarSize={32} />
               <Bar dataKey="Despesas" fill="#FF4D6A" radius={[0, 0, 4, 4]} maxBarSize={32} />
               <Line
                 type="monotone"
                 dataKey="Saldo Líquido"
-                stroke="#7D39EB"
+                stroke="#fcd34d"
                 strokeWidth={2.5}
-                dot={{ fill: '#7D39EB', r: 4 }}
+                dot={{ fill: '#fcd34d', r: 4 }}
               />
             </ComposedChart>
           </ResponsiveContainer>

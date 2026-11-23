@@ -267,40 +267,40 @@ export default function Admin() {
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={metrics.monthlyGrowth} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" vertical={false} />
                     <XAxis
                       dataKey="label"
-                      stroke="#8E8EA0"
+                      stroke="#a1a1aa"
                       fontSize={11}
                       tickLine={false}
                       axisLine={false}
                     />
                     <YAxis
-                      stroke="#8E8EA0"
+                      stroke="#a1a1aa"
                       fontSize={11}
                       tickLine={false}
                       axisLine={false}
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#171717',
-                        borderColor: '#262626',
+                        backgroundColor: '#111114',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
                         borderRadius: '0.75rem',
                         fontSize: '12px',
                       }}
-                      labelStyle={{ color: '#FFFFFF', fontWeight: 600 }}
+                      labelStyle={{ color: '#f4f4f5', fontWeight: 600 }}
                     />
                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
                     <Bar
                       dataKey="usersCount"
                       name="Novos Usuários"
-                      fill="#8B5CF6"
+                      fill="#fcd34d"
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar
                       dataKey="transactionsCount"
                       name="Transações"
-                      fill="#84CC16"
+                      fill="#fbbf24"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
@@ -352,8 +352,8 @@ export default function Admin() {
                   className={clsx(
                     'px-2.5 py-1 text-xs font-semibold rounded-md transition select-none',
                     statusFilter === tab.key
-                      ? 'bg-violet text-white shadow-sm'
-                      : 'text-text-dim hover:text-white',
+                      ? 'bg-accent text-canvas shadow-sm'
+                      : 'text-ink-secondary hover:text-ink-primary',
                   )}
                 >
                   {tab.label}

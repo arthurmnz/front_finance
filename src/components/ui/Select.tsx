@@ -284,14 +284,14 @@ export function Select({
                         onMouseEnter={() => setHighlightedIndex(flatIdx)}
                         className={clsx(
                           'flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition cursor-pointer select-none',
-                          isSelected && 'bg-violet/20 text-white font-medium',
-                          !isSelected && isHighlighted && 'bg-surface-2 text-white',
-                          !isSelected && !isHighlighted && 'text-text-muted hover:text-white',
+                          isSelected && 'bg-accent/15 text-ink-primary font-medium',
+                          !isSelected && isHighlighted && 'bg-surface-elevated text-ink-primary',
+                          !isSelected && !isHighlighted && 'text-ink-secondary hover:text-ink-primary',
                           item.disabled && 'opacity-30 cursor-not-allowed pointer-events-none',
                         )}
                       >
                         <span className="truncate flex-1">{item.label}</span>
-                        {isSelected && <Check className="size-4 shrink-0 text-lime" />}
+                        {isSelected && <Check className="size-4 shrink-0 text-accent" />}
                       </li>
                     )
                   })}

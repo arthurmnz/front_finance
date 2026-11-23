@@ -30,6 +30,7 @@ import type {
   UpdateTransactionInput,
 } from '@/lib/types'
 import { defaultInvoicePeriod, formatAccountLabel, formatDate, formatMoney, freqLabel, fullName, monthLabel, toISODate, txTypeLabel } from '@/lib/format'
+import { PALETTE, normalizeCategoryColor } from '@/lib/palette'
 import { Alert, Badge, Button, Checkbox, DatePicker, Field, InfoTooltip, Input, Modal, MoneyInput, NumberInput, Select, Skeleton } from './ui'
 import clsx from 'clsx'
 
@@ -161,6 +162,7 @@ export default function TransactionFormModal({
   const [addingSpecific, setAddingSpecific] = useState(false)
   const [newSpecificName, setNewSpecificName] = useState('')
   const [newSpecificIcon, setNewSpecificIcon] = useState('')
+  const [newSpecificColor, setNewSpecificColor] = useState<string>(PALETTE[0])
   const [localCreatedSpecifics, setLocalCreatedSpecifics] = useState<Category[]>([])
   const [status, setStatus] = useState<TransactionStatus>('PENDING')
   const [recurring, setRecurring] = useState(false)
@@ -607,7 +609,7 @@ export default function TransactionFormModal({
       type: newSubType,
       level: 'SPECIFIC',
       parentId: selectedGeneralCategory.id,
-      color: selectedGeneralCategory.color ?? null,
+      color: newSpecificColor || selectedGeneralCategory.color || null,
       icon: newSpecificIcon.trim() || null,
       groupId: selectedGeneralCategory.groupId ?? null,
     })
@@ -618,6 +620,8 @@ export default function TransactionFormModal({
     setAddingSpecific(false)
     setNewSpecificName('')
     setNewSpecificIcon('')
+    const gen = mergedCatMap.get(nextGeneralId)
+    setNewSpecificColor(normalizeCategoryColor(gen?.color))
     if (!nextGeneralId) {
       setSpecificCategoryId('')
       return
@@ -1209,13 +1213,13 @@ export default function TransactionFormModal({
     <Modal open={open} onClose={onClose} title={editing ? 'Editar transação' : 'Nova transação'}>
       <form noValidate className="space-y-4" onSubmit={submit}>
         {!editing && creditCards.length > 0 && (
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1 border border-border card-highlight">
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-elevated p-1 border border-border-subtle card-highlight">
             <button
               type="button"
               onClick={() => setSourceMode('ACCOUNT')}
               className={clsx(
                 'rounded-lg py-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none active:scale-[0.98]',
-                sourceMode === 'ACCOUNT' ? 'bg-violet text-white font-semibold shadow-[0_1px_3px_rgba(125,57,235,0.3)]' : 'text-text-muted hover:text-white',
+                sourceMode === 'ACCOUNT' ? 'bg-accent text-canvas font-semibold shadow-[0_1px_3px_rgba(251,191,36,0.3)]' : 'text-ink-secondary hover:text-ink-primary',
               )}
             >
               Conta bancária
@@ -1229,7 +1233,7 @@ export default function TransactionFormModal({
               }}
               className={clsx(
                 'rounded-lg py-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none active:scale-[0.98]',
-                sourceMode === 'CARD' ? 'bg-violet text-white font-semibold shadow-[0_1px_3px_rgba(125,57,235,0.3)]' : 'text-text-muted hover:text-white',
+                sourceMode === 'CARD' ? 'bg-accent text-canvas font-semibold shadow-[0_1px_3px_rgba(251,191,36,0.3)]' : 'text-ink-secondary hover:text-ink-primary',
               )}
             >
               Cartão de crédito
@@ -1238,7 +1242,7 @@ export default function TransactionFormModal({
         )}
 
         {!editing && sourceMode === 'ACCOUNT' && (
-          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1 border border-border card-highlight">
+          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-elevated p-1 border border-border-subtle card-highlight">
             {(['EXPENSE', 'INCOME', 'TRANSFER'] as const).map((t) => (
               <button
                 type="button"
@@ -1249,10 +1253,8 @@ export default function TransactionFormModal({
                   type === t
                     ? t === 'EXPENSE'
                       ? 'bg-expense text-white shadow-[0_1px_4px_rgba(255,77,106,0.35)] font-bold'
-                      : t === 'INCOME'
-                        ? 'bg-lime text-black shadow-[0_1px_4px_rgba(198,255,51,0.35)] font-bold'
-                        : 'bg-violet text-white shadow-[0_1px_4px_rgba(125,57,235,0.35)] font-bold'
-                    : 'text-text-muted hover:text-white',
+                      : 'bg-accent text-canvas shadow-[0_1px_4px_rgba(251,191,36,0.35)] font-bold'
+                    : 'text-ink-secondary hover:text-ink-primary',
                 )}
               >
                 {txTypeLabel[t]}
@@ -1356,8 +1358,8 @@ export default function TransactionFormModal({
                   className={clsx(
                     'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer select-none',
                     activeSplit
-                      ? 'bg-violet text-white font-semibold'
-                      : 'bg-surface-2 text-violet-hover hover:bg-violet/20',
+                      ? 'bg-accent text-canvas font-semibold'
+                      : 'bg-surface-elevated text-accent-soft hover:bg-accent/20',
                   )}
                 >
                   <Split className="size-3.5" />
@@ -1369,13 +1371,13 @@ export default function TransactionFormModal({
             {activeSplit ? (
               <div className="space-y-2.5 rounded-2xl border border-border bg-surface-2/40 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="inline-flex rounded-xl bg-surface-1 p-0.5 border border-border">
+                  <div className="inline-flex rounded-xl bg-surface p-0.5 border border-border-subtle">
                     <button
                       type="button"
                       onClick={() => switchSplitUnit('AMOUNT')}
                       className={clsx(
                         'rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer',
-                        splitUnit === 'AMOUNT' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                        splitUnit === 'AMOUNT' ? 'bg-accent text-canvas font-semibold' : 'text-ink-secondary hover:text-ink-primary',
                       )}
                     >
                       Por valor (R$)
@@ -1385,7 +1387,7 @@ export default function TransactionFormModal({
                       onClick={() => switchSplitUnit('PERCENT')}
                       className={clsx(
                         'rounded-lg px-2.5 py-1 text-xs font-medium transition cursor-pointer',
-                        splitUnit === 'PERCENT' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                        splitUnit === 'PERCENT' ? 'bg-accent text-canvas font-semibold' : 'text-ink-secondary hover:text-ink-primary',
                       )}
                     >
                       Por porcentagem (%)
@@ -1677,15 +1679,15 @@ export default function TransactionFormModal({
               )}
 
               {addingSpecific && canCreateSpecificInSelectedGeneral && selectedGeneralCategory && (
-                <div className="space-y-2.5 rounded-2xl border border-violet/35 bg-surface-2/60 p-3">
-                  <p className="text-xs font-medium text-white">
+                <div className="space-y-2.5 rounded-2xl border border-accent/35 bg-surface-elevated/60 p-3">
+                  <p className="text-xs font-medium text-ink-primary">
                     Nova específica em{' '}
-                    <span className="text-lime">
+                    <span className="text-accent">
                       {selectedGeneralCategory.icon ? `${selectedGeneralCategory.icon} ` : ''}
                       {selectedGeneralCategory.name}
                     </span>
                   </p>
-                  <div className="grid grid-cols-[1fr_5.5rem] gap-2">
+                  <div className="grid grid-cols-[1fr_4.5rem_2.5rem] gap-2">
                     <Input
                       value={newSpecificName}
                       onChange={(e) => setNewSpecificName(e.target.value)}
@@ -1711,6 +1713,22 @@ export default function TransactionFormModal({
                       placeholder="🏷️"
                       className="h-9 text-center text-xs"
                     />
+                    <label
+                      className="relative flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-border-strong bg-surface"
+                      title="Escolher cor da categoria específica"
+                    >
+                      <input
+                        type="color"
+                        aria-label="Cor da categoria específica"
+                        value={normalizeCategoryColor(newSpecificColor || selectedGeneralCategory.color)}
+                        onChange={(e) => setNewSpecificColor(e.target.value)}
+                        className="absolute inset-0 size-12 -translate-x-1 -translate-y-1 cursor-pointer opacity-0"
+                      />
+                      <span
+                        className="size-5 rounded-md border border-white/20"
+                        style={{ backgroundColor: normalizeCategoryColor(newSpecificColor || selectedGeneralCategory.color) }}
+                      />
+                    </label>
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button
@@ -1756,13 +1774,13 @@ export default function TransactionFormModal({
             </Checkbox>
             {recurring && (
               <>
-                <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1 border border-border">
+                <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-elevated p-1 border border-border-subtle">
                   <button
                     type="button"
                     onClick={() => setInfinite(false)}
                     className={clsx(
                       'rounded-lg py-1.5 text-xs font-medium transition cursor-pointer select-none',
-                      !infinite ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                      !infinite ? 'bg-accent text-canvas font-semibold' : 'text-ink-secondary hover:text-ink-primary',
                     )}
                   >
                     Parcelado (compromete total)
@@ -1772,7 +1790,7 @@ export default function TransactionFormModal({
                     onClick={() => setInfinite(true)}
                     className={clsx(
                       'rounded-lg py-1.5 text-xs font-medium transition cursor-pointer select-none',
-                      infinite ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+                      infinite ? 'bg-accent text-canvas font-semibold' : 'text-ink-secondary hover:text-ink-primary',
                     )}
                   >
                     Assinatura (mês a mês)

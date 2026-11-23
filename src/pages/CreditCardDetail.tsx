@@ -58,8 +58,8 @@ const chip = (active: boolean) =>
   clsx(
     'rounded-xl border px-3 py-1.5 text-xs font-medium transition cursor-pointer select-none',
     active
-      ? 'border-violet bg-violet text-white font-semibold shadow-sm shadow-violet/25'
-      : 'border-border text-text-muted hover:bg-surface-2 hover:text-white',
+      ? 'border-accent bg-accent text-canvas font-semibold shadow-sm shadow-accent/25'
+      : 'border-border-subtle text-ink-secondary hover:bg-surface-elevated hover:text-ink-primary',
   )
 
 const statusLabel: Record<string, { label: string; tone: 'default' | 'income' | 'primary' }> = {
@@ -349,7 +349,7 @@ export default function CreditCardDetail() {
           <Button variant="outline" size="sm" className="h-10" onClick={() => setShowFilters((v) => !v)}>
             <SlidersHorizontal className="size-4" /> Filtros
             {activeCount > 0 && (
-              <span className="rounded-full bg-violet px-1.5 py-0.2 text-[10px] font-bold text-white">{activeCount}</span>
+              <span className="rounded-full bg-accent px-1.5 py-0.2 text-[10px] font-mono font-bold text-canvas">{activeCount}</span>
             )}
           </Button>
         </div>

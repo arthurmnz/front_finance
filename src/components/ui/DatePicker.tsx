@@ -340,12 +340,12 @@ export function DatePicker({
                   onClick={() => selectDate(d.iso)}
                   onFocus={() => setFocusedIso(d.iso)}
                   className={clsx(
-                    'grid size-8 place-items-center rounded-xl text-xs font-medium transition cursor-pointer select-none tabular-nums outline-none',
-                    isSelected && 'bg-lime text-black font-bold shadow-sm shadow-lime/30',
-                    !isSelected && isToday && 'border border-lime/60 text-lime hover:bg-surface-2',
-                    !isSelected && !isToday && d.isCurrentMonth && 'text-white hover:bg-surface-2',
-                    !isSelected && !isToday && !d.isCurrentMonth && 'text-text-faint hover:bg-surface-2/60',
-                    isFocused && !isSelected && 'ring-2 ring-lime ring-offset-2 ring-offset-black z-10',
+                    'grid size-8 place-items-center rounded-xl text-xs font-mono font-medium transition cursor-pointer select-none tabular-nums outline-none',
+                    isSelected && 'bg-accent text-canvas font-bold shadow-sm shadow-accent/30',
+                    !isSelected && isToday && 'border border-accent/60 text-accent hover:bg-surface-elevated',
+                    !isSelected && !isToday && d.isCurrentMonth && 'text-ink-primary hover:bg-surface-elevated',
+                    !isSelected && !isToday && !d.isCurrentMonth && 'text-text-faint hover:bg-surface-elevated/60',
+                    isFocused && !isSelected && 'ring-2 ring-accent ring-offset-2 ring-offset-canvas z-10',
                     d.disabled && 'opacity-20 cursor-not-allowed pointer-events-none',
                   )}
                 >

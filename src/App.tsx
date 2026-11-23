@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useAuth } from '@/lib/auth'
 import { DetailSkeleton } from '@/components/ui'
 import Layout from '@/components/Layout'
+import Landing from '@/pages/Landing'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import ForgotPassword from '@/pages/ForgotPassword'
@@ -31,25 +32,26 @@ function Private({ children }: { children: ReactNode }) {
 function Public({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="mx-auto max-w-md p-6"><DetailSkeleton /></div>
-  return user ? <Navigate to="/" replace /> : <>{children}</>
+  return user ? <Navigate to="/dashboard" replace /> : <>{children}</>
 }
 function AdminRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="mx-auto max-w-5xl p-4 sm:p-6"><DetailSkeleton /></div>
   if (!user) return <Navigate to="/login" replace />
-  if (user.role !== 'ADMIN') return <Navigate to="/" replace />
+  if (user.role !== 'ADMIN') return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }
 
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Public><Login /></Public>} />
       <Route path="/cadastro" element={<Public><Register /></Public>} />
       <Route path="/esqueci-senha" element={<Public><ForgotPassword /></Public>} />
       <Route path="/redefinir-senha" element={<Public><ResetPassword /></Public>} />
       <Route element={<Private><Layout /></Private>}>
-        <Route index element={<Dashboard />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="transacoes" element={<Transactions />} />
         <Route path="relatorios" element={<Reports />} />
         <Route path="calendario" element={<Navigate to="/relatorios" replace />} />

@@ -44,10 +44,10 @@ export default function FutureCommitmentsSection({ commitments }: FutureCommitme
         <div className="h-64 w-full mb-4">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid stroke="#20202d" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" stroke="#8E8EA0" fontSize={11} tickLine={false} />
+              <CartesianGrid stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" stroke="#a1a1aa" fontSize={11} tickLine={false} />
               <YAxis
-                stroke="#8E8EA0"
+                stroke="#a1a1aa"
                 fontSize={11}
                 tickLine={false}
                 tickFormatter={(v) => `R$ ${v.toLocaleString('pt-BR')}`}
@@ -55,16 +55,16 @@ export default function FutureCommitmentsSection({ commitments }: FutureCommitme
               <Tooltip
                 formatter={(v) => formatMoney(Math.round(Number(v) * 100))}
                 contentStyle={{
-                  background: '#0e0e13',
-                  border: '1px solid #20202d',
+                  background: '#111114',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   borderRadius: 12,
-                  color: '#ffffff',
+                  color: '#f4f4f5',
                 }}
-                itemStyle={{ color: '#ffffff' }}
+                itemStyle={{ color: '#f4f4f5' }}
               />
               <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
-              <Bar dataKey="Faturas de Cartão" stackId="a" fill="#7D39EB" radius={[0, 0, 0, 0]} maxBarSize={32} />
-              <Bar dataKey="Contas Pendentes" stackId="a" fill="#C6FF33" radius={[4, 4, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="Faturas de Cartão" stackId="a" fill="#fbbf24" radius={[0, 0, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="Contas Pendentes" stackId="a" fill="#fcd34d" radius={[4, 4, 0, 0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
         </div>

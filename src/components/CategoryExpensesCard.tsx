@@ -36,13 +36,13 @@ export default function CategoryExpensesCard({
     <Card className="p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-semibold text-white">Despesas por categoria</h2>
-        <div className="inline-flex rounded-lg bg-surface-2 p-0.5 border border-border">
+        <div className="inline-flex rounded-lg bg-surface-elevated p-0.5 border border-border-subtle">
           <button
             type="button"
             onClick={() => onCategoryViewChange('GENERAL')}
             className={clsx(
               'rounded-md px-2.5 py-1 text-[11px] font-medium transition cursor-pointer select-none',
-              categoryView === 'GENERAL' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+              categoryView === 'GENERAL' ? 'bg-accent text-canvas font-semibold' : 'text-ink-secondary hover:text-ink-primary',
             )}
           >
             Gerais
@@ -52,7 +52,7 @@ export default function CategoryExpensesCard({
             onClick={() => onCategoryViewChange('SPECIFIC')}
             className={clsx(
               'rounded-md px-2.5 py-1 text-[11px] font-medium transition cursor-pointer select-none',
-              categoryView === 'SPECIFIC' ? 'bg-violet text-white font-semibold' : 'text-text-muted hover:text-white',
+              categoryView === 'SPECIFIC' ? 'bg-accent text-canvas font-semibold' : 'text-ink-secondary hover:text-ink-primary',
             )}
           >
             Específicas
@@ -84,12 +84,12 @@ export default function CategoryExpensesCard({
                 <Tooltip
                   formatter={(v) => formatMoney(Number(v))}
                   contentStyle={{
-                    background: '#0e0e13',
-                    border: '1px solid #20202d',
+                    background: '#111114',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
                     borderRadius: 12,
-                    color: '#ffffff',
+                    color: '#f4f4f5',
                   }}
-                  itemStyle={{ color: '#ffffff' }}
+                  itemStyle={{ color: '#f4f4f5' }}
                 />
               </PieChart>
             </ResponsiveContainer>

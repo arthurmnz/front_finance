@@ -22,13 +22,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none select-none cursor-pointer',
           size === 'md' ? 'h-11 min-h-11 px-4 text-sm' : 'h-9 min-h-9 px-3 text-xs',
           variant === 'primary' &&
-            'bg-violet text-white hover:bg-violet-hover active:bg-violet-active shadow-[inset_0_1px_0_0_rgba(255,255,255,0.2),0_2px_8px_rgba(125,57,235,0.3)]',
+            'bg-accent text-canvas hover:bg-accent-soft active:bg-primary-active font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.28),0_2px_10px_rgba(251,191,36,0.28)]',
           variant === 'lime' &&
-            'bg-lime text-black hover:bg-lime-hover active:bg-lime-active font-semibold shadow-[0_2px_8px_rgba(198,255,51,0.25)]',
+            'bg-accent text-canvas hover:bg-accent-soft active:bg-primary-active font-semibold shadow-[0_2px_10px_rgba(251,191,36,0.25)]',
           variant === 'ghost' &&
-            'text-text-muted hover:bg-surface-2 hover:text-white',
+            'text-ink-secondary hover:bg-surface-elevated hover:text-ink-primary',
           variant === 'outline' &&
-            'border border-border bg-surface-1 text-white card-highlight hover:bg-surface-2 hover:border-border-strong',
+            'border border-border-subtle bg-surface text-ink-primary card-highlight hover:bg-surface-elevated hover:border-border-strong',
           variant === 'danger' &&
             'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 hover:border-danger/50 active:bg-danger/25 font-medium',
           className,

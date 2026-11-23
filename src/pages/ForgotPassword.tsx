@@ -22,28 +22,28 @@ export default function ForgotPassword() {
   } = useForm<Form>({ resolver: zodResolver(schema) })
 
   return (
-    <div className="grid min-h-dvh place-items-center p-5 bg-black text-white">
+    <div className="grid min-h-dvh place-items-center p-5 bg-canvas text-ink-primary">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-violet/20 border border-violet/30 text-lime shadow-[0_0_24px_rgba(125,57,235,0.35)]">
+          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-accent/15 border border-accent/30 text-accent shadow-[0_0_24px_rgba(251,191,36,0.28)]">
             <KeyRound className="size-7" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Recuperar senha</h1>
-          <p className="mt-1 text-xs text-text-muted">
+          <h1 className="text-2xl font-bold tracking-tight text-ink-primary">Recuperar senha</h1>
+          <p className="mt-1 text-xs text-ink-secondary">
             Informe seu e-mail para receber as instruções de redefinição
           </p>
         </div>
 
         {submitted ? (
           <Card className="p-6 text-center space-y-4">
-            <div className="mx-auto grid size-12 place-items-center rounded-full bg-lime-subtle text-lime">
+            <div className="mx-auto grid size-12 place-items-center rounded-full bg-accent/15 text-accent">
               <CheckCircle2 className="size-7" />
             </div>
-            <h2 className="text-lg font-bold text-white">Solicitação enviada!</h2>
-            <p className="text-xs text-text-muted leading-relaxed">
+            <h2 className="text-lg font-bold text-ink-primary">Solicitação enviada!</h2>
+            <p className="text-xs text-ink-secondary leading-relaxed">
               Se o e-mail informado estiver cadastrado, você receberá um link para redefinição de senha em instantes.
             </p>
-            <p className="text-[11px] text-text-dim">
+            <p className="text-[11px] text-ink-secondary">
               Lembre-se de verificar sua caixa de entrada e a pasta de spam. O link expira em 30 minutos.
             </p>
             <div className="pt-2">
@@ -93,9 +93,9 @@ export default function ForgotPassword() {
           </Card>
         )}
 
-        <p className="text-center text-xs text-text-muted">
+        <p className="text-center text-xs text-ink-secondary">
           Lembrou a senha?{' '}
-          <Link to="/login" className="text-lime font-medium hover:underline">
+          <Link to="/login" className="text-accent font-medium hover:underline">
             Voltar para o login
           </Link>
         </p>

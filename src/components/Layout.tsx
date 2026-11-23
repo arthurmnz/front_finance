@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import TransactionFormModal from './TransactionFormModal'
 import {
   LayoutDashboard,
@@ -29,7 +29,7 @@ export default function Layout() {
   const [adding, setAdding] = useState(false)
 
   const items = [
-    { to: '/', label: 'Início', icon: LayoutDashboard, end: true },
+    { to: '/dashboard', label: 'Início', icon: LayoutDashboard, end: true },
     { to: '/transacoes', label: 'Transações', icon: ArrowLeftRight },
     { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
     { to: '/contas', label: 'Contas', icon: Wallet },
@@ -44,19 +44,22 @@ export default function Layout() {
   ]
 
   // No mobile: 2 itens | botão de nova transação | 2 itens
-  const mobileLeft = items.filter((i) => ['/', '/relatorios'].includes(i.to))
+  const mobileLeft = items.filter((i) => ['/dashboard', '/relatorios'].includes(i.to))
   const mobileRight = items
     .filter((i) => ['/transacoes', '/perfil'].includes(i.to))
     .map((i) => (i.to === '/perfil' ? { ...i, badge: requests + invites } : i))
 
   return (
-    <div className="min-h-dvh md:flex bg-black text-white">
+    <div className="min-h-dvh md:flex bg-canvas text-ink-primary">
       {/* Sidebar desktop */}
-      <aside className="hidden md:flex md:w-64 shrink-0 flex-col border-r border-border bg-surface p-4 sticky top-0 h-dvh">
-        <div className="flex items-center gap-2.5 px-3 py-3 text-lg font-bold tracking-tight text-white">
-          <BrandLogo className="size-9 drop-shadow-[0_0_12px_rgba(125,57,235,0.35)]" />
-          <span className="tracking-tight text-white font-bold">Finance</span>
-        </div>
+      <aside className="hidden md:flex md:w-64 shrink-0 flex-col border-r border-border-subtle bg-surface p-4 sticky top-0 h-dvh">
+        <Link
+          to="/dashboard"
+          className="flex items-center gap-2.5 px-3 py-3 text-base font-bold tracking-tight text-ink-primary transition hover:opacity-90"
+        >
+          <BrandLogo className="size-9 drop-shadow-[0_0_12px_rgba(251,191,36,0.35)]" />
+          <span className="font-display text-sm tracking-wider text-ink-primary">Finance</span>
+        </Link>
 
         <nav className="mt-5 flex-1 space-y-1">
           {items.map((i) => (
@@ -68,15 +71,15 @@ export default function Layout() {
                 clsx(
                   'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
                   isActive
-                    ? 'bg-violet/15 text-white font-semibold card-highlight border-l-2 border-violet'
-                    : 'text-text-muted hover:bg-surface-2 hover:text-white',
+                    ? 'bg-accent/15 text-ink-primary font-semibold card-highlight border-l-2 border-accent'
+                    : 'text-ink-secondary hover:bg-surface-elevated hover:text-ink-primary',
                 )
               }
             >
               <i.icon className="size-5 shrink-0" />
               <span>{i.label}</span>
               {!!i.badge && (
-                <span className="ml-auto rounded-full bg-violet px-2 py-0.5 text-[11px] font-bold text-white shadow-[0_0_8px_rgba(125,57,235,0.4)]">
+                <span className="ml-auto rounded-full bg-accent px-2 py-0.5 text-[11px] font-mono font-bold text-canvas shadow-[0_0_8px_rgba(251,191,36,0.4)]">
                   {i.badge}
                 </span>
               )}
@@ -85,18 +88,18 @@ export default function Layout() {
         </nav>
 
         {user && (
-          <div className="flex items-center gap-3 rounded-2xl bg-surface-1 border border-border p-3 card-highlight">
-            <div className="grid size-9 place-items-center rounded-full bg-violet/20 border border-violet/30 text-xs font-bold text-violet-hover">
+          <div className="flex items-center gap-3 rounded-2xl bg-surface-elevated/70 border border-border-subtle p-3 card-highlight">
+            <div className="grid size-9 place-items-center rounded-full bg-accent/20 border border-accent/30 text-xs font-mono font-bold text-accent-soft">
               {initials(user)}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">{fullName(user)}</p>
-              <p className="truncate text-xs text-text-dim">{user.email}</p>
+              <p className="truncate text-sm font-medium text-ink-primary">{fullName(user)}</p>
+              <p className="truncate text-xs text-ink-secondary">{user.email}</p>
             </div>
             <button
               onClick={logout}
               title="Sair"
-              className="rounded-lg p-2 text-text-muted hover:bg-surface-2 hover:text-white transition active:scale-95"
+              className="rounded-lg p-2 text-ink-secondary hover:bg-surface-elevated hover:text-ink-primary transition active:scale-95"
             >
               <LogOut className="size-4" />
             </button>
@@ -111,13 +114,13 @@ export default function Layout() {
       </main>
 
       {/* Bottom nav mobile */}
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 flex items-end border-t border-border bg-black/95 backdrop-blur-xl md:hidden">
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 flex items-end border-t border-border-subtle bg-canvas/95 backdrop-blur-xl md:hidden">
         {mobileLeft.map(MobileItem)}
         <div className="flex flex-1 justify-center">
           <button
             onClick={() => setAdding(true)}
             aria-label="Nova transação"
-            className="-mt-7 mb-2 grid size-14 place-items-center rounded-full bg-violet text-white shadow-[0_0_24px_rgba(125,57,235,0.45)] ring-4 ring-black transition-all duration-150 active:scale-95 hover:bg-violet-hover"
+            className="-mt-7 mb-2 grid size-14 place-items-center rounded-full bg-accent text-canvas shadow-[0_0_24px_rgba(251,191,36,0.45)] ring-4 ring-canvas transition-all duration-150 active:scale-95 hover:bg-accent-soft"
           >
             <Plus className="size-7" strokeWidth={2.5} />
           </button>
@@ -145,14 +148,14 @@ function MobileItem(i: {
       className={({ isActive }) =>
         clsx(
           'relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-all duration-150',
-          isActive ? 'text-lime font-semibold' : 'text-text-muted hover:text-white',
+          isActive ? 'text-accent font-semibold' : 'text-ink-secondary hover:text-ink-primary',
         )
       }
     >
       <i.icon className="size-5 shrink-0" />
       <span>{i.label}</span>
       {!!i.badge && (
-        <span className="absolute right-1/4 top-1.5 size-2 rounded-full bg-lime shadow-[0_0_8px_rgba(198,255,51,0.5)]" />
+        <span className="absolute right-1/4 top-1.5 size-2 rounded-full bg-accent shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
       )}
     </NavLink>
   )

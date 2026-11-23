@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Compass, Home } from 'lucide-react'
+import { useAuth } from '@/lib/auth'
 import { Button, Card } from '@/components/ui'
 
 interface Props {
@@ -16,16 +17,18 @@ export default function NotFound({
   backLabel = 'Voltar',
 }: Props) {
   const nav = useNavigate()
+  const { user } = useAuth()
+  const homePath = user ? '/dashboard' : '/'
 
   return (
     <div className="flex min-h-[70dvh] items-center justify-center px-4 py-10">
       <Card className="w-full max-w-md p-6 text-center sm:p-8">
-        <div className="mx-auto mb-4 grid size-16 place-items-center rounded-2xl bg-violet/20 text-lime">
+        <div className="mx-auto mb-4 grid size-16 place-items-center rounded-2xl bg-accent/15 text-accent">
           <Compass className="size-8" />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-lime">Erro 404</p>
-        <h1 className="mt-1 text-xl font-bold text-white sm:text-2xl">{title}</h1>
-        <p className="mt-2 text-xs text-text-muted leading-relaxed">{description}</p>
+        <p className="font-mono text-xs font-semibold uppercase tracking-widest text-accent">Erro 404</p>
+        <h1 className="mt-1 text-xl font-bold text-ink-primary sm:text-2xl">{title}</h1>
+        <p className="mt-2 text-xs text-ink-secondary leading-relaxed">{description}</p>
 
         <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
           {backTo ? (
@@ -39,7 +42,7 @@ export default function NotFound({
               <ArrowLeft className="size-4" /> Voltar
             </Button>
           )}
-          <Link to="/" className="flex-1">
+          <Link to={homePath} className="flex-1">
             <Button className="w-full">
               <Home className="size-4" /> Ir para o início
             </Button>
