@@ -82,7 +82,7 @@ export default function ForgiveDebtModal({
             </p>
             <p>
               Saldo que <span className="font-semibold text-white">{fullName(debtor)}</span> deve para você:{' '}
-              <span className="font-semibold text-lime tabular-nums">{formatMoney(maxAmount)}</span>
+              <span className="font-semibold text-income tabular-nums">{formatMoney(maxAmount)}</span>
             </p>
             <p className="border-t border-border/60 pt-1.5 text-text-dim leading-relaxed">
               O perdão abate o saldo devedor no grupo sem movimentar o saldo de nenhuma conta bancária.

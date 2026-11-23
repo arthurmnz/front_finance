@@ -53,7 +53,7 @@ export default function GroupDebtsReportSection({
       {!hasDebts ? (
         <Card className="p-6 bg-surface-1 border-border text-center">
           <div className="mx-auto w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center text-text-muted mb-3">
-            <CheckCircle2 className="size-5 text-lime" />
+            <CheckCircle2 className="size-5 text-income" />
           </div>
           <p className="text-sm font-semibold text-white">Contas e acertos equilibrados</p>
           <p className="text-xs text-text-dim mt-1 max-w-md mx-auto">
@@ -90,9 +90,9 @@ export default function GroupDebtsReportSection({
                     align="end"
                   />
                 </span>
-                <HandCoins className="size-3.5 text-lime" />
+                <HandCoins className="size-3.5 text-income" />
               </div>
-              <p className="text-xl font-bold text-lime tracking-tight tabular-nums">
+              <p className="text-xl font-bold text-income tracking-tight tabular-nums">
                 {formatMoney(debts?.totalReceivableByMe ?? 0)}
               </p>
               <p className="text-[11px] text-text-dim mt-1">Saldo credor total acumulado</p>

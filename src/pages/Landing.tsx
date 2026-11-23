@@ -175,7 +175,7 @@ export default function Landing() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-border-subtle bg-surface-elevated p-3.5 card-highlight">
                       <p className="text-xs text-ink-secondary">Saldo total em contas</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-ink-primary sm:text-2xl">
+                      <p className="mt-1 font-mono text-xl font-bold text-income sm:text-2xl">
                         R$ 14.820,50
                       </p>
                       <div className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-ink-secondary">
@@ -184,13 +184,13 @@ export default function Landing() {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-accent/35 bg-accent/10 p-3.5 card-highlight">
-                      <p className="text-xs text-accent-soft">Saldo projetado (fim do mês)</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-accent sm:text-2xl">
+                    <div className="rounded-2xl border border-income/35 bg-income/10 p-3.5 card-highlight">
+                      <p className="text-xs text-income">Saldo projetado (fim do mês)</p>
+                      <p className="mt-1 font-mono text-xl font-bold text-income sm:text-2xl">
                         R$ 11.490,00
                       </p>
                       <div className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-ink-primary/85">
-                        <CheckCircle2 className="size-3.5 text-accent" />
+                        <CheckCircle2 className="size-3.5 text-income" />
                         <span>Faturas e fixos cobertos</span>
                       </div>
                     </div>
@@ -213,11 +213,11 @@ export default function Landing() {
                         <span className="font-mono text-sm font-bold text-expense">−R$ 3.420,00</span>
                       </div>
                       <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-canvas">
-                        <div className="h-full w-[38%] rounded-full bg-accent" />
+                        <div className="h-full w-[38%] rounded-full bg-income" />
                       </div>
                       <div className="mt-1.5 flex justify-between font-mono text-[10px] text-ink-secondary">
                         <span>38% utilizado</span>
-                        <span className="text-accent">Disp: R$ 8.580,00</span>
+                        <span className="text-income">Disp: R$ 8.580,00</span>
                       </div>
                     </div>
 
@@ -234,11 +234,11 @@ export default function Landing() {
                       <div className="mt-2.5 space-y-1.5 font-mono text-xs">
                         <div className="flex items-center justify-between">
                           <span className="text-ink-secondary">A receber no mês</span>
-                          <span className="font-semibold text-accent">+R$ 640,00</span>
+                          <span className="font-semibold text-income">+R$ 640,00</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-ink-secondary">Conta Conjunta</span>
-                          <span className="font-semibold text-ink-primary">R$ 4.200,00</span>
+                          <span className="font-semibold text-income">R$ 4.200,00</span>
                         </div>
                       </div>
                     </div>
@@ -310,15 +310,15 @@ export default function Landing() {
                 <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                   <div className="rounded-xl border border-border-subtle bg-surface-elevated p-3">
                     <span className="text-[11px] text-ink-secondary">Conta Corrente</span>
-                    <p className="mt-1 font-mono text-sm font-bold text-ink-primary">R$ 6.420,00</p>
+                    <p className="mt-1 font-mono text-sm font-bold text-income">R$ 6.420,00</p>
                   </div>
                   <div className="rounded-xl border border-border-subtle bg-surface-elevated p-3">
                     <span className="text-[11px] text-ink-secondary">Reserva (6,5 meses)</span>
-                    <p className="mt-1 font-mono text-sm font-bold text-accent">R$ 28.000,00</p>
+                    <p className="mt-1 font-mono text-sm font-bold text-income">R$ 28.000,00</p>
                   </div>
                   <div className="col-span-2 rounded-xl border border-border-subtle bg-surface-elevated p-3 sm:col-span-1">
                     <span className="text-[11px] text-ink-secondary">Conta Conjunta</span>
-                    <p className="mt-1 font-mono text-sm font-bold text-ink-primary">R$ 4.200,00</p>
+                    <p className="mt-1 font-mono text-sm font-bold text-income">R$ 4.200,00</p>
                   </div>
                 </div>
               </Card>
@@ -468,13 +468,13 @@ export default function Landing() {
                         <p className="mt-2 truncate text-xs font-medium text-ink-primary">{d.label}</p>
                         <p
                           className={`mt-1 font-mono text-xs font-semibold ${
-                            d.positive ? 'text-accent' : 'text-expense'
+                            d.positive ? 'text-income' : 'text-expense'
                           }`}
                         >
                           {d.delta}
                         </p>
                         <div className="mt-2 border-t border-border-subtle pt-1.5 font-mono text-[11px] text-ink-secondary">
-                          Saldo: <strong className="text-ink-primary">{d.balance}</strong>
+                          Saldo: <strong className="text-income">{d.balance}</strong>
                         </div>
                       </div>
                     ))}

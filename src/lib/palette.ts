@@ -21,6 +21,13 @@ export const THEME_COLORS = {
   inkSecondary: '#a1a1aa',
   accent: '#fbbf24',
   accentSoft: '#fcd34d',
+  income: '#34d399',
+  incomeHover: '#6ee7b7',
+  incomeActive: '#10b981',
+  incomeSubtle: 'rgba(52, 211, 153, 0.14)',
+  positive: '#34d399',
+  success: '#34d399',
+  expense: '#FF4D6A',
   // Aliases legados
   black: '#09090b',
   surface1: '#111114',

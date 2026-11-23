@@ -35,7 +35,7 @@ function MomCell({ item }: { item: CategoryComparison }) {
       <span
         className={clsx(
           'inline-flex items-center gap-0.5 font-medium tabular-nums',
-          item.momVariationPct > 0 ? 'text-expense' : 'text-lime',
+          item.momVariationPct > 0 ? 'text-expense' : 'text-income',
         )}
       >
         {item.momVariationPct > 0 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}

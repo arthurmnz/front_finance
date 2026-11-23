@@ -129,7 +129,7 @@ export default function ManageSimulationsModal({
               <span
                 className={clsx(
                   'text-xs font-semibold tabular-nums',
-                  totalNet >= 0 ? 'text-lime' : 'text-expense',
+                  totalNet >= 0 ? 'text-income' : 'text-expense',
                 )}
               >
                 {totalNet >= 0 ? '+' : ''}
@@ -232,14 +232,14 @@ export default function ManageSimulationsModal({
                       className={clsx(
                         'grid size-8 shrink-0 place-items-center rounded-xl text-xs font-bold',
                         sim.type === 'INCOME'
-                          ? 'bg-lime/15 text-lime'
+                          ? 'bg-income/15 text-income'
                           : isCard
                             ? 'bg-violet/15 text-violet'
                             : 'bg-expense/15 text-expense',
                       )}
                     >
                       {sim.type === 'INCOME' ? (
-                        <TrendingUp className="size-4 text-lime" />
+                        <TrendingUp className="size-4 text-income" />
                       ) : isCard ? (
                         <CardIcon className="size-4 text-violet" />
                       ) : (
@@ -277,7 +277,7 @@ export default function ManageSimulationsModal({
                       <p
                         className={clsx(
                           'text-xs sm:text-sm font-bold tabular-nums',
-                          sim.type === 'INCOME' ? 'text-lime' : 'text-expense',
+                          sim.type === 'INCOME' ? 'text-income' : 'text-expense',
                         )}
                       >
                         {sim.type === 'INCOME' ? '+' : '−'}

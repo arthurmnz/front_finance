@@ -81,7 +81,7 @@ export default function Accounts() {
                     <p
                       className={clsx(
                         'text-lg font-bold tabular-nums',
-                        a.balance < 0 ? 'text-expense' : 'text-white',
+                        a.balance < 0 ? 'text-expense' : a.balance > 0 ? 'text-income' : 'text-white',
                       )}
                     >
                       {formatMoney(a.balance)}
@@ -164,7 +164,7 @@ export default function Accounts() {
                       <p
                         className={clsx(
                           'text-lg font-bold tabular-nums',
-                          a.balance < 0 ? 'text-expense' : 'text-white',
+                          a.balance < 0 ? 'text-expense' : a.balance > 0 ? 'text-income' : 'text-white',
                         )}
                       >
                         {formatMoney(a.balance)}

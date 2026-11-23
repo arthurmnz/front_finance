@@ -272,7 +272,7 @@ export default function Transactions() {
       <Card className="mb-4 grid grid-cols-3 divide-x divide-border text-center">
         <div className="p-3">
           <p className="text-xs text-text-dim">Receitas</p>
-          <p className="text-sm font-semibold text-lime tabular-nums">{formatMoney(income)}</p>
+          <p className="text-sm font-semibold text-income tabular-nums">{formatMoney(income)}</p>
         </div>
         <div className="p-3">
           <p className="text-xs text-text-dim">Despesas</p>
@@ -280,7 +280,7 @@ export default function Transactions() {
         </div>
         <div className="p-3">
           <p className="text-xs text-text-dim">Resultado</p>
-          <p className={clsx('text-sm font-semibold tabular-nums', net > 0 ? 'text-lime' : net < 0 ? 'text-expense' : 'text-white')}>
+          <p className={clsx('text-sm font-semibold tabular-nums', net > 0 ? 'text-income' : net < 0 ? 'text-expense' : 'text-white')}>
             {net > 0 ? '+' : net < 0 ? '−' : ''}
             {formatMoney(Math.abs(net))}
           </p>

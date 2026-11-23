@@ -175,7 +175,7 @@ export default function Dashboard() {
             <p
               className={clsx(
                 'mt-1 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
-                summary.currentBalance < 0 ? 'text-expense' : 'text-white',
+                summary.currentBalance < 0 ? 'text-expense' : summary.currentBalance > 0 ? 'text-income' : 'text-white',
               )}
             >
               {balance.data ? formatMoney(summary.currentBalance) : '—'}
@@ -186,7 +186,7 @@ export default function Dashboard() {
             <p
               className={clsx(
                 'mt-1 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
-                summary.projectedBalance < 0 ? 'text-expense' : 'text-lime',
+                summary.projectedBalance < 0 ? 'text-expense' : 'text-income',
               )}
             >
               {balance.data ? formatMoney(summary.projectedBalance) : '—'}
@@ -197,19 +197,19 @@ export default function Dashboard() {
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2 rounded-xl bg-surface-2/40 border border-border/70 p-3 card-highlight">
             <div className="flex items-center gap-2.5">
-              <div className="grid size-8 place-items-center rounded-xl bg-lime-subtle border border-lime/30 text-lime shrink-0">
+              <div className="grid size-8 place-items-center rounded-xl bg-income-subtle border border-income/30 text-income shrink-0">
                 <ArrowUpCircle className="size-5" />
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-text-muted font-medium">Receitas realizadas</p>
-                <p className="truncate font-semibold text-lime tabular-nums text-sm sm:text-base">
+                <p className="truncate font-semibold text-income tabular-nums text-sm sm:text-base">
                   {formatMoney(summary.realizedIncome)}
                 </p>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg bg-surface-2/80 px-2.5 py-1.5 text-xs">
               <span className="text-[11px] text-text-dim">Projeção total:</span>
-              <span className="font-semibold text-lime tabular-nums">
+              <span className="font-semibold text-income tabular-nums">
                 {formatMoney(summary.projectedIncome)}
               </span>
             </div>
@@ -309,7 +309,7 @@ export default function Dashboard() {
                     <span
                       className={clsx(
                         'text-sm font-semibold tabular-nums',
-                        a.balance < 0 ? 'text-expense' : 'text-white',
+                        a.balance < 0 ? 'text-expense' : a.balance > 0 ? 'text-income' : 'text-white',
                       )}
                     >
                       {formatMoney(a.balance)}
@@ -379,7 +379,7 @@ export default function Dashboard() {
                   <div>
                     <p className="font-medium text-white">{c.name}</p>
                     <p className="text-xs text-text-dim">
-                      Disponível: <span className="text-lime tabular-nums">{formatMoney(c.availableLimit)}</span> · Vence dia{' '}
+                      Disponível: <span className="text-income tabular-nums">{formatMoney(c.availableLimit)}</span> · Vence dia{' '}
                       <span className="tabular-nums">{c.dueDay}</span>
                     </p>
                   </div>
@@ -451,7 +451,7 @@ export default function Dashboard() {
               </div>
               <div className="rounded-xl bg-surface-2/60 border border-border/70 p-3 card-highlight">
                 <span className="text-[11px] text-text-muted font-medium">Total a receber (mês)</span>
-                <p className="mt-0.5 text-lg font-bold text-lime tabular-nums">
+                <p className="mt-0.5 text-lg font-bold text-income tabular-nums">
                   {formatMoney(debtsSummary.data.totalReceivableCurrentMonth)}
                 </p>
               </div>
@@ -469,7 +469,7 @@ export default function Dashboard() {
                       <p className="font-medium text-white">{g.groupName}</p>
                       <p className="text-xs text-text-dim">
                         Total acumulado: {g.owedTotal > 0 ? <span className="text-expense tabular-nums">Deve {formatMoney(g.owedTotal)}</span> : 'Em dia'}
-                        {g.receivableTotal > 0 ? <span className="tabular-nums"> · Tem a receber {formatMoney(g.receivableTotal)}</span> : ''}
+                        {g.receivableTotal > 0 ? <span className="text-income tabular-nums"> · Tem a receber {formatMoney(g.receivableTotal)}</span> : ''}
                       </p>
                     </div>
                     <div className="text-right">
@@ -479,7 +479,7 @@ export default function Dashboard() {
                         </p>
                       )}
                       {g.receivableCurrentMonth > 0 && (
-                        <p className="text-xs font-semibold text-lime tabular-nums">
+                        <p className="text-xs font-semibold text-income tabular-nums">
                           +{formatMoney(g.receivableCurrentMonth)} neste mês
                         </p>
                       )}
@@ -512,7 +512,7 @@ export default function Dashboard() {
                 <span
                   className={clsx(
                     'font-semibold tabular-nums',
-                    t.type === 'INCOME' ? 'text-lime' : 'text-expense',
+                    t.type === 'INCOME' ? 'text-income' : 'text-expense',
                   )}
                 >
                   {t.type === 'INCOME' ? '+' : '−'}

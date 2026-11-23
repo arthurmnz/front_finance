@@ -1253,7 +1253,9 @@ export default function TransactionFormModal({
                   type === t
                     ? t === 'EXPENSE'
                       ? 'bg-expense text-white shadow-[0_1px_4px_rgba(255,77,106,0.35)] font-bold'
-                      : 'bg-accent text-canvas shadow-[0_1px_4px_rgba(251,191,36,0.35)] font-bold'
+                      : t === 'INCOME'
+                        ? 'bg-income text-canvas shadow-[0_1px_4px_rgba(52,211,153,0.35)] font-bold'
+                        : 'bg-accent text-canvas shadow-[0_1px_4px_rgba(251,191,36,0.35)] font-bold'
                     : 'text-ink-secondary hover:text-ink-primary',
                 )}
               >
@@ -1481,7 +1483,7 @@ export default function TransactionFormModal({
                     <>
                       <span className="text-text-dim">
                         Total:{' '}
-                        <b className={clsx('tabular-nums', Math.abs(splitsPctSum - 100) <= 0.05 ? 'text-lime' : 'text-white')}>
+                        <b className={clsx('tabular-nums', Math.abs(splitsPctSum - 100) <= 0.05 ? 'text-income' : 'text-white')}>
                           {splitsPctSum}%
                         </b>{' '}
                         ({formatMoney(splitsSum)})
@@ -2149,7 +2151,7 @@ export default function TransactionFormModal({
                               <span
                                 className={clsx(
                                   'text-[11px] font-medium tabular-nums',
-                                  groupDraftTotal > originalGroupTotal ? 'text-expense' : 'text-lime',
+                                  groupDraftTotal > originalGroupTotal ? 'text-expense' : 'text-income',
                                 )}
                               >
                                 {groupDraftTotal > originalGroupTotal ? '+' : '−'}

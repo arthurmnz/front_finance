@@ -42,7 +42,7 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
       {!hasActivity ? (
         <Card className="p-6 bg-surface-1 border-border text-center">
           <div className="mx-auto w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center text-text-muted mb-3">
-            <CheckCircle2 className="size-5 text-lime" />
+            <CheckCircle2 className="size-5 text-income" />
           </div>
           <h3 className="text-sm font-semibold text-white">Sem pendências ou gastos compartilhados</h3>
           <p className="text-xs text-text-dim mt-1 max-w-md mx-auto">
@@ -119,9 +119,9 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
                     align="end"
                   />
                 </span>
-                <HandCoins className="size-3.5 text-lime" />
+                <HandCoins className="size-3.5 text-income" />
               </div>
-              <p className="text-lg font-bold text-lime tracking-tight tabular-nums">
+              <p className="text-lg font-bold text-income tracking-tight tabular-nums">
                 {formatMoney(data.totalReceivableByMe)}
               </p>
               <p className="text-[11px] text-text-dim mt-1">
@@ -156,7 +156,7 @@ export default function GroupSharedSection({ data }: GroupSharedSectionProps) {
                               Devo {formatMoney(g.owedCurrentMonth)}
                             </span>
                           ) : g.receivableCurrentMonth > 0 ? (
-                            <span className="text-lime font-medium">
+                            <span className="text-income font-medium">
                               Recebo {formatMoney(g.receivableCurrentMonth)}
                             </span>
                           ) : (

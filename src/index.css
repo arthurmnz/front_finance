@@ -13,6 +13,21 @@
   --color-accent: #fbbf24;
   --color-accent-soft: #fcd34d;
 
+  --color-income: #34d399;
+  --color-income-hover: #6ee7b7;
+  --color-income-active: #10b981;
+  --color-income-subtle: rgba(52, 211, 153, 0.14);
+
+  --color-positive: #34d399;
+  --color-positive-hover: #6ee7b7;
+  --color-positive-active: #10b981;
+  --color-positive-subtle: rgba(52, 211, 153, 0.14);
+
+  --color-success: #34d399;
+  --color-success-hover: #6ee7b7;
+  --color-success-active: #10b981;
+  --color-success-subtle: rgba(52, 211, 153, 0.14);
+
   --font-sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: "Stalinist One", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -28,6 +43,21 @@
   --color-ink-secondary: #a1a1aa;
   --color-accent: #fbbf24;
   --color-accent-soft: #fcd34d;
+
+  --color-income: #34d399;
+  --color-income-hover: #6ee7b7;
+  --color-income-active: #10b981;
+  --color-income-subtle: rgba(52, 211, 153, 0.14);
+
+  --color-positive: #34d399;
+  --color-positive-hover: #6ee7b7;
+  --color-positive-active: #10b981;
+  --color-positive-subtle: rgba(52, 211, 153, 0.14);
+
+  --color-success: #34d399;
+  --color-success-hover: #6ee7b7;
+  --color-success-active: #10b981;
+  --color-success-subtle: rgba(52, 211, 153, 0.14);
 
   --font-sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: "Stalinist One", sans-serif;
@@ -63,10 +93,6 @@
   --color-lime-hover: #fcd34d;
   --color-lime-active: #f59e0b;
   --color-lime-subtle: rgba(251, 191, 36, 0.12);
-
-  --color-income: #fbbf24;
-  --color-income-hover: #fcd34d;
-  --color-income-subtle: rgba(251, 191, 36, 0.12);
 
   --color-expense: #FF4D6A;
   --color-expense-hover: #ff6b83;

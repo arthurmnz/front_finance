@@ -24,7 +24,7 @@ export default function FinancialPlanningSection({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
-            <ShieldCheck className="size-4 text-lime" />
+            <ShieldCheck className="size-4 text-income" />
             <span>Patrimônio Guardado & Custo de Vida</span>
             <InfoTooltip
               title="Patrimônio Guardado & Custo Médio"
@@ -51,12 +51,12 @@ export default function FinancialPlanningSection({
                   align="start"
                 />
               </span>
-              <div className="p-1.5 rounded-lg bg-lime/10 text-lime">
+              <div className="p-1.5 rounded-lg bg-income/10 text-income">
                 <ShieldCheck className="size-4" />
               </div>
             </div>
 
-            <p className="text-2xl font-bold text-white tabular-nums tracking-tight">
+            <p className={clsx('text-2xl font-bold tabular-nums tracking-tight', data.totalSavings > 0 ? 'text-income' : 'text-white')}>
               {formatMoney(data.totalSavings)}
             </p>
 
@@ -68,7 +68,7 @@ export default function FinancialPlanningSection({
                     className="font-medium"
                   >
                     {isHealthyCoverage ? (
-                      <CheckCircle2 className="size-3 mr-0.5 inline text-lime" />
+                      <CheckCircle2 className="size-3 mr-0.5 inline text-income" />
                     ) : isModerateCoverage ? (
                       <AlertTriangle className="size-3 mr-0.5 inline text-amber-400" />
                     ) : (
@@ -105,12 +105,12 @@ export default function FinancialPlanningSection({
                   align="start"
                 />
               </span>
-              <div className="p-1.5 rounded-lg bg-violet/15 text-violet">
+              <div className="p-1.5 rounded-lg bg-income/15 text-income">
                 <TrendingUp className="size-4" />
               </div>
             </div>
 
-            <p className="text-2xl font-bold text-white tabular-nums tracking-tight">
+            <p className={clsx('text-2xl font-bold tabular-nums tracking-tight', data.totalInvestments > 0 ? 'text-income' : 'text-white')}>
               {formatMoney(data.totalInvestments)}
             </p>
 

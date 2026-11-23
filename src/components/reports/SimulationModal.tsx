@@ -447,8 +447,8 @@ export default function SimulationModal({
       <div className="space-y-4 max-h-[82vh] overflow-y-auto px-1 pr-1.5 scrollbar-thin">
         {/* Banner de Feedback de Sucesso */}
         {feedbackMessage && (
-          <div className="flex items-center gap-2 rounded-xl border border-lime/40 bg-lime/10 px-3.5 py-2.5 text-xs text-lime transition-all animate-in fade-in">
-            <CheckCircle2 className="size-4 shrink-0 text-lime" />
+          <div className="flex items-center gap-2 rounded-xl border border-income/40 bg-income/10 px-3.5 py-2.5 text-xs text-income transition-all animate-in fade-in">
+            <CheckCircle2 className="size-4 shrink-0 text-income" />
             <span className="font-medium">{feedbackMessage}</span>
           </div>
         )}
@@ -494,7 +494,7 @@ export default function SimulationModal({
               className={clsx(
                 'flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer',
                 type === 'INCOME'
-                  ? 'bg-lime/15 border-lime text-lime shadow-sm'
+                  ? 'bg-income/15 border-income text-income shadow-sm'
                   : 'bg-surface-2 border-border text-text-muted hover:text-white',
               )}
             >

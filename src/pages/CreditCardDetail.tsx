@@ -326,7 +326,7 @@ export default function CreditCardDetail() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs text-text-dim">Limite disponível</p>
-              <p className="text-2xl font-bold text-lime tabular-nums">{formatMoney(card.availableLimit)}</p>
+              <p className="text-2xl font-bold text-income tabular-nums">{formatMoney(card.availableLimit)}</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-text-dim">Limite comprometido</p>
@@ -335,7 +335,7 @@ export default function CreditCardDetail() {
           </div>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-2">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-expense' : pct >= 70 ? 'bg-violet' : 'bg-lime'}`}
+              className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-expense' : pct >= 70 ? 'bg-violet' : 'bg-income'}`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -400,11 +400,11 @@ export default function CreditCardDetail() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-text-dim">Restante a pagar</p>
-                  <p className={clsx('text-xl font-bold tabular-nums', inv.remainingAmount > 0 ? 'text-expense' : 'text-lime')}>
+                  <p className={clsx('text-xl font-bold tabular-nums', inv.remainingAmount > 0 ? 'text-expense' : 'text-income')}>
                     {formatMoney(inv.remainingAmount)}
                   </p>
                   {inv.paidAmount > 0 && (
-                    <p className="text-xs text-lime tabular-nums">Já pago: {formatMoney(inv.paidAmount)}</p>
+                    <p className="text-xs text-income tabular-nums">Já pago: {formatMoney(inv.paidAmount)}</p>
                   )}
                 </div>
               </div>
@@ -430,11 +430,11 @@ export default function CreditCardDetail() {
             {(inv.payments ?? []).length > 0 && (
               <div className="mb-4 space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-lime">
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-income">
                     <CheckCircle2 className="size-3.5" /> Pagamentos efetuados nesta fatura
                   </h3>
                   <span className="text-xs font-medium text-text-dim">
-                    Total pago: <b className="text-lime tabular-nums">{formatMoney(inv.paidAmount)}</b>
+                    Total pago: <b className="text-income tabular-nums">{formatMoney(inv.paidAmount)}</b>
                   </span>
                 </div>
                 <TransactionList

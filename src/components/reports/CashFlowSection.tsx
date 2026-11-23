@@ -20,7 +20,7 @@ export default function CashFlowSection({ data }: CashFlowSectionProps) {
     <div className="space-y-4 mb-8">
       <div>
         <h2 className="text-base font-semibold text-white tracking-tight flex items-center gap-2">
-          <ArrowLeftRight className="size-4 text-lime" />
+          <ArrowLeftRight className="size-4 text-income" />
           <span>Fluxo de Caixa dos Últimos 6 Meses</span>
           <InfoTooltip
             title="Fluxo de Caixa (6 Meses)"
@@ -61,14 +61,14 @@ export default function CashFlowSection({ data }: CashFlowSectionProps) {
                 itemStyle={{ color: '#f4f4f5' }}
               />
               <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
-              <Bar dataKey="Receitas" fill="#fbbf24" radius={[4, 4, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="Receitas" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={32} />
               <Bar dataKey="Despesas" fill="#FF4D6A" radius={[0, 0, 4, 4]} maxBarSize={32} />
               <Line
                 type="monotone"
                 dataKey="Saldo Líquido"
-                stroke="#fcd34d"
+                stroke="#fbbf24"
                 strokeWidth={2.5}
-                dot={{ fill: '#fcd34d', r: 4 }}
+                dot={{ fill: '#fbbf24', r: 4 }}
               />
             </ComposedChart>
           </ResponsiveContainer>

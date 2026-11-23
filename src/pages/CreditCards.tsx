@@ -120,11 +120,11 @@ export default function CreditCards() {
                             {formatMoney(c.usedLimit)}
                           </b>
                         </span>
-                        <span className="font-medium text-lime tabular-nums">Disponível: {formatMoney(c.availableLimit)}</span>
+                        <span className="font-medium text-income tabular-nums">Disponível: {formatMoney(c.availableLimit)}</span>
                       </div>
                       <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
                         <div
-                          className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-expense' : pct >= 70 ? 'bg-violet' : 'bg-lime'}`}
+                          className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? 'bg-expense' : pct >= 70 ? 'bg-violet' : 'bg-income'}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>

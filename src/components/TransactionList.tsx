@@ -102,7 +102,7 @@ export default function TransactionList({
             className={clsx(
               'grid size-9 shrink-0 place-items-center rounded-xl border',
               done
-                ? 'bg-lime-subtle text-lime border-lime/30'
+                ? 'bg-income-subtle text-income border-income/30'
                 : 'bg-amber-500/10 text-amber-400 border-amber-500/30',
             )}
             title={done ? 'Concluído' : 'Pendente'}
@@ -117,7 +117,7 @@ export default function TransactionList({
             className={clsx(
               'grid size-9 shrink-0 place-items-center rounded-xl transition-all duration-150 active:scale-95 cursor-pointer',
               done
-                ? 'bg-lime-subtle text-lime border border-lime/30 hover:bg-lime/25 shadow-[0_0_8px_rgba(198,255,51,0.15)]'
+                ? 'bg-income-subtle text-income border border-income/30 hover:bg-income/25 shadow-[0_0_8px_rgba(52,211,153,0.15)]'
                 : 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25',
             )}
           >
@@ -203,7 +203,7 @@ export default function TransactionList({
             )}
             {!isCard && (
               done ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-lime/10 border border-lime/25 px-1.5 py-0.2 text-[10px] font-medium text-lime">
+                <span className="inline-flex items-center gap-1 rounded-md bg-income/10 border border-income/25 px-1.5 py-0.2 text-[10px] font-medium text-income">
                   <Check className="size-2.5 stroke-[2.5]" /> Concluído
                 </span>
               ) : (
@@ -218,7 +218,7 @@ export default function TransactionList({
           <p
             className={clsx(
               'text-sm sm:text-base font-semibold tabular-nums tracking-tight',
-              incoming ? 'text-lime' : 'text-expense',
+              incoming ? 'text-income' : 'text-expense',
             )}
           >
             {incoming ? '+' : t.type === 'TRANSFER' ? '' : '−'}
@@ -274,7 +274,7 @@ export default function TransactionList({
                   <span
                     className={clsx(
                       'tabular-nums font-semibold',
-                      total > 0 ? 'text-lime' : total < 0 ? 'text-expense' : 'text-text-muted',
+                      total > 0 ? 'text-income' : total < 0 ? 'text-expense' : 'text-text-muted',
                     )}
                   >
                     {total > 0 ? '+' : total < 0 ? '−' : ''}

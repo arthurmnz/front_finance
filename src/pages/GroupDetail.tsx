@@ -568,7 +568,7 @@ export default function GroupDetail() {
                     <p
                       className={clsx(
                         'mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
-                        groupSummary.currentBalance < 0 ? 'text-expense' : 'text-white',
+                        groupSummary.currentBalance < 0 ? 'text-expense' : groupSummary.currentBalance > 0 ? 'text-income' : 'text-white',
                       )}
                     >
                       {!accounts.isLoading ? formatMoney(groupSummary.currentBalance) : '—'}
@@ -579,7 +579,7 @@ export default function GroupDetail() {
                     <p
                       className={clsx(
                         'mt-0.5 text-2xl font-bold sm:text-3xl tracking-tight tabular-nums',
-                        groupSummary.projectedBalance < 0 ? 'text-expense' : 'text-lime',
+                        groupSummary.projectedBalance < 0 ? 'text-expense' : 'text-income',
                       )}
                     >
                       {!accounts.isLoading ? formatMoney(groupSummary.projectedBalance) : '—'}
@@ -590,17 +590,17 @@ export default function GroupDetail() {
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2.5">
-                      <ArrowUpCircle className="size-6 shrink-0 text-lime" />
+                      <ArrowUpCircle className="size-6 shrink-0 text-income" />
                       <div className="min-w-0">
                         <p className="text-xs text-text-dim">Receitas</p>
-                        <p className="truncate font-semibold text-lime tabular-nums">
+                        <p className="truncate font-semibold text-income tabular-nums">
                           {formatMoney(groupSummary.realizedIncome)}
                         </p>
                       </div>
                     </div>
                     <div className="rounded-xl bg-surface-2 px-3 py-2">
                       <p className="text-[11px] text-text-dim">Receitas projetadas</p>
-                      <p className="text-xs font-semibold text-lime tabular-nums">
+                      <p className="text-xs font-semibold text-income tabular-nums">
                         {formatMoney(groupSummary.projectedIncome)}
                       </p>
                     </div>
@@ -695,7 +695,7 @@ export default function GroupDetail() {
                             <span
                               className={clsx(
                                 'text-sm font-semibold tabular-nums',
-                                a.balance < 0 ? 'text-expense' : 'text-white',
+                                a.balance < 0 ? 'text-expense' : a.balance > 0 ? 'text-income' : 'text-white',
                               )}
                             >
                               {formatMoney(a.balance)}
@@ -747,7 +747,7 @@ export default function GroupDetail() {
                               {c.owner ? <span className="text-xs font-normal text-text-dim"> · {fullName(c.owner)}</span> : null}
                             </p>
                             <p className="text-xs text-text-dim">
-                              Disponível: <span className="text-lime">{formatMoney(c.availableLimit)}</span> · Vence
+                              Disponível: <span className="text-income">{formatMoney(c.availableLimit)}</span> · Vence
                               dia {c.dueDay}
                             </p>
                           </div>
@@ -800,7 +800,7 @@ export default function GroupDetail() {
                         <span
                           className={
                             t.type === 'INCOME'
-                              ? 'font-semibold text-lime tabular-nums'
+                              ? 'font-semibold text-income tabular-nums'
                               : 'font-semibold text-expense tabular-nums'
                           }
                         >
@@ -950,7 +950,7 @@ export default function GroupDetail() {
               <Card className="grid grid-cols-3 divide-x divide-border text-center">
                 <div className="p-3">
                   <p className="text-xs text-text-dim">Receitas</p>
-                  <p className="text-sm font-semibold text-lime tabular-nums">{formatMoney(txIncome)}</p>
+                  <p className="text-sm font-semibold text-income tabular-nums">{formatMoney(txIncome)}</p>
                 </div>
                 <div className="p-3">
                   <p className="text-xs text-text-dim">Despesas</p>
@@ -958,7 +958,7 @@ export default function GroupDetail() {
                 </div>
                 <div className="p-3">
                   <p className="text-xs text-text-dim">Resultado</p>
-                  <p className={clsx('text-sm font-semibold tabular-nums', txNet > 0 ? 'text-lime' : txNet < 0 ? 'text-expense' : 'text-white')}>
+                  <p className={clsx('text-sm font-semibold tabular-nums', txNet > 0 ? 'text-income' : txNet < 0 ? 'text-expense' : 'text-white')}>
                     {txNet > 0 ? '+' : txNet < 0 ? '−' : ''}
                     {formatMoney(Math.abs(txNet))}
                   </p>
@@ -1008,7 +1008,7 @@ export default function GroupDetail() {
                 </Card>
                 <Card className="p-4 bg-surface-1">
                   <p className="text-xs text-text-dim">Você tem a receber (todos os meses)</p>
-                  <p className="mt-1 text-2xl font-bold text-lime tabular-nums">
+                  <p className="mt-1 text-2xl font-bold text-income tabular-nums">
                     {formatMoney(groupDebts?.totalReceivableByMe ?? 0)}
                   </p>
                 </Card>
@@ -1069,7 +1069,7 @@ export default function GroupDetail() {
                                         ) : isCreditor ? (
                                           <>
                                             {fullName(b.debtor)} deve{' '}
-                                            <span className="font-bold text-lime tabular-nums">
+                                            <span className="font-bold text-income tabular-nums">
                                               {formatMoney(b.netAmount)}
                                             </span>{' '}
                                             para você
@@ -1085,7 +1085,7 @@ export default function GroupDetail() {
                                         )}
                                       </p>
                                       {b.netAmount === 0 && (
-                                        <p className="text-xs text-lime mt-0.5">Quitado para este mês 🎉</p>
+                                        <p className="text-xs text-income mt-0.5">Quitado para este mês 🎉</p>
                                       )}
                                     </div>
 
@@ -1160,7 +1160,7 @@ export default function GroupDetail() {
                                               </strong>
                                             </span>
                                             {gd.settledAmount > 0 && (
-                                              <span className="text-lime tabular-nums">
+                                              <span className="text-income tabular-nums">
                                                 Já abatido: {formatMoney(gd.settledAmount)}
                                               </span>
                                             )}
@@ -1205,7 +1205,7 @@ export default function GroupDetail() {
               {groupDebts && groupDebts.settlements.length > 0 && (
                 <Card className="p-4">
                   <div className="mb-3 flex items-center gap-2">
-                    <Receipt className="size-4 text-lime" />
+                    <Receipt className="size-4 text-income" />
                     <h3 className="font-semibold text-white">Histórico de Quitações / Acertos</h3>
                   </div>
 
@@ -1216,7 +1216,7 @@ export default function GroupDetail() {
                           {s.isForgiveness ? (
                             <p className="text-white font-medium">
                               {fullName(s.creditor)} perdoou{' '}
-                              <span className="text-lime font-bold tabular-nums">
+                              <span className="text-income font-bold tabular-nums">
                                 {formatMoney(s.amount)}
                               </span>{' '}
                               da dívida de {fullName(s.debtor)}
@@ -1224,7 +1224,7 @@ export default function GroupDetail() {
                           ) : (
                             <p className="text-white font-medium">
                               {fullName(s.debtor)} transferiu{' '}
-                              <span className="text-lime font-bold tabular-nums">
+                              <span className="text-income font-bold tabular-nums">
                                 {formatMoney(s.amount)}
                               </span>{' '}
                               para {fullName(s.creditor)}
@@ -1402,7 +1402,7 @@ export default function GroupDetail() {
                                     <p
                                       className={clsx(
                                         'text-base font-bold tabular-nums',
-                                        a.balance < 0 ? 'text-expense' : 'text-white',
+                                        a.balance < 0 ? 'text-expense' : a.balance > 0 ? 'text-income' : 'text-white',
                                       )}
                                     >
                                       {formatMoney(a.balance)}
@@ -1474,7 +1474,7 @@ export default function GroupDetail() {
                               <p
                                 className={clsx(
                                   'text-sm font-semibold tabular-nums',
-                                  a.balance < 0 ? 'text-expense' : 'text-white',
+                                  a.balance < 0 ? 'text-expense' : a.balance > 0 ? 'text-income' : 'text-white',
                                 )}
                               >
                                 {formatMoney(a.balance)}
@@ -1516,7 +1516,7 @@ export default function GroupDetail() {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-text-dim">Disponível</p>
-                        <p className="text-sm font-semibold text-lime tabular-nums">{formatMoney(c.availableLimit)}</p>
+                        <p className="text-sm font-semibold text-income tabular-nums">{formatMoney(c.availableLimit)}</p>
                       </div>
                     </Link>
                   ))}

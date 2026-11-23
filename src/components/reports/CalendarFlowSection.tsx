@@ -49,8 +49,8 @@ const levelOf = (balance: number, threshold: number): Level =>
   balance < 0 ? 'negative' : balance < threshold ? 'warning' : 'positive'
 
 const levelCell: Record<Level, string> = {
-  positive: 'bg-lime-subtle border-lime/25 text-lime hover:border-lime/60',
-  warning: 'bg-violet-subtle border-violet/30 text-white hover:border-violet/60',
+  positive: 'bg-income-subtle border-income/30 text-income hover:border-income/60',
+  warning: 'bg-accent/12 border-accent/35 text-accent hover:border-accent/65',
   negative: 'bg-expense-subtle border-expense/40 text-expense hover:border-expense/70',
 }
 
@@ -236,7 +236,7 @@ export default function CalendarFlowSection({
                 <span
                   className={clsx(
                     'ml-2 font-semibold tabular-nums',
-                    monthSimNet > 0 ? 'text-lime' : 'text-expense',
+                    monthSimNet > 0 ? 'text-income' : 'text-expense',
                   )}
                 >
                   Impacto líquido no mês: {monthSimNet > 0 ? '+' : ''}
@@ -286,7 +286,11 @@ export default function CalendarFlowSection({
           <p
             className={clsx(
               'text-sm font-semibold sm:text-base tabular-nums',
-              projection.opening < 0 ? 'text-expense' : 'text-white',
+              projection.opening < 0
+                ? 'text-expense'
+                : projection.opening < threshold
+                  ? 'text-accent'
+                  : 'text-income',
             )}
           >
             {formatMoney(projection.opening)}
@@ -311,9 +315,9 @@ export default function CalendarFlowSection({
               'flex items-center gap-1 text-sm font-semibold sm:text-base tabular-nums',
               projection.closing < 0
                 ? 'text-expense'
-                : projection.closing >= projection.opening
-                  ? 'text-lime'
-                  : 'text-white',
+                : projection.closing < threshold
+                  ? 'text-accent'
+                  : 'text-income',
             )}
           >
             {projection.closing < projection.opening ? (
@@ -324,7 +328,7 @@ export default function CalendarFlowSection({
                 )}
               />
             ) : (
-              <TrendingUp className="size-4 shrink-0 text-lime" />
+              <TrendingUp className="size-4 shrink-0 text-income" />
             )}
             {formatMoney(projection.closing)}
           </p>
@@ -334,7 +338,7 @@ export default function CalendarFlowSection({
               <span
                 className={clsx(
                   'font-medium',
-                  projection.closing >= projection.realClosing ? 'text-lime' : 'text-expense',
+                  projection.closing >= projection.realClosing ? 'text-income' : 'text-expense',
                 )}
               >
                 ({projection.closing >= projection.realClosing ? '+' : ''}
@@ -355,7 +359,11 @@ export default function CalendarFlowSection({
           <p
             className={clsx(
               'text-sm font-semibold sm:text-base tabular-nums',
-              projection.min.balance < 0 ? 'text-expense' : 'text-white',
+              projection.min.balance < 0
+                ? 'text-expense'
+                : projection.min.balance < threshold
+                  ? 'text-accent'
+                  : 'text-income',
             )}
           >
             {formatMoney(projection.min.balance)}
@@ -467,7 +475,7 @@ export default function CalendarFlowSection({
                 <span
                   className={clsx(
                     'text-[10px] leading-none tabular-nums font-medium whitespace-nowrap',
-                    d.delta > 0 ? 'text-lime' : 'text-expense',
+                    d.delta > 0 ? 'text-income' : 'text-expense',
                   )}
                 >
                   {d.delta > 0 ? '+' : '−'}
@@ -485,7 +493,11 @@ export default function CalendarFlowSection({
               <span
                 className={clsx(
                   'text-[11px] font-semibold leading-none sm:text-xs tabular-nums whitespace-nowrap',
-                  d.balance < 0 ? 'text-expense' : 'text-white',
+                  d.balance < 0
+                    ? 'text-expense'
+                    : d.balance < threshold
+                      ? 'text-accent'
+                      : 'text-income',
                 )}
               >
                 {formatCompact(d.balance)}
@@ -497,10 +509,10 @@ export default function CalendarFlowSection({
         {/* Legenda */}
         <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-border pt-2.5 px-1.5 sm:px-2 text-xs text-text-dim">
           <span className="flex items-center gap-1.5">
-            <i className="size-2 rounded-full bg-lime shrink-0" /> Positivo (≥ {formatMoney(threshold)})
+            <i className="size-2 rounded-full bg-income shrink-0" /> Positivo (≥ {formatMoney(threshold)})
           </span>
           <span className="flex items-center gap-1.5">
-            <i className="size-2 rounded-full bg-violet shrink-0" /> Atenção (abaixo de {formatMoney(threshold)})
+            <i className="size-2 rounded-full bg-accent shrink-0" /> Atenção (abaixo de {formatMoney(threshold)})
           </span>
           <span className="flex items-center gap-1.5">
             <i className="size-2 rounded-full bg-expense shrink-0" /> Negativo
@@ -528,7 +540,16 @@ export default function CalendarFlowSection({
               <h3 className="font-semibold text-white">Movimentações do Dia {sel.day}</h3>
               <p className="text-xs text-text-muted">
                 Saldo projetado no encerramento:{' '}
-                <b className={clsx('tabular-nums', sel.balance < 0 ? 'text-expense' : 'text-white')}>
+                <b
+                  className={clsx(
+                    'tabular-nums',
+                    sel.balance < 0
+                      ? 'text-expense'
+                      : sel.balance < threshold
+                        ? 'text-accent'
+                        : 'text-income',
+                  )}
+                >
                   {formatMoney(sel.balance)}
                 </b>
                 {sel.realBalance != null && sel.realBalance !== sel.balance && (
@@ -588,7 +609,7 @@ export default function CalendarFlowSection({
                   <b
                     className={clsx(
                       'tabular-nums font-semibold',
-                      (sel.simulatedDelta ?? 0) >= 0 ? 'text-lime' : 'text-expense',
+                      (sel.simulatedDelta ?? 0) >= 0 ? 'text-income' : 'text-expense',
                     )}
                   >
                     {(sel.simulatedDelta ?? 0) >= 0 ? '+' : ''}
@@ -612,14 +633,14 @@ export default function CalendarFlowSection({
                         className={clsx(
                           'grid size-8 place-items-center rounded-lg text-xs font-bold shrink-0',
                           sim.type === 'INCOME'
-                            ? 'bg-lime/15 text-lime'
+                            ? 'bg-income/15 text-income'
                             : isCardPurchase
                               ? 'bg-violet/15 text-violet'
                               : 'bg-expense/15 text-expense',
                         )}
                       >
                         {sim.type === 'INCOME' ? (
-                          <TrendingUp className="size-4 text-lime" />
+                          <TrendingUp className="size-4 text-income" />
                         ) : isCardPurchase ? (
                           <CardIcon className="size-4 text-violet" />
                         ) : (
@@ -669,7 +690,7 @@ export default function CalendarFlowSection({
                         className={clsx(
                           'text-sm font-semibold tabular-nums',
                           sim.type === 'INCOME'
-                            ? 'text-lime'
+                            ? 'text-income'
                             : isCardPurchase
                               ? 'text-text-muted'
                               : 'text-expense',

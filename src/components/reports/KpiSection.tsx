@@ -43,7 +43,7 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
                 />
               </span>
               {isNetPositive ? (
-                <ArrowUpRight className="size-4 text-lime" />
+                <ArrowUpRight className="size-4 text-income" />
               ) : (
                 <ArrowDownRight className="size-4 text-expense" />
               )}
@@ -51,7 +51,7 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
             <p
               className={clsx(
                 'text-2xl font-bold tabular-nums tracking-tight',
-                isNetPositive ? 'text-lime' : 'text-expense',
+                isNetPositive ? 'text-income' : 'text-expense',
               )}
             >
               {isNetPositive ? '+' : ''}
@@ -59,7 +59,7 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
             </p>
           </div>
           <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between text-[11px] text-text-dim">
-            <span className="text-lime">Receitas: {formatMoney(kpis.income)}</span>
+            <span className="text-income">Receitas: {formatMoney(kpis.income)}</span>
             <span className="text-expense">Despesas: {formatMoney(kpis.expense)}</span>
           </div>
         </Card>
@@ -82,7 +82,7 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
               <p
                 className={clsx(
                   'text-2xl font-bold tabular-nums tracking-tight',
-                  isSavingsPositive ? 'text-lime' : kpis.savingsRate < 0 ? 'text-expense' : 'text-white',
+                  isSavingsPositive ? 'text-income' : kpis.savingsRate < 0 ? 'text-expense' : 'text-white',
                 )}
               >
                 {kpis.savingsRate}%
@@ -136,12 +136,12 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
                   align="end"
                 />
               </span>
-              <Calendar className={clsx('size-4', kpis.minBalanceAmount < 0 ? 'text-expense' : 'text-lime')} />
+              <Calendar className={clsx('size-4', kpis.minBalanceAmount < 0 ? 'text-expense' : 'text-income')} />
             </div>
             <p
               className={clsx(
                 'text-2xl font-bold tabular-nums tracking-tight',
-                kpis.minBalanceAmount < 0 ? 'text-expense' : 'text-white',
+                kpis.minBalanceAmount < 0 ? 'text-expense' : kpis.minBalanceAmount > 0 ? 'text-income' : 'text-white',
               )}
             >
               {formatMoney(kpis.minBalanceAmount)}
@@ -149,7 +149,7 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
           </div>
           <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between text-[11px] text-text-dim">
             <span>Ponto crítico:</span>
-            <Badge tone={kpis.minBalanceAmount < 0 ? 'expense' : 'neutral'}>Dia {kpis.minBalanceDay}</Badge>
+            <Badge tone={kpis.minBalanceAmount < 0 ? 'expense' : kpis.minBalanceAmount > 0 ? 'income' : 'neutral'}>Dia {kpis.minBalanceDay}</Badge>
           </div>
         </Card>
       </div>
@@ -172,8 +172,8 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
             <span className="flex items-center gap-1.5 text-violet">
               <span className="size-2 rounded-full bg-violet" /> Cartão ({kpis.cardSharePct}% · {formatMoney(kpis.cardExpense)})
             </span>
-            <span className="flex items-center gap-1.5 text-lime">
-              <span className="size-2 rounded-full bg-lime" /> Contas/À vista ({100 - kpis.cardSharePct}% · {formatMoney(kpis.accountExpense)})
+            <span className="flex items-center gap-1.5 text-income">
+              <span className="size-2 rounded-full bg-income" /> Contas/À vista ({100 - kpis.cardSharePct}% · {formatMoney(kpis.accountExpense)})
             </span>
           </div>
         </div>
@@ -186,7 +186,7 @@ export default function KpiSection({ kpis }: KpiSectionProps) {
             title={`Cartão: ${kpis.cardSharePct}%`}
           />
           <div
-            className="h-full bg-lime transition-all duration-500"
+            className="h-full bg-income transition-all duration-500"
             style={{ width: `${Math.min(100, Math.max(0, 100 - kpis.cardSharePct))}%` }}
             title={`Contas: ${100 - kpis.cardSharePct}%`}
           />

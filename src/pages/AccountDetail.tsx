@@ -176,7 +176,7 @@ export default function AccountDetail() {
         <p
           className={clsx(
             'text-3xl font-bold tracking-tight tabular-nums',
-            account.balance < 0 ? 'text-expense' : 'text-white',
+            account.balance < 0 ? 'text-expense' : account.balance > 0 ? 'text-income' : 'text-white',
           )}
         >
           {formatMoney(account.balance)}
@@ -184,7 +184,7 @@ export default function AccountDetail() {
         <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
           <div>
             <p className="text-xs text-text-dim">Entradas no mês</p>
-            <p className="font-semibold text-lime tabular-nums">{formatMoney(income)}</p>
+            <p className="font-semibold text-income tabular-nums">{formatMoney(income)}</p>
           </div>
           <div>
             <p className="text-xs text-text-dim">Saídas no mês</p>
@@ -231,7 +231,7 @@ export default function AccountDetail() {
 
                   <div className="rounded-xl border border-border bg-surface-2/60 p-3">
                     <p className="text-xs text-text-dim">Total aportado (transferências)</p>
-                    <p className="mt-1 text-lg font-bold text-lime tabular-nums">
+                    <p className="mt-1 text-lg font-bold text-income tabular-nums">
                       +{formatMoney(summary.totalContributions)}
                     </p>
                     {summary.totalIncome > 0 && (
@@ -307,7 +307,7 @@ export default function AccountDetail() {
                             </div>
                             <div className="rounded-lg bg-surface-1/80 px-2.5 py-2 border border-border/60">
                               <p className="text-xs text-text-dim">Aportado no mês</p>
-                              <p className="mt-0.5 font-semibold text-lime tabular-nums">
+                              <p className="mt-0.5 font-semibold text-income tabular-nums">
                                 {formatMoney(share.contributedAmount)}
                               </p>
                             </div>
@@ -322,7 +322,7 @@ export default function AccountDetail() {
                               <p
                                 className={clsx(
                                   'mt-0.5 font-semibold tabular-nums',
-                                  share.netBalance >= 0 ? 'text-lime' : 'text-expense',
+                                  share.netBalance >= 0 ? 'text-income' : 'text-expense',
                                 )}
                               >
                                 {share.netBalance > 0 ? '+' : share.netBalance < 0 ? '−' : ''}
