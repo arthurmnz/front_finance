@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Percent, Plus, Search, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, FileSpreadsheet, FileText, Percent, Plus, Search, SlidersHorizontal, Trash2, Users, X } from 'lucide-react'
 import clsx from 'clsx'
+import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { addMissingTransactionCategories, matchesCategoryFilters } from '@/lib/categories'
 import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCardInvoice, useCreditCards } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
+import { computeNetInvoiceAmountCents, exportInvoiceCsv, exportInvoicePdf } from '@/lib/invoiceExport'
 import type { Category, TransactionStatus, TransactionType, UserSummary } from '@/lib/types'
 import { formatAccountLabel, formatDate, formatMoney, formatShortAccountLabel, fullName, initials, toISODate, txTypeLabel } from '@/lib/format'
 import {
@@ -171,9 +173,11 @@ export default function CreditCardDetail() {
     f.recurring,
   ].filter(Boolean).length
   const filteredTotal = useMemo(
-    () => filteredTransactions.reduce((s, t) => s + t.amount, 0),
+    () => computeNetInvoiceAmountCents(filteredTransactions),
     [filteredTransactions],
   )
+  const hasFilterApplied = activeCount > 0 || f.search.trim().length > 0
+  const exportDisabled = !card || !inv || invoice.isLoading
   const accountNameMap = useMemo(
     () => new Map(accounts.map((a) => [a.id, formatShortAccountLabel(a)])),
     [accounts],
@@ -246,6 +250,49 @@ export default function CreditCardDetail() {
     setEditingRevolving(true)
   }
 
+  const buildExportPayload = () => {
+    if (!card || !inv) return null
+    return {
+      card,
+      invoice: inv,
+      transactions: filteredTransactions,
+      totalTransactionsCount: allTransactions.length,
+      filters: { activeCount, search: f.search },
+      categoryMap: displayCatMap,
+      accountNames: accountNameMap,
+    }
+  }
+
+  const handleExportCsv = () => {
+    const payload = buildExportPayload()
+    if (!payload) return
+    try {
+      exportInvoiceCsv(payload)
+      toast.success(
+        hasFilterApplied
+          ? 'Fatura exportada em CSV com os filtros aplicados.'
+          : 'Fatura exportada em CSV com sucesso.',
+      )
+    } catch {
+      toast.error('Não foi possível exportar a fatura em CSV. Tente novamente.')
+    }
+  }
+
+  const handleExportPdf = () => {
+    const payload = buildExportPayload()
+    if (!payload) return
+    try {
+      exportInvoicePdf(payload)
+      toast.success(
+        hasFilterApplied
+          ? 'Fatura exportada em PDF com os filtros aplicados.'
+          : 'Fatura exportada em PDF com sucesso.',
+      )
+    } catch {
+      toast.error('Não foi possível exportar a fatura em PDF. Tente novamente.')
+    }
+  }
+
   const pct = card && card.limitAmount > 0 ? Math.min(100, Math.round((card.usedLimit / card.limitAmount) * 100)) : 0
   const st = inv ? statusLabel[inv.status] ?? { label: inv.status, tone: 'default' } : undefined
   const isPartialPayment = inv ? payAmount < inv.remainingAmount : false
@@ -306,7 +353,25 @@ export default function CreditCardDetail() {
             )}
           </Button>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportCsv}
+            disabled={exportDisabled}
+            title={hasFilterApplied ? 'Exportar lançamentos filtrados em CSV' : 'Exportar fatura em CSV'}
+          >
+            <FileSpreadsheet className="size-4" /> Exportar CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportPdf}
+            disabled={exportDisabled}
+            title={hasFilterApplied ? 'Exportar lançamentos filtrados em PDF' : 'Exportar fatura em PDF'}
+          >
+            <FileText className="size-4" /> Exportar PDF
+          </Button>
           <Button size="sm" variant="outline" onClick={openRevolvingModal}>
             <Percent className="size-4" /> Rotativo / Saldo anterior
           </Button>
@@ -490,7 +555,7 @@ export default function CreditCardDetail() {
               </Card>
             )}
 
-            {(activeCount > 0 || f.search.trim().length > 0) && (
+            {hasFilterApplied && (
               <div className="mb-3 flex items-center justify-between rounded-xl border border-border bg-surface-1 px-3.5 py-2 text-xs">
                 <span className="text-text-dim">
                   Exibindo <b className="text-white">{filteredTransactions.length}</b> de {allTransactions.length}{' '}
