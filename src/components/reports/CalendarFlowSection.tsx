@@ -405,7 +405,7 @@ export default function CalendarFlowSection({
               type="button"
               onClick={() => setSelected(d.date === selected ? undefined : d.date)}
               className={clsx(
-                'flex min-h-[52px] flex-col items-center justify-between rounded-lg border p-1 text-center transition cursor-pointer select-none sm:min-h-0 sm:aspect-[10/9] sm:p-1.5 relative',
+                'flex min-h-[52px] min-w-0 flex-col items-center justify-between rounded-lg border p-1 text-center transition cursor-pointer select-none sm:min-h-0 sm:aspect-[10/9] sm:p-1.5 relative',
                 levelCell[levelOf(d.balance, threshold)],
                 d.date === selected && '!border-lime ring-2 ring-lime/60',
                 d.date === today && 'outline outline-1 outline-lime',
@@ -415,7 +415,7 @@ export default function CalendarFlowSection({
               <div className="flex items-center justify-between w-full px-0.5">
                 <span
                   className={clsx(
-                    'text-xs font-medium',
+                    'text-xs font-medium tabular-nums',
                     d.date === today
                       ? 'text-lime font-bold'
                       : d.balance < 0
@@ -466,7 +466,7 @@ export default function CalendarFlowSection({
               {d.delta !== 0 ? (
                 <span
                   className={clsx(
-                    'text-[10px] leading-none tabular-nums font-medium',
+                    'text-[10px] leading-none tabular-nums font-medium whitespace-nowrap',
                     d.delta > 0 ? 'text-lime' : 'text-expense',
                   )}
                 >
@@ -476,7 +476,7 @@ export default function CalendarFlowSection({
               ) : d.date < today && d.pendingTxs && d.pendingTxs.length > 0 && (d.pendingDelta ?? 0) !== 0 ? (
                 <span
                   title={`Lançamento não pago: ${formatMoney(d.pendingDelta ?? 0)}`}
-                  className="text-[10px] leading-none tabular-nums font-medium text-amber-400 border-b border-dashed border-amber-400/60"
+                  className="text-[10px] leading-none tabular-nums font-medium whitespace-nowrap text-amber-400 border-b border-dashed border-amber-400/60"
                 >
                   {(d.pendingDelta ?? 0) > 0 ? '+' : '−'}
                   {formatCompact(Math.abs(d.pendingDelta ?? 0))}
@@ -484,7 +484,7 @@ export default function CalendarFlowSection({
               ) : null}
               <span
                 className={clsx(
-                  'text-[11px] font-semibold leading-none sm:text-xs tabular-nums',
+                  'text-[11px] font-semibold leading-none sm:text-xs tabular-nums whitespace-nowrap',
                   d.balance < 0 ? 'text-expense' : 'text-white',
                 )}
               >

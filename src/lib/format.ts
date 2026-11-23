@@ -40,15 +40,16 @@ export const txTypeLabel: Record<string, string> = { EXPENSE: 'Despesa', INCOME:
 export const roleLabel: Record<string, string> = { OWNER: 'Dono', ADMIN: 'Admin', MEMBER: 'Membro' }
 export const freqLabel: Record<string, string> = { DAILY: 'Diária', WEEKLY: 'Semanal', MONTHLY: 'Mensal', YEARLY: 'Anual' }
 
-/** Valor compacto para células pequenas (ex.: -R$ 45, R$ 1,2 mil). Recebe centavos. */
+/** Valor compacto para células pequenas (ex.: -45,00, 6,00, 1,2 mil). Recebe centavos. */
 export const formatCompact = (cents: number) => {
-  const v = cents / 100
+  const safeCents = Number.isFinite(cents) ? cents : 0
+  const v = safeCents / 100
   const abs = Math.abs(v)
-  const sign = v < 0 ? '-' : ''
+  const sign = v <= -0.005 ? '-' : ''
   if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`
   if (abs >= 10_000) return `${sign}${(abs / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} mil`
   if (abs >= 1000) return `${sign}${(abs / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`
-  return `${sign}${abs.toLocaleString('pt-BR', { maximumFractionDigits: Number.isInteger(abs) ? 0 : 2, minimumFractionDigits: Number.isInteger(abs) ? 0 : 2 })}`
+  return `${sign}${abs.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 /**
