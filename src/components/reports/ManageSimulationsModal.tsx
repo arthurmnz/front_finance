@@ -13,6 +13,7 @@ import {
 import clsx from 'clsx'
 import type { Account, CreditCard } from '@/lib/types'
 import { formatMoney } from '@/lib/format'
+import { summarizeInstallments } from '@/lib/installments'
 import { Button, Empty, Modal } from '@/components/ui'
 import type { SimulatedTransaction } from './types'
 
@@ -76,12 +77,17 @@ export default function ManageSimulationsModal({
   // Total líquido das simulações cadastradas
   const totalNet = useMemo(() => {
     return simulations.reduce((s, sim) => {
+      const hasInstallmentAmounts = Array.isArray(sim.installmentAmounts) && sim.installmentAmounts.length > 0
       const isCardInstallments =
         (sim.sourceMode === 'CARD' || sim.creditCardId) &&
         sim.totalInstallments &&
         sim.totalInstallments > 1
-      const totalCost = isCardInstallments ? sim.amount * (sim.totalInstallments || 1) : sim.amount
-      return s + (sim.type === 'INCOME' ? sim.amount : -totalCost)
+      const totalCost = hasInstallmentAmounts
+        ? sim.installmentAmounts!.reduce((acc, v) => acc + v, 0)
+        : isCardInstallments
+          ? sim.amount * (sim.totalInstallments || 1)
+          : sim.amount
+      return s + (sim.type === 'INCOME' ? totalCost : -totalCost)
     }, 0)
   }, [simulations])
 
@@ -210,6 +216,11 @@ export default function ManageSimulationsModal({
                 'Cartão'
               const accountName = sim.accountId ? accountMap.get(sim.accountId) : undefined
               const isInstallments = isCard && sim.totalInstallments && sim.totalInstallments > 1
+              const installmentAmounts = sim.installmentAmounts
+              const hasExactInstallments =
+                Boolean(isInstallments) &&
+                Array.isArray(installmentAmounts) &&
+                installmentAmounts.length === sim.totalInstallments
 
               return (
                 <div
@@ -270,11 +281,22 @@ export default function ManageSimulationsModal({
                         )}
                       >
                         {sim.type === 'INCOME' ? '+' : '−'}
-                        {formatMoney(sim.amount)}
-                        {isInstallments && (
-                          <span className="text-[10px] text-text-dim font-normal block sm:inline sm:ml-1">
-                            (Total: {formatMoney(sim.amount * (sim.totalInstallments || 1))})
-                          </span>
+                        {hasExactInstallments && installmentAmounts ? (
+                          <>
+                            {summarizeInstallments(installmentAmounts)}
+                            <span className="text-[10px] text-text-dim font-normal block sm:inline sm:ml-1">
+                              (Total: {formatMoney(installmentAmounts.reduce((acc, v) => acc + v, 0))})
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            {formatMoney(sim.amount)}
+                            {isInstallments && (
+                              <span className="text-[10px] text-text-dim font-normal block sm:inline sm:ml-1">
+                                (Total: {formatMoney(sim.amount * (sim.totalInstallments || 1))})
+                              </span>
+                            )}
+                          </>
                         )}
                       </p>
                     </div>

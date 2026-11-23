@@ -246,9 +246,18 @@ export function expandSimulationsForMonth(
             if (isDueThisMonth && notExpired) {
               const safeDay = Math.min(p.day, daysInCurrentMonth)
               const dateIso = `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
+              const occIdx = Math.floor(deltaMonths / interval)
+              const occAmount =
+                Array.isArray(sim.installmentAmounts) &&
+                occIdx >= 0 &&
+                occIdx < sim.installmentAmounts.length &&
+                Number.isFinite(sim.installmentAmounts[occIdx])
+                  ? sim.installmentAmounts[occIdx]
+                  : sim.amount
               add(dateIso, {
                 ...sim,
                 id: `${sim.id}_m_${year}_${month}`,
+                amount: occAmount,
                 date: dateIso,
                 installmentDisplay: 'Assinatura',
               })
@@ -329,6 +338,17 @@ export function expandSimulationsForMonth(
         } else {
           // Subcaso 2B: Compra parcelada no cartão (N parcelas)
           const firstInv = getInvoiceForCardPurchase(p.year, p.month, p.day, closingDay, dueDay)
+          const getInstallmentAmount = (index: number): number => {
+            if (
+              Array.isArray(sim.installmentAmounts) &&
+              index >= 0 &&
+              index < sim.installmentAmounts.length &&
+              Number.isFinite(sim.installmentAmounts[index])
+            ) {
+              return sim.installmentAmounts[index]
+            }
+            return sim.amount
+          }
 
           // 1. Registro visual no dia da compra (mês da compra original)
           if (p.year === year && p.month === month) {
@@ -337,6 +357,7 @@ export function expandSimulationsForMonth(
             add(purchaseIso, {
               ...sim,
               id: `${sim.id}_card_buy`,
+              amount: getInstallmentAmount(0),
               date: purchaseIso,
               cardName,
               isCardPurchaseDay: true,
@@ -356,6 +377,7 @@ export function expandSimulationsForMonth(
                 ...sim,
                 id: `${sim.id}_card_parc_${k + 1}`,
                 title: `${sim.title} (${k + 1}/${totalInstallments})`,
+                amount: getInstallmentAmount(k),
                 date: dueIso,
                 accountId: cardAccountId,
                 cardName,

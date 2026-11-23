@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { api, errorMessage } from './api'
+import { api, errorMessage, getTransactionsByGroup } from './api'
 import type * as T from './types'
 
 const get = <R,>(url: string, params?: object) => api.get<R>(url, { params }).then((r) => r.data)
@@ -181,6 +181,13 @@ export const useResponsibleTransactions = (month?: number, year?: number) =>
   useQuery({
     queryKey: ['transactions', 'responsible', 'me', month, year],
     queryFn: () => get<T.Transaction[]>('/transactions/responsible/me', { month, year }),
+  })
+
+export const useTransactionGroup = (recurrenceGroupId: string | undefined, enabled = true) =>
+  useQuery({
+    queryKey: ['transactions', 'group', recurrenceGroupId],
+    enabled: !!recurrenceGroupId && enabled,
+    queryFn: () => getTransactionsByGroup(recurrenceGroupId!),
   })
 
 export function useSettleDebt(groupId: string | undefined) {

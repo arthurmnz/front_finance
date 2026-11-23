@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { allocateInstallments } from '@/lib/installments'
 import {
   MAX_CASCADE_INVOICE_MONTHS,
   buildCalendarProjection,
@@ -1730,5 +1731,64 @@ describe('Blindagem Contábil do Calendário Financeiro (buildCalendarProjection
     // Dez abre com 1300 (closing de Nov) e fecha descontando a fatura de Dez (1300 - 500 = 800)
     expect(calendarProjDez.opening).toBe(130000)
     expect(calendarProjDez.closing).toBe(80000)
+  })
+
+  it('20. Simulação de Compra Parcelada com resto (R$ 199,94 em 4x): soma exatamente R$ 199,94 no fluxo projetado (50,00 no 1º mês e 49,98 nos 3 seguintes)', () => {
+    const account = makeAccount({ balance: 100000 }) // R$ 1.000,00
+    const card = makeCreditCard({ accountId: account.id, closingDay: 25, dueDay: 10 })
+    const cardsMap = new Map<string, CreditCard>([[card.id, card]])
+
+    const allocated = allocateInstallments(19994, 4, 'FIRST_INSTALLMENT')
+    expect(allocated).toEqual([5000, 4998, 4998, 4998])
+
+    // Compra de R$ 199,94 em 4x em 20/11/2026 (antes do corte 25/11, dueDay 10 < 25 => 1ª fatura em 12/2026)
+    const perfumeSim: SimulatedTransaction = {
+      id: 'sim_perfume_199_94',
+      title: 'Perfumes',
+      amount: allocated[0],
+      type: 'EXPENSE',
+      date: '2026-11-20T00:00:00Z',
+      creditCardId: card.id,
+      cardName: card.name,
+      sourceMode: 'CARD',
+      accountId: account.id,
+      totalInstallments: 4,
+      installmentAmounts: allocated,
+    }
+
+    // Expansão mensal: Nov exibe apenas o registro visual no dia 20, sem débito na conta
+    const novExpanded = expandSimulationsForMonth([perfumeSim], 11, 2026, cardsMap)
+    const novPurchaseItem = novExpanded.get('2026-11-20')![0]
+    expect(novPurchaseItem.isCardPurchaseDay).toBe(true)
+    expect(novPurchaseItem.amount).toBe(5000)
+
+    const dezDebit = expandSimulationsForMonth([perfumeSim], 12, 2026, cardsMap).get('2026-12-10')![0]
+    const janDebit = expandSimulationsForMonth([perfumeSim], 1, 2027, cardsMap).get('2027-01-10')![0]
+    const fevDebit = expandSimulationsForMonth([perfumeSim], 2, 2027, cardsMap).get('2027-02-10')![0]
+    const marDebit = expandSimulationsForMonth([perfumeSim], 3, 2027, cardsMap).get('2027-03-10')![0]
+
+    expect(dezDebit.amount).toBe(5000)
+    expect(janDebit.amount).toBe(4998)
+    expect(fevDebit.amount).toBe(4998)
+    expect(marDebit.amount).toBe(4998)
+    expect(dezDebit.amount + janDebit.amount + fevDebit.amount + marDebit.amount).toBe(19994)
+
+    const invoiceList = [
+      makeInvoice(card, 11, 2026, 0),
+      makeInvoice(card, 12, 2026, 0),
+      makeInvoice(card, 1, 2027, 0),
+      makeInvoice(card, 2, 2027, 0),
+      makeInvoice(card, 3, 2027, 0),
+    ]
+
+    const projDez = buildCalendarProjection([account], [], invoiceList, { month: 12, year: 2026 }, undefined, [], [perfumeSim], [card], FIXED_TODAY)
+    const projJan = buildCalendarProjection([account], [], invoiceList, { month: 1, year: 2027 }, undefined, [], [perfumeSim], [card], FIXED_TODAY)
+    const projFev = buildCalendarProjection([account], [], invoiceList, { month: 2, year: 2027 }, undefined, [], [perfumeSim], [card], FIXED_TODAY)
+    const projMar = buildCalendarProjection([account], [], invoiceList, { month: 3, year: 2027 }, undefined, [], [perfumeSim], [card], FIXED_TODAY)
+
+    expect(projDez.closing).toBe(100000 - 5000) // 950,00
+    expect(projJan.closing).toBe(100000 - 5000 - 4998) // 900,02
+    expect(projFev.closing).toBe(100000 - 5000 - 4998 * 2) // 850,04
+    expect(projMar.closing).toBe(100000 - 19994) // 800,06 exatos, sem centavos fantasmas!
   })
 })

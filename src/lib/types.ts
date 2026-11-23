@@ -129,6 +129,13 @@ export interface Transaction {
   generatesDebt?: boolean
   createdAt: string; updatedAt: string
 }
+export type RemainderStrategy =
+  | 'FIRST_INSTALLMENT'
+  | 'LAST_INSTALLMENT'
+  | 'DISTRIBUTE_FIRST'
+  | 'DISTRIBUTE_LAST'
+export type InstallmentAmountMode = 'INSTALLMENT' | 'TOTAL' | 'CUSTOM'
+
 export interface AccountSplitInput {
   accountId: string
   amount: number
@@ -140,15 +147,26 @@ export interface CreateTransactionInput {
   isRecurring: boolean; recurrenceFrequency?: RecurrenceFrequency | null
   recurrenceInterval: number; recurrenceInstallments: number; isInfinite: boolean
   creditCardId?: string | null; creditCardInvoiceId?: string | null; invoiceMonth?: number | null; invoiceYear?: number | null
-  installmentAmountMode?: 'INSTALLMENT' | 'TOTAL'
+  installmentAmountMode?: InstallmentAmountMode
+  remainderStrategy?: RemainderStrategy
+  installmentAmounts?: number[] | null
   splits?: AccountSplitInput[] | null
   generatesDebt?: boolean
 }
 export interface UpdateTransactionInput {
   title: string; amount: number; date: string; categoryId?: string | null
   generalCategoryId?: string | null; specificCategoryId?: string | null; status: TransactionStatus
-  updateAllFuture: boolean; invoiceMonth?: number | null; invoiceYear?: number | null
+  updateAllFuture: boolean
+  updateFutureAmounts?: boolean
+  invoiceMonth?: number | null; invoiceYear?: number | null
   generatesDebt?: boolean | null
+}
+export interface UpdateInstallmentGroupItemInput {
+  transactionId: string
+  amount: number
+}
+export interface UpdateInstallmentGroupAmountsInput {
+  items: UpdateInstallmentGroupItemInput[]
 }
 
 export interface Friendship { id: string; requester: UserSummary; addressee: UserSummary; status: FriendshipStatus; createdAt: string; updatedAt: string }

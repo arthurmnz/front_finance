@@ -1,5 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import type { AuthResponse } from './types'
+import type { AuthResponse, Transaction, UpdateInstallmentGroupAmountsInput } from './types'
 
 const defaultApiUrl = import.meta.env.PROD ? 'https://api-finance.devmnz.com.br' : ''
 const baseURL = `${(import.meta.env.VITE_API_URL ?? defaultApiUrl).replace(/\/$/, '')}/api/v1`
@@ -54,4 +54,29 @@ export const errorMessage = (e: unknown): string => {
     return `Erro ${e.response.status}`
   }
   return e instanceof Error ? e.message : 'Erro inesperado.'
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function assertValidUuid(value: string, fieldName = 'Identificador'): string {
+  if (typeof value !== 'string' || /[\r\n]/.test(value) || !UUID_RE.test(value)) {
+    throw new Error(`${fieldName} inválido.`)
+  }
+  return encodeURIComponent(value)
+}
+
+export const getTransactionsByGroup = async (recurrenceGroupId: string): Promise<Transaction[]> => {
+  const safeGroupId = assertValidUuid(recurrenceGroupId, 'Identificador do grupo de recorrência')
+  return api.get<Transaction[]>(`/transactions/group/${safeGroupId}`).then((r) => r.data)
+}
+
+export const updateGroupInstallments = async (
+  recurrenceGroupId: string,
+  body: UpdateInstallmentGroupAmountsInput,
+): Promise<Transaction[]> => {
+  const safeGroupId = assertValidUuid(recurrenceGroupId, 'Identificador do grupo de recorrência')
+  body.items.forEach((item) => {
+    assertValidUuid(item.transactionId, 'Identificador da parcela')
+  })
+  return api.put<Transaction[]>(`/transactions/group/${safeGroupId}/installments`, body).then((r) => r.data)
 }

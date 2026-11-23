@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Split, Trash2, Wand2 } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, ChevronUp, Layers, Plus, RotateCcw, Split, Trash2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { api } from '@/lib/api'
+import { api, errorMessage, updateGroupInstallments } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { isGeneralCategory, isTypeCompatibleWithTransaction, resolveTransactionCategory } from '@/lib/categories'
-import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCards } from '@/lib/hooks'
+import { ALL_MONEY, useAccessibleAccounts, useAction, useAllCategories, useCreditCards, useTransactionGroup } from '@/lib/hooks'
+import {
+  DEFAULT_REMAINDER_STRATEGY,
+  MAX_AMOUNT_CENTS,
+  REMAINDER_STRATEGY_OPTIONS,
+  allocateInstallments,
+  summarizeInstallments,
+} from '@/lib/installments'
 import { canTransferGenerateDebt, filterTransferSourceAccounts, pickTransferSourceAccountId } from '@/lib/jointAccounts'
 import type {
   Account,
@@ -12,14 +20,17 @@ import type {
   CategoryInput,
   CategoryType,
   CreateTransactionInput,
+  InstallmentAmountMode,
   RecurrenceFrequency,
+  RemainderStrategy,
   Transaction,
   TransactionStatus,
   TransactionType,
+  UpdateInstallmentGroupAmountsInput,
   UpdateTransactionInput,
 } from '@/lib/types'
-import { defaultInvoicePeriod, formatAccountLabel, formatMoney, freqLabel, fullName, monthLabel, toISODate, txTypeLabel } from '@/lib/format'
-import { Button, Checkbox, DatePicker, Field, Input, Modal, MoneyInput, NumberInput, Select } from './ui'
+import { defaultInvoicePeriod, formatAccountLabel, formatDate, formatMoney, freqLabel, fullName, monthLabel, toISODate, txTypeLabel } from '@/lib/format'
+import { Alert, Badge, Button, Checkbox, DatePicker, Field, InfoTooltip, Input, Modal, MoneyInput, NumberInput, Select, Skeleton } from './ui'
 import clsx from 'clsx'
 
 interface Props {
@@ -158,10 +169,22 @@ export default function TransactionFormModal({
   const [installments, setInstallments] = useState(12)
   const [infinite, setInfinite] = useState(false)
   const [installmentAmountMode, setInstallmentAmountMode] = useState<'INSTALLMENT' | 'TOTAL'>('TOTAL')
+  const [remainderStrategy, setRemainderStrategy] = useState<RemainderStrategy>(DEFAULT_REMAINDER_STRATEGY)
+  const [customizeInstallments, setCustomizeInstallments] = useState(false)
+  const [customAmounts, setCustomAmounts] = useState<number[]>([])
   const [allFuture, setAllFuture] = useState(false)
+  const [updateFutureAmounts, setUpdateFutureAmounts] = useState(false)
+  const [showGroupInstallments, setShowGroupInstallments] = useState(false)
+  const [groupDraftAmounts, setGroupDraftAmounts] = useState<Record<string, number>>({})
   const [splitMode, setSplitMode] = useState(false)
   const [splitUnit, setSplitUnit] = useState<'AMOUNT' | 'PERCENT'>('AMOUNT')
   const [splits, setSplits] = useState<{ accountId: string; amount: number; percentage: number }[]>([])
+
+  const qc = useQueryClient()
+  const groupQuery = useTransactionGroup(
+    transaction?.recurrenceGroupId ?? undefined,
+    open && editing && showGroupInstallments && transaction?.installmentNumber != null,
+  )
 
   const sourceAccounts = type === 'TRANSFER' ? transferSourceAccounts : accounts
   const canSplit = !editing && sourceMode === 'ACCOUNT' && type !== 'TRANSFER' && accounts.length >= 2
@@ -260,7 +283,13 @@ export default function TransactionFormModal({
     setInstallments(2)
     setInfinite(false)
     setInstallmentAmountMode('TOTAL')
+    setRemainderStrategy(DEFAULT_REMAINDER_STRATEGY)
+    setCustomizeInstallments(false)
+    setCustomAmounts([])
     setAllFuture(false)
+    setUpdateFutureAmounts(Boolean(t?.isInfinite))
+    setShowGroupInstallments(false)
+    setGroupDraftAmounts({})
     setSplitMode(false)
     setSplitUnit('AMOUNT')
     setSplits([])
@@ -710,6 +739,7 @@ export default function TransactionFormModal({
       setSplitMode(false)
       return
     }
+    setCustomizeInstallments(false)
     const firstId = accountId || accounts[0]?.id || ''
     const secondId = accounts.find((a) => a.id !== firstId)?.id || ''
     const base = amount > 0 ? Math.floor(amount / 2) : 0
@@ -795,10 +825,224 @@ export default function TransactionFormModal({
     if (targetTotal > 0) setAmount(targetTotal)
   }
 
+  const isInstallmentPlan = !editing && recurring && !infinite && installments > 1
+  const isCustomInstallmentMode = isInstallmentPlan && !activeSplit && customizeInstallments
+
+  const buildDefaultCustomAmounts = (
+    targetAmount: number,
+    count: number,
+    mode: 'INSTALLMENT' | 'TOTAL',
+    strategy: RemainderStrategy,
+  ): number[] => {
+    const safeCount = Math.min(365, Math.max(2, Math.floor(count || 2)))
+    if (mode === 'TOTAL') {
+      return targetAmount >= safeCount
+        ? allocateInstallments(targetAmount, safeCount, strategy)
+        : new Array<number>(safeCount).fill(0)
+    }
+    return new Array<number>(safeCount).fill(Math.max(0, targetAmount))
+  }
+
+  const handleInstallmentsChange = (rawCount: number) => {
+    const nextCount = Math.min(365, Math.max(2, Math.floor(rawCount || 2)))
+    setInstallments(nextCount)
+    if (customizeInstallments) {
+      setCustomAmounts((prev) => {
+        if (nextCount <= prev.length) return prev.slice(0, nextCount)
+        const fillValue = prev[prev.length - 1] ?? 0
+        return [...prev, ...new Array<number>(nextCount - prev.length).fill(fillValue)]
+      })
+    }
+  }
+
+  const handleToggleCustomizeInstallments = () => {
+    if (customizeInstallments) {
+      setCustomizeInstallments(false)
+      return
+    }
+    setCustomAmounts(buildDefaultCustomAmounts(amount, installments, installmentAmountMode, remainderStrategy))
+    setCustomizeInstallments(true)
+  }
+
+  const handleCustomAmountChange = (idx: number, cents: number) => {
+    setCustomAmounts((prev) => prev.map((v, i) => (i === idx ? cents : v)))
+  }
+
+  const handleResetCustomAmounts = () => {
+    setCustomAmounts(buildDefaultCustomAmounts(amount, installments, installmentAmountMode, remainderStrategy))
+  }
+
+  const customTotal = useMemo(() => customAmounts.reduce((sum, v) => sum + v, 0), [customAmounts])
+  const expectedTotalForCustom = installmentAmountMode === 'TOTAL' ? amount : amount * installments
+  const customDiff = customTotal - expectedTotalForCustom
+
+  const effectiveInstallmentAmounts = useMemo(() => {
+    if (!isInstallmentPlan) return []
+    if (isCustomInstallmentMode) return customAmounts
+    if (installmentAmountMode === 'TOTAL') {
+      return amount >= installments ? allocateInstallments(amount, installments, remainderStrategy) : []
+    }
+    return amount > 0 ? new Array<number>(installments).fill(amount) : []
+  }, [isInstallmentPlan, isCustomInstallmentMode, customAmounts, installmentAmountMode, amount, installments, remainderStrategy])
+
+  const installmentSummaryText = useMemo(
+    () => (effectiveInstallmentAmounts.length > 0 ? summarizeInstallments(effectiveInstallmentAmounts) : ''),
+    [effectiveInstallmentAmounts],
+  )
+
+  const effectiveTotalPreview = isCustomInstallmentMode
+    ? customTotal
+    : isInstallmentPlan && installmentAmountMode === 'INSTALLMENT'
+      ? amount * installments
+      : amount
+
+  const sortedGroupTransactions = useMemo(() => {
+    const list = groupQuery.data ?? []
+    return [...list].sort((a, b) => {
+      const nDiff = (a.installmentNumber ?? Number.MAX_SAFE_INTEGER) - (b.installmentNumber ?? Number.MAX_SAFE_INTEGER)
+      if (nDiff !== 0) return nDiff
+      return a.date.localeCompare(b.date)
+    })
+  }, [groupQuery.data])
+
+  useEffect(() => {
+    if (!open || !editing || !showGroupInstallments || !groupQuery.data) return
+    const nextDraft: Record<string, number> = {}
+    groupQuery.data.forEach((item) => {
+      nextDraft[item.id] = item.amount
+    })
+    setGroupDraftAmounts(nextDraft)
+  }, [open, editing, showGroupInstallments, groupQuery.data, groupQuery.dataUpdatedAt])
+
+  const groupDraftAmountsList = useMemo(
+    () => sortedGroupTransactions.map((item) => groupDraftAmounts[item.id] ?? item.amount),
+    [sortedGroupTransactions, groupDraftAmounts],
+  )
+  const groupDraftTotal = useMemo(
+    () => groupDraftAmountsList.reduce((sum, v) => sum + v, 0),
+    [groupDraftAmountsList],
+  )
+  const originalGroupTotal = useMemo(
+    () => sortedGroupTransactions.reduce((sum, item) => sum + item.amount, 0),
+    [sortedGroupTransactions],
+  )
+  const hasGroupChanges = useMemo(
+    () => sortedGroupTransactions.some((item) => (groupDraftAmounts[item.id] ?? item.amount) !== item.amount),
+    [sortedGroupTransactions, groupDraftAmounts],
+  )
+  const hasInvalidGroupAmount = useMemo(
+    () => sortedGroupTransactions.some((item) => (groupDraftAmounts[item.id] ?? item.amount) <= 0),
+    [sortedGroupTransactions, groupDraftAmounts],
+  )
+  const hasOverLimitGroupAmount = useMemo(
+    () =>
+      groupDraftTotal > MAX_AMOUNT_CENTS ||
+      sortedGroupTransactions.some((item) => (groupDraftAmounts[item.id] ?? item.amount) > MAX_AMOUNT_CENTS),
+    [groupDraftTotal, sortedGroupTransactions, groupDraftAmounts],
+  )
+
+  const saveGroupInstallments = useMutation({
+    mutationFn: (payload: UpdateInstallmentGroupAmountsInput) =>
+      updateGroupInstallments(transaction!.recurrenceGroupId!, payload),
+    onSuccess: (updatedList, payload) => {
+      ALL_MONEY.forEach((k) => qc.invalidateQueries({ queryKey: k }))
+      if (transaction?.recurrenceGroupId) {
+        qc.invalidateQueries({ queryKey: ['transactions', 'group', transaction.recurrenceGroupId] })
+      }
+      const selfUpdated =
+        updatedList.find((tx) => tx.id === transaction?.id) ??
+        payload.items.find((item) => item.transactionId === transaction?.id)
+      if (selfUpdated && typeof selfUpdated.amount === 'number') {
+        setAmount(selfUpdated.amount)
+      }
+      toast.success('Valores das parcelas atualizados com sucesso!')
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  })
+
+  const handleSaveGroupInstallments = () => {
+    if (!transaction?.recurrenceGroupId || sortedGroupTransactions.length === 0) return
+    if (hasInvalidGroupAmount) {
+      toast.error('Todas as parcelas devem ter valor maior que R$ 0,00.')
+      return
+    }
+    if (hasOverLimitGroupAmount) {
+      toast.error(`Os valores e o total das parcelas não podem ultrapassar ${formatMoney(MAX_AMOUNT_CENTS)}.`)
+      return
+    }
+    saveGroupInstallments.mutate({
+      items: sortedGroupTransactions.map((item) => ({
+        transactionId: item.id,
+        amount: groupDraftAmounts[item.id] ?? item.amount,
+      })),
+    })
+  }
+
+  const handleResetGroupDrafts = () => {
+    const nextDraft: Record<string, number> = {}
+    sortedGroupTransactions.forEach((item) => {
+      nextDraft[item.id] = item.amount
+    })
+    setGroupDraftAmounts(nextDraft)
+  }
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    const effectiveTotal = activeSplit ? (amount > 0 ? amount : splitsSum) : amount
-    if (!title.trim() || effectiveTotal <= 0) return
+    if (!title.trim()) {
+      toast.error('Informe o título da transação.')
+      return
+    }
+
+    if (!editing && recurring && infinite && (interval < 1 || interval > 120)) {
+      toast.error('O intervalo de recorrência deve estar entre 1 e 120.')
+      return
+    }
+
+    if (isCustomInstallmentMode) {
+      if (customAmounts.length !== installments || customAmounts.some((v) => v <= 0)) {
+        toast.error('Todas as parcelas personalizadas devem ter valor maior que R$ 0,00.')
+        return
+      }
+      if (customAmounts.some((v) => v > MAX_AMOUNT_CENTS) || customTotal > MAX_AMOUNT_CENTS) {
+        toast.error(`O valor total e o de cada parcela não podem ultrapassar ${formatMoney(MAX_AMOUNT_CENTS)}.`)
+        return
+      }
+    } else {
+      const effectiveTotal = activeSplit ? (amount > 0 ? amount : splitsSum) : amount
+      if (effectiveTotal <= 0) {
+        toast.error('Informe um valor maior que zero.')
+        return
+      }
+      if (effectiveTotal > MAX_AMOUNT_CENTS) {
+        toast.error(`O valor não pode ultrapassar ${formatMoney(MAX_AMOUNT_CENTS)}.`)
+        return
+      }
+      if (activeSplit && (splits.some((s) => s.amount > MAX_AMOUNT_CENTS) || splitsSum > MAX_AMOUNT_CENTS)) {
+        toast.error(`O valor das contas não pode ultrapassar ${formatMoney(MAX_AMOUNT_CENTS)}.`)
+        return
+      }
+      if (isInstallmentPlan && installmentAmountMode === 'INSTALLMENT') {
+        const projectedTotal = activeSplit ? splitsSum * installments : amount * installments
+        if (projectedTotal > MAX_AMOUNT_CENTS) {
+          toast.error(`O valor total do parcelamento não pode ultrapassar ${formatMoney(MAX_AMOUNT_CENTS)}.`)
+          return
+        }
+      }
+      if (isInstallmentPlan && installmentAmountMode === 'TOTAL') {
+        if (!activeSplit && amount < installments) {
+          toast.error(
+            `No modo Valor total para ${installments}x, o valor deve ser de pelo menos ${formatMoney(installments)} (R$ 0,01 por parcela).`,
+          )
+          return
+        }
+        if (activeSplit && splits.some((s) => s.amount < installments)) {
+          toast.error(
+            `No rateio em ${installments}x pelo valor total, cada conta deve ter pelo menos ${formatMoney(installments)}.`,
+          )
+          return
+        }
+      }
+    }
 
     let effectiveGeneralId: string | null = null
     let effectiveSpecificId: string | null = null
@@ -812,6 +1056,12 @@ export default function TransactionFormModal({
     }
     const effectiveCategoryId = effectiveSpecificId || effectiveGeneralId || null
 
+    const createMode: InstallmentAmountMode = !isInstallmentPlan
+      ? 'INSTALLMENT'
+      : isCustomInstallmentMode
+        ? 'CUSTOM'
+        : installmentAmountMode
+
     if (editing) {
       save.mutate({
         title: title.trim(),
@@ -822,6 +1072,7 @@ export default function TransactionFormModal({
         specificCategoryId: effectiveSpecificId,
         status,
         updateAllFuture: allFuture,
+        updateFutureAmounts: allFuture ? updateFutureAmounts : false,
         invoiceMonth: transaction?.creditCardId ? invoiceMonth : null,
         invoiceYear: transaction?.creditCardId ? invoiceYear : null,
         generatesDebt: canEditGeneratesDebt ? generatesDebt : undefined,
@@ -830,7 +1081,7 @@ export default function TransactionFormModal({
       if (!selectedCard) return
       save.mutate({
         title: title.trim(),
-        amount,
+        amount: isCustomInstallmentMode ? customTotal : amount,
         date,
         accountId: selectedCard.accountId,
         type: 'EXPENSE',
@@ -847,7 +1098,9 @@ export default function TransactionFormModal({
         creditCardId: selectedCard.id,
         invoiceMonth,
         invoiceYear,
-        installmentAmountMode: recurring && !infinite ? installmentAmountMode : 'INSTALLMENT',
+        installmentAmountMode: createMode,
+        ...(createMode === 'TOTAL' ? { remainderStrategy } : {}),
+        ...(createMode === 'CUSTOM' ? { installmentAmounts: customAmounts } : {}),
       })
     } else if (activeSplit) {
       if (splits.length < 2 || splits.length > 10) {
@@ -881,6 +1134,7 @@ export default function TransactionFormModal({
         toast.error(`A soma das contas (${formatMoney(splitsSum)}) deve ser igual ao valor total (${formatMoney(amount)}).`)
         return
       }
+      const splitInstallmentMode: InstallmentAmountMode = isInstallmentPlan ? installmentAmountMode : 'INSTALLMENT'
       save.mutate({
         title: title.trim(),
         amount: splitsSum,
@@ -897,7 +1151,8 @@ export default function TransactionFormModal({
         recurrenceInterval: interval,
         recurrenceInstallments: installments,
         isInfinite: recurring && infinite,
-        installmentAmountMode: recurring && !infinite ? installmentAmountMode : 'INSTALLMENT',
+        installmentAmountMode: splitInstallmentMode,
+        ...(splitInstallmentMode === 'TOTAL' ? { remainderStrategy } : {}),
         splits: splits.map(({ accountId: accId, amount: rowAmount }) => ({
           accountId: accId,
           amount: rowAmount,
@@ -928,7 +1183,7 @@ export default function TransactionFormModal({
       }
       save.mutate({
         title: title.trim(),
-        amount,
+        amount: isCustomInstallmentMode ? customTotal : amount,
         date,
         accountId,
         type,
@@ -942,16 +1197,13 @@ export default function TransactionFormModal({
         recurrenceInterval: interval,
         recurrenceInstallments: installments,
         isInfinite: recurring && infinite,
-        installmentAmountMode: recurring && !infinite ? installmentAmountMode : 'INSTALLMENT',
+        installmentAmountMode: createMode,
+        ...(createMode === 'TOTAL' ? { remainderStrategy } : {}),
+        ...(createMode === 'CUSTOM' ? { installmentAmounts: customAmounts } : {}),
         generatesDebt: canGenerateDebt ? generatesDebt : false,
       })
     }
   }
-
-  const isInstallmentPlan = recurring && !infinite && installments > 1
-  const perInstallmentPreview =
-    isInstallmentPlan && installmentAmountMode === 'TOTAL' ? Math.floor(amount / installments) : amount
-  const totalPreview = isInstallmentPlan && installmentAmountMode === 'INSTALLMENT' ? amount * installments : amount
 
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Editar transação' : 'Nova transação'}>
@@ -1014,7 +1266,18 @@ export default function TransactionFormModal({
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label={isInstallmentPlan ? (installmentAmountMode === 'TOTAL' ? 'Valor total' : 'Valor da parcela') : 'Valor'}>
+          <Field
+            label={
+              isInstallmentPlan
+                ? isCustomInstallmentMode
+                  ? 'Valor total (referência)'
+                  : installmentAmountMode === 'TOTAL'
+                    ? 'Valor total'
+                    : 'Valor da parcela'
+                : 'Valor'
+            }
+            error={amount > MAX_AMOUNT_CENTS ? `Máximo de ${formatMoney(MAX_AMOUNT_CENTS)}.` : undefined}
+          >
             <MoneyInput value={amount} onChange={handleTotalAmountChange} />
           </Field>
           <Field label="Data da compra">
@@ -1531,8 +1794,11 @@ export default function TransactionFormModal({
                       <NumberInput
                         showControls
                         min={1}
+                        max={120}
                         value={interval}
-                        onChange={(e) => setInterval_(Math.max(1, Number(e.target.value)))}
+                        onChange={(e) =>
+                          setInterval_(Math.min(120, Math.max(1, Math.floor(Number(e.target.value) || 1))))
+                        }
                       />
                     </Field>
                   </div>
@@ -1543,8 +1809,9 @@ export default function TransactionFormModal({
                         <NumberInput
                           showControls
                           min={2}
+                          max={365}
                           value={installments}
-                          onChange={(e) => setInstallments(Math.max(2, Number(e.target.value)))}
+                          onChange={(e) => handleInstallmentsChange(Number(e.target.value))}
                         />
                       </Field>
                       <Field label="O valor digitado acima é">
@@ -1557,11 +1824,172 @@ export default function TransactionFormModal({
                         </Select>
                       </Field>
                     </div>
-                    {amount > 0 && (
-                      <p className="text-xs text-text-dim">
-                        Resumo: <b className="text-white">{installments}x</b> de{' '}
-                        <b className="text-white tabular-nums">{formatMoney(perInstallmentPreview)}</b> (total{' '}
-                        <b className="text-white tabular-nums">{formatMoney(totalPreview)}</b>)
+
+                    <div className="space-y-2 rounded-xl border border-border/80 bg-surface-2/40 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-text-muted">Divisão das parcelas</span>
+                        <InfoTooltip
+                          align="end"
+                          side="top"
+                          ariaLabel="Entenda como funciona a divisão de centavos nas parcelas"
+                          title="Por que os centavos variam nas parcelas?"
+                          content={
+                            <span>
+                              Quando o valor não divide exatamente (ex.: R$ 199,94 em 4x), cada banco lança os centavos
+                              restantes em uma parcela — em geral na 1ª (1x de R$ 50,00 + 3x de R$ 49,98) ou na última.
+                              Escolha abaixo onde lançar a diferença ou ative o ajuste manual para bater exatamente com
+                              a sua fatura.
+                            </span>
+                          }
+                        />
+                      </div>
+
+                      {isCustomInstallmentMode ? (
+                        customTotal > MAX_AMOUNT_CENTS || customAmounts.some((v) => v > MAX_AMOUNT_CENTS) ? (
+                          <p className="text-xs text-expense tabular-nums">
+                            O valor total e o de cada parcela não podem ultrapassar {formatMoney(MAX_AMOUNT_CENTS)}.
+                          </p>
+                        ) : customAmounts.every((v) => v > 0) ? (
+                          <p className="text-xs text-text-dim leading-relaxed">
+                            Resumo:{' '}
+                            <b className="text-white tabular-nums">{installmentSummaryText}</b>{' '}
+                            <span className="tabular-nums">(total {formatMoney(customTotal)})</span>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-expense">
+                            Preencha todas as parcelas abaixo com valor maior que R$ 0,00.
+                          </p>
+                        )
+                      ) : amount > 0 ? (
+                        effectiveTotalPreview > MAX_AMOUNT_CENTS ? (
+                          <p className="text-xs text-expense tabular-nums">
+                            O valor total do parcelamento não pode ultrapassar {formatMoney(MAX_AMOUNT_CENTS)}.
+                          </p>
+                        ) : installmentAmountMode === 'TOTAL' && amount < installments ? (
+                          <p className="text-xs text-expense tabular-nums">
+                            Valor insuficiente para {installments}x: informe ao menos {formatMoney(installments)} (R$
+                            0,01 por parcela).
+                          </p>
+                        ) : (
+                          <p className="text-xs text-text-dim leading-relaxed">
+                            Resumo:{' '}
+                            <b className="text-white tabular-nums">{installmentSummaryText}</b>{' '}
+                            <span className="tabular-nums">(total {formatMoney(effectiveTotalPreview)})</span>
+                          </p>
+                        )
+                      ) : (
+                        <p className="text-xs text-text-dim">
+                          Informe o valor acima para visualizar como as {installments} parcelas serão lançadas.
+                        </p>
+                      )}
+                    </div>
+
+                    {!isCustomInstallmentMode &&
+                      installmentAmountMode === 'TOTAL' &&
+                      amount >= installments &&
+                      amount % installments !== 0 && (
+                        <Field
+                          label={`Distribuição dos centavos (${formatMoney(amount % installments)})`}
+                          hint={
+                            REMAINDER_STRATEGY_OPTIONS.find((opt) => opt.value === remainderStrategy)?.description
+                          }
+                        >
+                          <Select
+                            aria-label="Estratégia de distribuição dos centavos"
+                            value={remainderStrategy}
+                            onChange={(e) => setRemainderStrategy(e.target.value as RemainderStrategy)}
+                          >
+                            {REMAINDER_STRATEGY_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </Select>
+                        </Field>
+                      )}
+
+                    {!activeSplit ? (
+                      <div className="border-t border-border/70 pt-2.5 space-y-2.5">
+                        <button
+                          type="button"
+                          onClick={handleToggleCustomizeInstallments}
+                          aria-expanded={customizeInstallments}
+                          className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-surface-2/70 px-3 py-2 text-xs font-medium text-white hover:border-border-strong hover:bg-surface-2 transition cursor-pointer select-none"
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <span>Personalizar valor de cada parcela</span>
+                            {customizeInstallments && <Badge tone="primary">Manual</Badge>}
+                          </span>
+                          {customizeInstallments ? (
+                            <ChevronUp className="size-4 text-text-dim shrink-0" />
+                          ) : (
+                            <ChevronDown className="size-4 text-text-dim shrink-0" />
+                          )}
+                        </button>
+
+                        {customizeInstallments && (
+                          <div className="space-y-2.5 rounded-xl border border-border bg-surface-2/50 p-3">
+                            <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                              {customAmounts.map((val, idx) => (
+                                <div key={idx} className="grid grid-cols-[4.25rem_1fr] items-center gap-2">
+                                  <span className="text-xs font-semibold text-text-muted tabular-nums">
+                                    {idx + 1}/{installments}
+                                  </span>
+                                  <MoneyInput
+                                    aria-label={`Valor da parcela ${idx + 1} de ${installments}`}
+                                    value={val}
+                                    onChange={(cents) => handleCustomAmountChange(idx, cents)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="space-y-1.5 border-t border-border/70 pt-2 text-xs">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-text-dim">
+                                  Soma das parcelas:{' '}
+                                  <b className="text-white tabular-nums">{formatMoney(customTotal)}</b>
+                                </span>
+                                {expectedTotalForCustom > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={handleResetCustomAmounts}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-text-muted hover:text-white transition cursor-pointer"
+                                  >
+                                    <RotateCcw className="size-3" />
+                                    Redistribuir
+                                  </button>
+                                )}
+                              </div>
+
+                              {expectedTotalForCustom > 0 && customDiff !== 0 && (
+                                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-1 px-2.5 py-1.5">
+                                  <span className="text-[11px] text-text-muted tabular-nums">
+                                    {customDiff < 0
+                                      ? `Faltam ${formatMoney(Math.abs(customDiff))} para ${formatMoney(expectedTotalForCustom)}`
+                                      : `Passou ${formatMoney(customDiff)} de ${formatMoney(expectedTotalForCustom)}`}
+                                  </span>
+                                  {customTotal > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setInstallmentAmountMode('TOTAL')
+                                        setAmount(customTotal)
+                                      }}
+                                      className="text-[11px] font-semibold text-lime hover:underline cursor-pointer"
+                                    >
+                                      Atualizar total para {formatMoney(customTotal)}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-text-dim">
+                        Personalização individual de parcelas fica indisponível quando a compra é dividida entre várias contas.
                       </p>
                     )}
                   </>
@@ -1572,10 +2000,185 @@ export default function TransactionFormModal({
         )}
 
         {editing && transaction?.recurrenceGroupId && (
-          <div className="rounded-xl border border-border p-3 bg-surface-2">
+          <div className="space-y-3 rounded-xl border border-border p-3 bg-surface-2">
             <Checkbox checked={allFuture} onChange={setAllFuture}>
               Aplicar a todas as futuras
             </Checkbox>
+
+            {allFuture && (
+              <div className="space-y-1 border-t border-border/70 pt-2.5 pl-6">
+                <Checkbox checked={updateFutureAmounts} onChange={setUpdateFutureAmounts}>
+                  Aplicar também este valor às parcelas futuras
+                </Checkbox>
+                <p className="pl-7 text-[11px] text-text-dim leading-relaxed">
+                  {transaction.isInfinite
+                    ? 'Desmarque para alterar apenas título, categoria ou dados das próximas cobranças mantendo os valores atuais.'
+                    : 'Desmarcado por padrão para preservar valores diferentes já definidos nas próximas parcelas.'}
+                </p>
+              </div>
+            )}
+
+            {transaction.installmentNumber != null && (
+              <div className="space-y-2.5 border-t border-border/70 pt-2.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-between"
+                  onClick={() => setShowGroupInstallments((prev) => !prev)}
+                  aria-expanded={showGroupInstallments}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Layers className="size-4 text-violet-hover" />
+                    <span>
+                      Ver e ajustar todas as parcelas (
+                      {transaction.totalInstallments ?? (sortedGroupTransactions.length || '…')})
+                    </span>
+                  </span>
+                  {showGroupInstallments ? (
+                    <ChevronUp className="size-4 text-text-dim shrink-0" />
+                  ) : (
+                    <ChevronDown className="size-4 text-text-dim shrink-0" />
+                  )}
+                </Button>
+
+                {showGroupInstallments && (
+                  <div className="space-y-3 rounded-xl border border-border bg-surface-1 p-3">
+                    {groupQuery.isLoading ? (
+                      <div className="space-y-2" aria-label="Carregando parcelas">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ) : groupQuery.isError ? (
+                      <Alert tone="neutral">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span>Não foi possível carregar as parcelas deste grupo.</span>
+                          <Button size="sm" variant="outline" onClick={() => groupQuery.refetch()}>
+                            Tentar novamente
+                          </Button>
+                        </div>
+                      </Alert>
+                    ) : sortedGroupTransactions.length === 0 ? (
+                      <p className="text-xs text-text-dim">Nenhuma parcela encontrada para este grupo.</p>
+                    ) : (
+                      <>
+                        <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                          {sortedGroupTransactions.map((item, idx) => {
+                            const labelNum = `${item.installmentNumber ?? idx + 1}/${
+                              item.totalInstallments ?? sortedGroupTransactions.length
+                            }`
+                            const draftCents = groupDraftAmounts[item.id] ?? item.amount
+                            const isCurrent = item.id === transaction.id
+                            return (
+                              <div
+                                key={item.id}
+                                className={clsx(
+                                  'flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border p-2.5',
+                                  isCurrent
+                                    ? 'border-violet/40 bg-violet-subtle/20'
+                                    : 'border-border bg-surface-2/40',
+                                )}
+                              >
+                                <div className="min-w-0 space-y-1">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-white tabular-nums">
+                                      {labelNum}
+                                    </span>
+                                    {isCurrent && (
+                                      <Badge tone="primary" className="text-[10px] px-2 py-0">
+                                        Atual
+                                      </Badge>
+                                    )}
+                                    <Badge
+                                      tone={item.status === 'COMPLETED' ? 'income' : 'default'}
+                                      className="text-[10px] px-2 py-0"
+                                    >
+                                      {item.status === 'COMPLETED' ? 'Concluída' : 'Pendente'}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-text-dim tabular-nums">
+                                    <span>{formatDate(item.date)}</span>
+                                    {item.invoiceMonth != null && item.invoiceYear != null && (
+                                      <span>
+                                        · Fat. {String(item.invoiceMonth).padStart(2, '0')}/{item.invoiceYear}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="w-full sm:w-36 shrink-0">
+                                  <MoneyInput
+                                    aria-label={`Valor da parcela ${labelNum}`}
+                                    value={draftCents}
+                                    onChange={(cents) =>
+                                      setGroupDraftAmounts((prev) => ({ ...prev, [item.id]: cents }))
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        <div className="space-y-2 border-t border-border/70 pt-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="text-text-dim">
+                              Total recalculado:{' '}
+                              <b className="text-white tabular-nums">{formatMoney(groupDraftTotal)}</b>
+                            </span>
+                            {groupDraftTotal !== originalGroupTotal && (
+                              <span
+                                className={clsx(
+                                  'text-[11px] font-medium tabular-nums',
+                                  groupDraftTotal > originalGroupTotal ? 'text-expense' : 'text-lime',
+                                )}
+                              >
+                                {groupDraftTotal > originalGroupTotal ? '+' : '−'}
+                                {formatMoney(Math.abs(groupDraftTotal - originalGroupTotal))} vs. atual
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-text-dim tabular-nums">
+                            {summarizeInstallments(groupDraftAmountsList)}
+                          </p>
+
+                          {hasOverLimitGroupAmount && (
+                            <p className="text-xs text-expense tabular-nums">
+                              Os valores e a soma das parcelas não podem ultrapassar {formatMoney(MAX_AMOUNT_CENTS)}.
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                            {hasGroupChanges && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={handleResetGroupDrafts}
+                                disabled={saveGroupInstallments.isPending}
+                              >
+                                <RotateCcw className="size-3.5" />
+                                Desfazer
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="lime"
+                              loading={saveGroupInstallments.isPending}
+                              disabled={!hasGroupChanges || hasInvalidGroupAmount || hasOverLimitGroupAmount}
+                              onClick={handleSaveGroupInstallments}
+                            >
+                              Salvar parcelas
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

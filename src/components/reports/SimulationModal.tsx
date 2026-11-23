@@ -12,6 +12,7 @@ import {
 import clsx from 'clsx'
 import type { Account, CreditCard } from '@/lib/types'
 import { formatMoney, toISODate } from '@/lib/format'
+import { MAX_AMOUNT_CENTS, allocateInstallments, summarizeInstallments } from '@/lib/installments'
 import { Button, Field, Input, Modal, MoneyInput } from '@/components/ui'
 import type { SimulatedTransaction } from './types'
 import { getInvoiceForCardPurchase, parseDateParts } from './useReportsData'
@@ -207,7 +208,7 @@ export default function SimulationModal({
 
   // Atalhos de valor rápido
   const handleAddAmount = (cents: number) => {
-    setAmount((prev) => prev + cents)
+    setAmount((prev) => Math.min(MAX_AMOUNT_CENTS, prev + cents))
   }
 
   // Atalhos de data rápida
@@ -235,10 +236,29 @@ export default function SimulationModal({
     }
   }
 
+  const amountLimitError = useMemo(() => {
+    if (!Number.isFinite(amount) || amount <= 0) return undefined
+    if (amount > MAX_AMOUNT_CENTS) {
+      return `O valor não pode ultrapassar ${formatMoney(MAX_AMOUNT_CENTS)}.`
+    }
+    if (
+      sourceMode === 'CARD' &&
+      creditCards.length > 0 &&
+      cardPaymentMode === 'INSTALLMENTS' &&
+      installmentAmountMode === 'PER_INSTALLMENT'
+    ) {
+      const total = Math.min(48, Math.max(2, Math.floor(installmentsCount || 2)))
+      if (amount * total > MAX_AMOUNT_CENTS) {
+        return `O valor total do parcelamento (${formatMoney(amount * total)}) não pode ultrapassar ${formatMoney(MAX_AMOUNT_CENTS)}.`
+      }
+    }
+    return undefined
+  }, [amount, sourceMode, creditCards.length, cardPaymentMode, installmentAmountMode, installmentsCount])
+
   // Monta o payload da simulação para salvar
   const buildSimulationPayload = (): Omit<SimulatedTransaction, 'id'> | null => {
     const cleanTitle = title.trim()
-    if (!cleanTitle || !Number.isFinite(amount) || amount <= 0 || !date) return null
+    if (!cleanTitle || !Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT_CENTS || !date) return null
 
     if (sourceMode === 'CARD' && creditCards.length > 0) {
       const card = selectedCard
@@ -247,14 +267,27 @@ export default function SimulationModal({
       const totalInstallments = isInstallments
         ? Math.min(48, Math.max(2, Math.floor(installmentsCount || 2)))
         : 1
-      const perInstallmentAmount =
-        isInstallments && installmentAmountMode === 'TOTAL'
-          ? Math.round(amount / totalInstallments)
-          : amount
+
+      if (isInstallments && installmentAmountMode === 'TOTAL' && amount < totalInstallments) {
+        return null
+      }
+      if (
+        isInstallments &&
+        installmentAmountMode === 'PER_INSTALLMENT' &&
+        amount * totalInstallments > MAX_AMOUNT_CENTS
+      ) {
+        return null
+      }
+
+      const installmentAmounts = isInstallments
+        ? installmentAmountMode === 'TOTAL'
+          ? allocateInstallments(amount, totalInstallments, 'FIRST_INSTALLMENT')
+          : Array.from({ length: totalInstallments }, () => amount)
+        : undefined
 
       return {
         title: cleanTitle,
-        amount: perInstallmentAmount,
+        amount: installmentAmounts ? installmentAmounts[0] : amount,
         type: 'EXPENSE',
         date,
         sourceMode: 'CARD',
@@ -264,6 +297,7 @@ export default function SimulationModal({
         isRecurring,
         isInfinite: isRecurring,
         totalInstallments: isInstallments ? totalInstallments : undefined,
+        installmentAmounts,
       }
     }
 
@@ -303,7 +337,7 @@ export default function SimulationModal({
 
   // Preview em tempo real de onde e quando incide o débito/crédito
   const previewInfo = useMemo(() => {
-    if (!date || !Number.isFinite(amount) || amount <= 0) return null
+    if (!date || !Number.isFinite(amount) || amount <= 0 || amountLimitError) return null
     const p = parseDateParts(date)
     const formattedAmount = formatMoney(amount)
 
@@ -324,8 +358,20 @@ export default function SimulationModal({
 
       if (cardPaymentMode === 'INSTALLMENTS') {
         const total = Math.min(48, Math.max(2, Math.floor(installmentsCount || 2)))
-        const parcAmount =
-          installmentAmountMode === 'TOTAL' ? Math.round(amount / total) : amount
+
+        if (installmentAmountMode === 'TOTAL' && amount < total) {
+          return {
+            title: `Compra Parcelada em ${total}x no cartão ${selectedCard.name}`,
+            headline: `Valor mínimo de ${formatMoney(total)} para dividir em ${total}x`,
+            detail: 'Informe um valor total de pelo menos R$ 0,01 por parcela para simular o parcelamento.',
+            badge: `Cartão: ${total}x`,
+          }
+        }
+
+        const previewAmounts =
+          installmentAmountMode === 'TOTAL'
+            ? allocateInstallments(amount, total, 'FIRST_INSTALLMENT')
+            : Array.from({ length: total }, () => amount)
         const totalAmountFormatted = formatMoney(
           installmentAmountMode === 'TOTAL' ? amount : amount * total,
         )
@@ -340,7 +386,7 @@ export default function SimulationModal({
 
         return {
           title: `Compra Parcelada em ${total}x no cartão ${selectedCard.name}`,
-          headline: `${total} parcelas de ${formatMoney(parcAmount)} (Total: ${totalAmountFormatted})`,
+          headline: `${summarizeInstallments(previewAmounts)} (Total: ${totalAmountFormatted})`,
           detail: `1ª parcela vence na fatura de ${dueFormatted} e a última vence em ${lastDueFormatted}. O saldo bancário sofrerá o débito de cada parcela no dia do vencimento da respectiva fatura.`,
           badge: `Cartão: ${total}x`,
         }
@@ -388,6 +434,7 @@ export default function SimulationModal({
     isRecurringAccount,
     isInfiniteAccount,
     fixedInstallmentsAccount,
+    amountLimitError,
   ])
 
   return (
@@ -730,9 +777,12 @@ export default function SimulationModal({
           <Field
             label={
               sourceMode === 'CARD' && cardPaymentMode === 'INSTALLMENTS' && installmentAmountMode === 'TOTAL'
-                ? `Valor Total da Compra (será dividido em ${installmentsCount}x de ${formatMoney(Math.round(amount / installmentsCount))})`
+                ? amount >= installmentsCount
+                  ? `Valor Total da Compra (${summarizeInstallments(allocateInstallments(amount, installmentsCount, 'FIRST_INSTALLMENT'))})`
+                  : `Valor Total da Compra (mínimo ${formatMoney(installmentsCount)} para ${installmentsCount}x)`
                 : 'Valor'
             }
+            error={amountLimitError}
           >
             <MoneyInput value={amount} onChange={setAmount} />
           </Field>
@@ -841,23 +891,43 @@ export default function SimulationModal({
           </Button>
 
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!title.trim() || !Number.isFinite(amount) || amount <= 0 || !date}
-              onClick={() => handleSave(true)}
-              className="border-violet/40 text-violet hover:bg-violet-subtle"
-            >
-              <Plus className="size-3.5" />
-              Salvar e Adicionar Outro
-            </Button>
-            <Button
-              type="button"
-              disabled={!title.trim() || !Number.isFinite(amount) || amount <= 0 || !date}
-              onClick={() => handleSave(false)}
-            >
-              Adicionar ao Cenário
-            </Button>
+            {(() => {
+              const hasValidInstallmentTotal =
+                !(
+                  sourceMode === 'CARD' &&
+                  creditCards.length > 0 &&
+                  cardPaymentMode === 'INSTALLMENTS' &&
+                  installmentAmountMode === 'TOTAL'
+                ) || amount >= Math.min(48, Math.max(2, Math.floor(installmentsCount || 2)))
+              const isDisabled =
+                !title.trim() ||
+                !Number.isFinite(amount) ||
+                amount <= 0 ||
+                Boolean(amountLimitError) ||
+                !date ||
+                !hasValidInstallmentTotal
+              return (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isDisabled}
+                    onClick={() => handleSave(true)}
+                    className="border-violet/40 text-violet hover:bg-violet-subtle"
+                  >
+                    <Plus className="size-3.5" />
+                    Salvar e Adicionar Outro
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => handleSave(false)}
+                  >
+                    Adicionar ao Cenário
+                  </Button>
+                </>
+              )
+            })()}
           </div>
         </div>
       </div>

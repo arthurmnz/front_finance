@@ -137,6 +137,7 @@ export interface SimulatedTransaction {
   isInfinite?: boolean
   installmentNumber?: number
   totalInstallments?: number
+  installmentAmounts?: number[]
   notes?: string
 }
 
